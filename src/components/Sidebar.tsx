@@ -114,6 +114,11 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     { id: 'test-history', label: 'Scorecard', icon: FileText, badge: 'HISTORY' },
   ];
 
+  const generalKnowledgeItems = [
+    { id: 'gk-dashboard', label: 'GK Dashboard', icon: LayoutDashboard },
+    { id: 'gk-exams', label: 'GK Exams', icon: ClipboardCheck, badge: 'NEW' },
+  ];
+
   const conceptualVivaItems = [
     { id: 'conceptual-tutor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'conceptual-tutor-selection', label: 'Conceptual Tutor', icon: Mic },
@@ -145,6 +150,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const [isActivityHubExpanded, setIsActivityHubExpanded] = useState(isGroupActive(activityHub) || isComputersActive || isChemistryActive);
   const [isVivaPrepExpanded, setIsVivaPrepExpanded] = useState(isGroupActive(vivaPreparation) || currentPage === 'viva-preparation');
   const [isExamZoneExpanded, setIsExamZoneExpanded] = useState(isGroupActive(examZone));
+  const [isGeneralKnowledgeExpanded, setIsGeneralKnowledgeExpanded] = useState(isGroupActive(generalKnowledgeItems));
   const [isConceptualVivaExpanded, setIsConceptualVivaExpanded] = useState(isGroupActive(conceptualVivaItems));
   const [isSpeakAlongVivaExpanded, setIsSpeakAlongVivaExpanded] = useState(isGroupActive(speakAlongVivaItems));
   const [isDoubtSupportExpanded, setIsDoubtSupportExpanded] = useState(isGroupActive(doubtSupport));
@@ -156,6 +162,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     if (isGroupActive(activityHub) || isComputersActive || isChemistryActive) setIsActivityHubExpanded(true);
     if (isGroupActive(vivaPreparation)) setIsVivaPrepExpanded(true);
     if (isGroupActive(examZone)) setIsExamZoneExpanded(true);
+    if (isGroupActive(generalKnowledgeItems)) setIsGeneralKnowledgeExpanded(true);
     if (isGroupActive(conceptualVivaItems)) setIsConceptualVivaExpanded(true);
     if (isGroupActive(speakAlongVivaItems)) setIsSpeakAlongVivaExpanded(true);
     if (isGroupActive(doubtSupport)) setIsDoubtSupportExpanded(true);
@@ -425,6 +432,34 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
             {examZone.map((item: any) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onNavigate?.(item.id)}
+                  className={childMenuClass(isActive)}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <span className="flex-1 text-left">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* General Knowledge */}
+        <button
+          onClick={() => setIsGeneralKnowledgeExpanded(!isGeneralKnowledgeExpanded)}
+          className={parentMenuClass(false, isGeneralKnowledgeExpanded || isGroupActive(generalKnowledgeItems))}
+        >
+          <Globe className={`w-5 h-5 ${(isGeneralKnowledgeExpanded || isGroupActive(generalKnowledgeItems)) ? 'text-blue-600' : 'text-slate-400'}`} />
+          <span className="flex-1 text-left">General Knowledge</span>
+          {isGeneralKnowledgeExpanded ? <ChevronDown className="w-4 h-4 opacity-50" /> : <ChevronRight className="w-4 h-4 opacity-50" />}
+        </button>
+        {isGeneralKnowledgeExpanded && (
+          <div className="mt-1 mb-2 space-y-1">
+            {generalKnowledgeItems.map((item: any) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id || (item.id === 'gk-exams' && currentPage === 'gk-exam-runner');
               return (
                 <button
                   key={item.id}

@@ -73,6 +73,9 @@ import ConceptualVivaResultDetails from "./components/conceptual-tutor/Conceptua
 import SpeakAlongDashboard from "./components/speakalong-viva/SpeakAlongDashboard";
 import SpeakAlongSelection from "./components/speakalong-viva/SpeakAlongSelection";
 import SpeakAlongSession from "./components/speakalong-viva/SpeakAlongSession";
+import GKDashboard from "./components/GeneralKnowledge/GKDashboard";
+import GKExams from "./components/GeneralKnowledge/GKExams";
+import GKExamRunner from "./components/GeneralKnowledge/GKExamRunner";
 import { Volume2, AlertCircle, ArrowLeft, BrainCircuit } from "lucide-react";
 import { SmartStudyPlanner } from "./components/features/SmartStudyPlanner";
 import { GamificationSystem } from "./components/features/GamificationSystem";
@@ -206,6 +209,12 @@ export default function App() {
   const [speakAlongParams, setSpeakAlongParams] = useState<any>(
     () => loadState("speakAlongParams", null)
   );
+  const [gkCategory, setGkCategory] = useState<string | null>(
+    () => loadState("gkCategory", null)
+  );
+  const [gkSubcategory, setGkSubcategory] = useState<string | null>(
+    () => loadState("gkSubcategory", null)
+  );
   const [showAssessmentIntro, setShowAssessmentIntro] = useState(false);
 
   // Check for session/token on mount
@@ -257,7 +266,9 @@ export default function App() {
     localStorage.setItem("selectedConceptualVivaData", JSON.stringify(selectedConceptualVivaData));
     localStorage.setItem("selectedConceptualVivaCurrentQuestion", JSON.stringify(selectedConceptualVivaCurrentQuestion));
     localStorage.setItem("speakAlongParams", JSON.stringify(speakAlongParams));
-  }, [currentStep, activePage, phoneNumber, profileData, assessmentResults, isExistingUser, selectedUserAssId, selectedAssessmentMethod, selectedConceptualVivaParams, selectedConceptualVivaSessionId, selectedConceptualVivaData, selectedConceptualVivaCurrentQuestion, speakAlongParams]);
+    localStorage.setItem("gkCategory", JSON.stringify(gkCategory));
+    localStorage.setItem("gkSubcategory", JSON.stringify(gkSubcategory));
+  }, [currentStep, activePage, phoneNumber, profileData, assessmentResults, isExistingUser, selectedUserAssId, selectedAssessmentMethod, selectedConceptualVivaParams, selectedConceptualVivaSessionId, selectedConceptualVivaData, selectedConceptualVivaCurrentQuestion, speakAlongParams, gkCategory, gkSubcategory]);
   
   // Scroll to top on step change and log for debugging
   useEffect(() => {
@@ -507,7 +518,7 @@ export default function App() {
 
         {currentStep === "main" && (
           <div className="min-h-screen bg-gray-50 flex">
-            {activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && (
+            {activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && (
               <Sidebar
                   activePage={activePage}
                   onNavigate={handleNavigate}
@@ -912,6 +923,28 @@ export default function App() {
                       setActivePage("dashboard");
                       setSelectedConceptualVivaSessionId(null);
                     }}
+                  />
+                )}
+                {activePage === "gk-dashboard" && (
+                  <GKDashboard 
+                    onNavigate={handleNavigate} 
+                  />
+                )}
+                {activePage === "gk-exams" && (
+                  <GKExams 
+                    onStartExam={(cat, sub) => {
+                      setGkCategory(cat);
+                      setGkSubcategory(sub);
+                      setActivePage("gk-exam-runner");
+                    }} 
+                  />
+                )}
+                {activePage === "gk-exam-runner" && gkCategory && gkSubcategory && (
+                  <GKExamRunner 
+                    category={gkCategory} 
+                    subcategory={gkSubcategory} 
+                    onExit={() => setActivePage("gk-exams")} 
+                    onGoToDashboard={() => setActivePage("gk-dashboard")} 
                   />
                 )}
                 {activePage === "doubt-hub-workbench" && (
