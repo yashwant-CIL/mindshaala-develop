@@ -3,7 +3,7 @@ import React, { useMemo } from "react";
 
 export const QuestionMathJaxConfig = {
   loader: {
-    load: ["input/tex", "output/chtml", "tex-chtml"]
+    load: ["[tex]/mhchem", "[tex]/physics", "[tex]/unicode"]
   },
   tex: {
     packages: { "[+]": ["ams", "html", "boldsymbol", "mhchem", "physics", "color", "unicode"] },

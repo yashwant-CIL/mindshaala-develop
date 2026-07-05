@@ -125,7 +125,7 @@ axiosFastApiClient.interceptors.response.use(
     }
 );
 
-const axiosConceptualVivaClient = axios.create({
+const axiosVoiceClient = axios.create({
     baseURL: import.meta.env.VITE_CONCEPTUAL_API_URL,
     // headers: {
     //     'Content-Type': 'application/json',   
@@ -133,7 +133,7 @@ const axiosConceptualVivaClient = axios.create({
 });
 
 //Request Interceptor for Conceptual Viva API
-axiosConceptualVivaClient.interceptors.request.use(
+axiosVoiceClient.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         if (config.data && !(config.data instanceof FormData) && !config.headers['Content-Type']) {
             config.headers['Content-Type'] = 'application/json';
@@ -153,7 +153,7 @@ axiosConceptualVivaClient.interceptors.request.use(
 );
 
 //Response Interceptor for Conceptual Viva API
-axiosConceptualVivaClient.interceptors.response.use(
+axiosVoiceClient.interceptors.response.use(
     (response: AxiosResponse) => {
         return response;
     },
@@ -174,8 +174,65 @@ axiosConceptualVivaClient.interceptors.response.use(
             window.location.href = '/';
         }
         return Promise.reject(error);
+    },
+
+    
+);
+
+const axiosMindShaalaClient = axios.create({
+    baseURL: import.meta.env.VITE_MINDSHAALA_API_URL,
+    // headers: {
+    //     'Content-Type': 'application/json',   
+    // }
+});
+
+//Request Interceptor for AI API
+axiosMindShaalaClient.interceptors.request.use(
+    (config: InternalAxiosRequestConfig) => {
+        if (config.data && !(config.data instanceof FormData) && !config.headers['Content-Type']) {
+            config.headers['Content-Type'] = 'application/json';
+        }
+
+        const token = Cookies.get('token');
+        if (token && config.headers['skip-auth'] !== 'true') {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        delete config.headers['skip-auth'];
+
+        return config;
+    },
+    (error: AxiosError) => {
+        return Promise.reject(error);
     }
 );
 
-export { axiosClient, axiosFastApiClient, axiosConceptualVivaClient };
+//Response Interceptor for AI API
+axiosMindShaalaClient.interceptors.response.use(
+    (response: AxiosResponse) => {
+        return response;
+    },
+    (error: AxiosError) => {
+        if (error.response && error.response.status === 401) {
+            localStorage.clear();
+            Cookies.remove('token');
+            Cookies.remove('user_id');
+            Cookies.remove('username');
+
+            import('react-hot-toast').then(({ toast }) => {
+                toast.error("Session expired. Please login again.");
+            }).catch(() => {
+                console.warn("Toast not available in interceptor");
+            });
+
+            localStorage.setItem('currentStep', JSON.stringify('login'));
+            window.location.href = '/';
+        }
+        return Promise.reject(error);
+    }
+);
+
+export { axiosClient, axiosFastApiClient, axiosVoiceClient , axiosMindShaalaClient };
 export default axiosClient;
+
+// export { axiosClient, axiosFastApiClient, axiosConceptualVivaClient };
+// export default axiosClient;

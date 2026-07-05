@@ -76,6 +76,8 @@ import SpeakAlongSession from "./components/speakalong-viva/SpeakAlongSession";
 import GKDashboard from "./components/GeneralKnowledge/GKDashboard";
 import GKExams from "./components/GeneralKnowledge/GKExams";
 import GKExamRunner from "./components/GeneralKnowledge/GKExamRunner";
+import GKProfile from "./components/GeneralKnowledge/GKProfile";
+import GKResult from "./components/GeneralKnowledge/GKResult";
 import { Volume2, AlertCircle, ArrowLeft, BrainCircuit } from "lucide-react";
 import { SmartStudyPlanner } from "./components/features/SmartStudyPlanner";
 import { GamificationSystem } from "./components/features/GamificationSystem";
@@ -215,6 +217,21 @@ export default function App() {
   const [gkSubcategory, setGkSubcategory] = useState<string | null>(
     () => loadState("gkSubcategory", null)
   );
+  const [gkQuestions, setGkQuestions] = useState<any[]>(
+    () => loadState("gkQuestions", [])
+  );
+  const [gkAssessmentId, setGkAssessmentId] = useState<string | number | null>(
+    () => loadState("gkAssessmentId", null)
+  );
+  const [gkTotalMarks, setGkTotalMarks] = useState<number>(
+    () => loadState("gkTotalMarks", 40)
+  );
+  const [gkTotalTimeSeconds, setGkTotalTimeSeconds] = useState<number>(
+    () => loadState("gkTotalTimeSeconds", 3600)
+  );
+  const [gkAssessmentName, setGkAssessmentName] = useState<string | null>(
+    () => loadState("gkAssessmentName", null)
+  );
   const [showAssessmentIntro, setShowAssessmentIntro] = useState(false);
 
   // Check for session/token on mount
@@ -268,7 +285,12 @@ export default function App() {
     localStorage.setItem("speakAlongParams", JSON.stringify(speakAlongParams));
     localStorage.setItem("gkCategory", JSON.stringify(gkCategory));
     localStorage.setItem("gkSubcategory", JSON.stringify(gkSubcategory));
-  }, [currentStep, activePage, phoneNumber, profileData, assessmentResults, isExistingUser, selectedUserAssId, selectedAssessmentMethod, selectedConceptualVivaParams, selectedConceptualVivaSessionId, selectedConceptualVivaData, selectedConceptualVivaCurrentQuestion, speakAlongParams, gkCategory, gkSubcategory]);
+    localStorage.setItem("gkQuestions", JSON.stringify(gkQuestions));
+    localStorage.setItem("gkAssessmentId", JSON.stringify(gkAssessmentId));
+    localStorage.setItem("gkTotalMarks", JSON.stringify(gkTotalMarks));
+    localStorage.setItem("gkTotalTimeSeconds", JSON.stringify(gkTotalTimeSeconds));
+    localStorage.setItem("gkAssessmentName", JSON.stringify(gkAssessmentName));
+  }, [currentStep, activePage, phoneNumber, profileData, assessmentResults, isExistingUser, selectedUserAssId, selectedAssessmentMethod, selectedConceptualVivaParams, selectedConceptualVivaSessionId, selectedConceptualVivaData, selectedConceptualVivaCurrentQuestion, speakAlongParams, gkCategory, gkSubcategory, gkQuestions, gkAssessmentId, gkTotalMarks, gkTotalTimeSeconds, gkAssessmentName]);
   
   // Scroll to top on step change and log for debugging
   useEffect(() => {
@@ -932,20 +954,50 @@ export default function App() {
                 )}
                 {activePage === "gk-exams" && (
                   <GKExams 
-                    onStartExam={(cat, sub) => {
+                    onStartExam={(cat, sub, questions, id, marks, timeSec, name) => {
+                      console.log("App: onStartExam triggered with:", { cat, sub, questions, id, marks, timeSec, name });
                       setGkCategory(cat);
                       setGkSubcategory(sub);
+                      setGkQuestions(questions || []);
+                      setGkAssessmentId(id || null);
+                      setGkTotalMarks(marks || 40);
+                      setGkTotalTimeSeconds(timeSec || 3600);
+                      setGkAssessmentName(name || null);
                       setActivePage("gk-exam-runner");
                     }} 
                   />
                 )}
                 {activePage === "gk-exam-runner" && gkCategory && gkSubcategory && (
-                  <GKExamRunner 
-                    category={gkCategory} 
-                    subcategory={gkSubcategory} 
-                    onExit={() => setActivePage("gk-exams")} 
-                    onGoToDashboard={() => setActivePage("gk-dashboard")} 
+                  <>
+                    {console.log("App: Rendering GKExamRunner with state:", { gkCategory, gkSubcategory, gkQuestionsLength: gkQuestions?.length, gkAssessmentId, gkTotalMarks, gkTotalTimeSeconds, gkAssessmentName })}
+                    <GKExamRunner 
+                      category={gkCategory} 
+                      subcategory={gkSubcategory} 
+                      initialQuestions={gkQuestions}
+                      assessmentId={gkAssessmentId}
+                      totalMarks={gkTotalMarks}
+                      totalTimeSeconds={gkTotalTimeSeconds}
+                      assessmentName={gkAssessmentName}
+                    onExit={() => {
+                      setActivePage("gk-exams");
+                      setGkQuestions([]);
+                    }} 
+                    onGoToDashboard={() => {
+                      setActivePage("gk-dashboard");
+                      setGkQuestions([]);
+                    }} 
+                    onGoToResults={() => {
+                      setActivePage("gk-results");
+                      setGkQuestions([]);
+                    }} 
                   />
+                  </>
+                )}
+                {activePage === "gk-profile" && (
+                  <GKProfile />
+                )}
+                {(activePage === "gk-result" || activePage === "gk-results") && (
+                  <GKResult />
                 )}
                 {activePage === "doubt-hub-workbench" && (
                    <DoubtHubWorkbench onBack={() => setActivePage("dashboard")} />
@@ -972,11 +1024,21 @@ export default function App() {
                         }}
                     />
                   )}
-                  {activePage === "result-detail" && selectedUserAssId && (
+                   {activePage === "result-detail" && selectedUserAssId && (
                     <DetailedResult 
                         userAssId={selectedUserAssId} 
                         assessmentMethod={selectedAssessmentMethod}
                         onExit={() => setActivePage('test-history')} 
+                    />
+                  )}
+                  {activePage === "profile" && (
+                    <ProfilePage
+                      phoneNumber={phoneNumber}
+                      onComplete={(data) => {
+                        setProfileData(data);
+                        setActivePage("dashboard");
+                      }}
+                      onBack={() => setActivePage("dashboard")}
                     />
                   )}
                 </div>

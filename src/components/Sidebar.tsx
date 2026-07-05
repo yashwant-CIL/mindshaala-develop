@@ -34,7 +34,8 @@ import {
   Eye,
   FileText,
   LayoutDashboard,
-  ClipboardList
+  ClipboardList,
+  UserCheck
 } from 'lucide-react';
 import mindshaalLogo from '../assets/Mindshaala.png';
 import Cookies from 'js-cookie';
@@ -115,8 +116,10 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   ];
 
   const generalKnowledgeItems = [
+    { id: 'gk-profile', label: 'GK Profile', icon: UserCheck, badge: 'NEW' },
     { id: 'gk-dashboard', label: 'GK Dashboard', icon: LayoutDashboard },
     { id: 'gk-exams', label: 'GK Exams', icon: ClipboardCheck, badge: 'NEW' },
+    { id: 'gk-result', label: 'GK Results', icon: FileText, badge: 'NEW' },
   ];
 
   const conceptualVivaItems = [

@@ -90,11 +90,37 @@ export const API_ENDPOINT = {
         START_CONCEPTUAL_VIVA: '/api/v1/topic-assessment/start',
         SUBMIT_CONCEPTUAL_ANSWER: 'api/v1/topic-assessment/submit-answer',
         END_CONCEPTUAL_VIVA: 'api/v1/topic-assessment/end',
-        GET_CONCEPTUAL_VIVA_HISTORY: (user_id: number | string | undefined) => `/api/v1/topic-assessment/user-sessions?user_id=${user_id}`,
+        GET_CONCEPTUAL_VIVA_HISTORY: (user_id: number | string | undefined, subscription_id: string | number | undefined) => `/api/v1/topic-assessment/user-sessions?user_id=${user_id}&subscription_id=${subscription_id}`,
         GET_CONCEPTUAL_VIVA_RESULT: (session_id: number | string, user_id: number | string | undefined) => `/api/v1/topic-assessment/report?session_id=${session_id}&user_id=${user_id}`,
         GET_CONCEPTUAL_VIVA_SOLUTION: (userId: number | string | undefined) => `/api/v1/topic-assessment/user-question-history?user_id=${userId}`,
         START_CONCEPTUAL_VIVA_SESSION: '/api/v1/topic-assessment/start-viva-session',
-    }
+    },
+
+     GENERAL_KNOWLEDGE: {
+
+        //GK Dashboard ENDPOINTS
+        GK_DASHBOARD_CARDS: `/api/v1/gk/dashboard/cards`,
+        GK_DASHBOARD_SUBJECTWISE_PERFORMANCE: `/api/v1/gk/dashboard/subject-wise-performance-indicators`,
+        GK_DASHBOARD_WEAK_CHAPTERS: `/api/v1/gk/dashboard/weak-chapters`,
+        GK_DASHBOARD_WEAK_TOPICS: `/api/v1/gk/dashboard/weak-topics`,
+        GK_DASHBOARD_SUBJECT_RADAR: `/api/v1/gk/dashboard/subject-radar`,
+
+        //GK Categories ENDPOINTS
+        GK_CATEGORIES: `/api/gk/categories`,
+
+        // GK Profile ENDPOINTS
+        FETCH_GK_PROFILE: (user_id: number | string | undefined) => `/api/gk/profiles?user_id=${user_id}`,
+        UPDATE_GK_PROFILE: (user_id: number | string| undefined) => `/api/gk/profiles?user_id=${user_id}`,
+
+        //Assessment ENDPOINTS
+        START_GK_ASSESSMENT: `/api/gk/assessments/start`,
+        END_GK_ASSESSMENT: `/api/gk/assessments/end`,
+        GET_LIST_GK_ASSESSMENT : (user_id: number | string | undefined) => `/api/gk/assessments/user?user_id=${user_id}`,
+        GET_RESULT_GK_ASSESSMENT: (gk_user_ass_id: number | string | undefined) => `/api/gk/assessments/results?gk_user_ass_id=${gk_user_ass_id}`
+
+    },
+
+
 
 
 }
