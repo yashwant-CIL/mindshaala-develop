@@ -132,7 +132,7 @@ const mapBackendQuestionToFrontend = (q: any): Question => {
     question: q.gk_question || details.gk_question || q.question || q.question_text || q.question_latex || q.que || details.question_latex || details.question_text || '',
     options: options.length > 0 ? options : ['Option A', 'Option B', 'Option C', 'Option D'],
     correctAnswer: parseCorrectAnswer(q),
-    explanation: q.explanation || q.explanation_text || details.explanation || details.explanation_text || '',
+    explanation: q.gk_answer || details.gk_answer || q.explanation || q.explanation_text || details.explanation || details.explanation_text || '',
     difficulty: q.difficulty || details.difficulty || 'Medium'
   };
 };
