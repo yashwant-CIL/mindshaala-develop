@@ -77,22 +77,6 @@ export default function GKProfile() {
       document.head.appendChild(link);
     }
 
-    // Fetch profile data
-    const savedProfile = localStorage.getItem('profileData');
-    if (savedProfile) {
-      setProfile(JSON.parse(savedProfile));
-    } else {
-      // Fallback premium mock profile for demo
-      setProfile({
-        firstName: 'Rohan',
-        lastName: 'Sharma',
-        currentGrade: 'Class 10',
-        schoolBoard: 'ICSE',
-        schoolName: "St. Xavier's High School",
-        phoneNumber: '9764696566'
-      });
-    }
-
     // Fetch GK profile from API
     const fetchProfileFromBackend = async () => {
       const userId = localStorage.getItem('user_id') || Cookies.get('user_id');
@@ -101,6 +85,9 @@ export default function GKProfile() {
       try {
         const response = await GKService.fetchGKProfile(userId);
         if (response) {
+          if (response.user_name) {
+            setProfile({ user_name: response.user_name });
+          }
           if (response.area_of_focus === null) {
             setBackendAreaOfFocusNull(true);
             setSelectedCategories([]);
@@ -303,6 +290,12 @@ export default function GKProfile() {
 
   const getInitials = () => {
     if (!profile) return 'ST';
+    if (profile.user_name) {
+      const parts = profile.user_name.trim().split(/\s+/);
+      const first = parts[0] ? parts[0].charAt(0) : '';
+      const last = parts[1] ? parts[1].charAt(0) : '';
+      return first || last ? (first + last).toUpperCase() : 'ST';
+    }
     const first = (profile.firstName || profile.first_name || '').charAt(0);
     const last = (profile.lastName || profile.last_name || '').charAt(0);
     return first || last ? (first + last).toUpperCase() : 'ST';
@@ -342,7 +335,7 @@ export default function GKProfile() {
             {/* <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Welcome back,</span> */}
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-none">
-                {profile ? `${profile.firstName || profile.first_name || ''} ${profile.lastName || profile.last_name || ''}`.trim() || 'User Profile' : 'Loading...'}
+                {profile ? (profile.user_name || `${profile.firstName || profile.first_name || ''} ${profile.lastName || profile.last_name || ''}`.trim() || 'User Profile') : 'Loading...'}
               </h2>
               {/* <span className="inline-flex items-center px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest border border-indigo-100/30">
                 {profile?.currentGrade || profile?.current_grade || profile?.standard_name || profile?.standardName || 'Class 10'}
