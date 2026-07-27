@@ -128,6 +128,12 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     { id: 'conceptual-tutor-report', label: 'Report', icon: ClipboardCheck },
   ];
 
+  const aiTutorItems = [
+    { id: 'ai-tutor-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'ai-tutor-selection', label: 'AI Tutor', icon: Brain },
+    { id: 'ai-tutor-report', label: 'Report', icon: ClipboardCheck },
+  ];
+
   const doubtSupport = [
     { id: 'doubt-hub', label: 'Doubt Hub', icon: HelpCircle, badge: 'NEW' },
     { id: 'doubt-hub-workbench', label: 'Workbench', icon: MessageCircle, badge: 'TEACHER' },
@@ -155,6 +161,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const [isExamZoneExpanded, setIsExamZoneExpanded] = useState(isGroupActive(examZone));
   const [isGeneralKnowledgeExpanded, setIsGeneralKnowledgeExpanded] = useState(isGroupActive(generalKnowledgeItems));
   const [isConceptualVivaExpanded, setIsConceptualVivaExpanded] = useState(isGroupActive(conceptualVivaItems));
+  const [isAITutorExpanded, setIsAITutorExpanded] = useState(isGroupActive(aiTutorItems));
   const [isSpeakAlongVivaExpanded, setIsSpeakAlongVivaExpanded] = useState(isGroupActive(speakAlongVivaItems));
   const [isDoubtSupportExpanded, setIsDoubtSupportExpanded] = useState(isGroupActive(doubtSupport));
   const [isOthersExpanded, setIsOthersExpanded] = useState(isGroupActive(bottomMenuItems));
@@ -167,6 +174,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     if (isGroupActive(examZone)) setIsExamZoneExpanded(true);
     if (isGroupActive(generalKnowledgeItems)) setIsGeneralKnowledgeExpanded(true);
     if (isGroupActive(conceptualVivaItems)) setIsConceptualVivaExpanded(true);
+    if (isGroupActive(aiTutorItems)) setIsAITutorExpanded(true);
     if (isGroupActive(speakAlongVivaItems)) setIsSpeakAlongVivaExpanded(true);
     if (isGroupActive(doubtSupport)) setIsDoubtSupportExpanded(true);
     if (isGroupActive(bottomMenuItems)) setIsOthersExpanded(true);
@@ -379,6 +387,36 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
             {conceptualVivaItems.map((item: any) => {
               const Icon = item.icon;
               const isActive = currentPage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onNavigate?.(item.id)}
+                  className={childMenuClass(isActive)}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <span className="flex-1 text-left">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* AI Tutor */}
+        <button
+          onClick={() => setIsAITutorExpanded(!isAITutorExpanded)}
+          className={parentMenuClass(false, isAITutorExpanded || isGroupActive(aiTutorItems))}
+        >
+          <Brain className={`w-5 h-5 ${(isAITutorExpanded || isGroupActive(aiTutorItems)) ? 'text-violet-600' : 'text-slate-400'}`} />
+          <span className="flex-1 text-left">AI Tutor</span>
+          {isAITutorExpanded ? <ChevronDown className="w-4 h-4 opacity-50" /> : <ChevronRight className="w-4 h-4 opacity-50" />}
+        </button>
+        {isAITutorExpanded && (
+          <div className="mt-1 mb-2 space-y-1">
+            {aiTutorItems.map((item: any) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id || 
+                (item.id === 'ai-tutor-selection' && currentPage === 'ai-tutor-session') ||
+                (item.id === 'ai-tutor-report' && currentPage === 'ai-tutor-result-detail');
               return (
                 <button
                   key={item.id}

@@ -120,6 +120,14 @@ export const API_ENDPOINT = {
 
     },
 
+    AI_TUTOR: {
+        AI_TUTOR_START: '/api/ai_tutor/session/start',
+        AI_TUTOR_SUBMIT_ANSWER: 'api/ai_tutor/session/answer',
+        AI_TUTOR_END: 'api/ai_tutor/session/end',
+        AI_TUTOR_HISTORY: (user_id: number | string | undefined, subscription_id: string | number ) => `/api/ai_tutor/sessions?user_id=${user_id}&subscription_id=${subscription_id}`,
+        AI_TUTOR_RESULT: (session_id: number | string) => `/api/ai_tutor/result?session_id=${session_id}`,
+    },
+
 
 
 

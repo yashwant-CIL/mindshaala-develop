@@ -70,6 +70,11 @@ import ConceptualVivaSelection from "./components/conceptual-tutor/ConceptualTut
 import ConceptualVivaSession from "./components/conceptual-tutor/ConceptualTutorSession";
 import ConceptualVivaHistory from "./components/conceptual-tutor/ConceptualTutorHistory";
 import ConceptualVivaResultDetails from "./components/conceptual-tutor/ConceptualTutorResultDetails";
+import AITutorDashboard from "./components/ai-tutor/AITutorDashboard";
+import AITutorSelection from "./components/ai-tutor/AITutorSelection";
+import AITutorSession from "./components/ai-tutor/AITutorSession";
+import AITutorHistory from "./components/ai-tutor/AITutorHistory";
+import AITutorResultDetails from "./components/ai-tutor/AITutorResultDetails";
 import SpeakAlongDashboard from "./components/speakalong-viva/SpeakAlongDashboard";
 import SpeakAlongSelection from "./components/speakalong-viva/SpeakAlongSelection";
 import SpeakAlongSession from "./components/speakalong-viva/SpeakAlongSession";
@@ -208,6 +213,18 @@ export default function App() {
   const [selectedConceptualVivaParams, setSelectedConceptualVivaParams] = useState<any>(
     () => loadState("selectedConceptualVivaParams", null)
   );
+  const [selectedAITutorSessionId, setSelectedAITutorSessionId] = useState<string | number | null>(
+    () => loadState("selectedAITutorSessionId", null)
+  );
+  const [selectedAITutorData, setSelectedAITutorData] = useState<any>(
+    () => loadState("selectedAITutorData", null)
+  );
+  const [selectedAITutorCurrentQuestion, setSelectedAITutorCurrentQuestion] = useState<any>(
+    JSON.parse(localStorage.getItem('selectedAITutorCurrentQuestion') || 'null')
+  );
+  const [selectedAITutorParams, setSelectedAITutorParams] = useState<any>(
+    () => loadState("selectedAITutorParams", null)
+  );
   const [speakAlongParams, setSpeakAlongParams] = useState<any>(
     () => loadState("speakAlongParams", null)
   );
@@ -282,6 +299,10 @@ export default function App() {
     localStorage.setItem("selectedConceptualVivaSessionId", JSON.stringify(selectedConceptualVivaSessionId));
     localStorage.setItem("selectedConceptualVivaData", JSON.stringify(selectedConceptualVivaData));
     localStorage.setItem("selectedConceptualVivaCurrentQuestion", JSON.stringify(selectedConceptualVivaCurrentQuestion));
+    localStorage.setItem("selectedAITutorParams", JSON.stringify(selectedAITutorParams));
+    localStorage.setItem("selectedAITutorSessionId", JSON.stringify(selectedAITutorSessionId));
+    localStorage.setItem("selectedAITutorData", JSON.stringify(selectedAITutorData));
+    localStorage.setItem("selectedAITutorCurrentQuestion", JSON.stringify(selectedAITutorCurrentQuestion));
     localStorage.setItem("speakAlongParams", JSON.stringify(speakAlongParams));
     localStorage.setItem("gkCategory", JSON.stringify(gkCategory));
     localStorage.setItem("gkSubcategory", JSON.stringify(gkSubcategory));
@@ -290,7 +311,7 @@ export default function App() {
     localStorage.setItem("gkTotalMarks", JSON.stringify(gkTotalMarks));
     localStorage.setItem("gkTotalTimeSeconds", JSON.stringify(gkTotalTimeSeconds));
     localStorage.setItem("gkAssessmentName", JSON.stringify(gkAssessmentName));
-  }, [currentStep, activePage, phoneNumber, profileData, assessmentResults, isExistingUser, selectedUserAssId, selectedAssessmentMethod, selectedConceptualVivaParams, selectedConceptualVivaSessionId, selectedConceptualVivaData, selectedConceptualVivaCurrentQuestion, speakAlongParams, gkCategory, gkSubcategory, gkQuestions, gkAssessmentId, gkTotalMarks, gkTotalTimeSeconds, gkAssessmentName]);
+  }, [currentStep, activePage, phoneNumber, profileData, assessmentResults, isExistingUser, selectedUserAssId, selectedAssessmentMethod, selectedConceptualVivaParams, selectedConceptualVivaSessionId, selectedConceptualVivaData, selectedConceptualVivaCurrentQuestion, selectedAITutorParams, selectedAITutorSessionId, selectedAITutorData, selectedAITutorCurrentQuestion, speakAlongParams, gkCategory, gkSubcategory, gkQuestions, gkAssessmentId, gkTotalMarks, gkTotalTimeSeconds, gkAssessmentName]);
   
   // Scroll to top on step change and log for debugging
   useEffect(() => {
@@ -540,7 +561,7 @@ export default function App() {
 
         {currentStep === "main" && (
           <div className="min-h-screen bg-gray-50 flex">
-            {activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && (
+            {activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && (
               <Sidebar
                   activePage={activePage}
                   onNavigate={handleNavigate}
@@ -944,6 +965,69 @@ export default function App() {
                     onGoToDashboard={() => {
                       setActivePage("dashboard");
                       setSelectedConceptualVivaSessionId(null);
+                    }}
+                  />
+                )}
+                {activePage === "ai-tutor-dashboard" && (
+                  <AITutorDashboard />
+                )}
+                {activePage === "ai-tutor-selection" && (
+                  <AITutorSelection 
+                    onStartViva={(params) => {
+                      setSelectedAITutorParams(params);
+                      setSelectedAITutorSessionId(null);
+                      setSelectedAITutorData(null);
+                      setSelectedAITutorCurrentQuestion(null);
+                      setActivePage("ai-tutor-session");
+                    }}
+                  />
+                )}
+                {activePage === "ai-tutor-session" && (
+                  <AITutorSession 
+                    initialParams={selectedAITutorParams} 
+                    sessionId={selectedAITutorSessionId}
+                    initialData={selectedAITutorData}
+                    initialQuestion={selectedAITutorCurrentQuestion}
+                    onSessionSync={(id, data, currentQ) => {
+                      setSelectedAITutorSessionId(id);
+                      setSelectedAITutorData(data);
+                      setSelectedAITutorCurrentQuestion(currentQ);
+                    }}
+                    onFinish={(sessionId) => {
+                      setSelectedAITutorSessionId(sessionId);
+                      setActivePage("ai-tutor-result-detail");
+                      setSelectedAITutorData(null);
+                      setSelectedAITutorCurrentQuestion(null);
+                    }}
+                    onExit={() => {
+                      setActivePage("ai-tutor-selection");
+                      setSelectedAITutorSessionId(null);
+                      setSelectedAITutorData(null);
+                      setSelectedAITutorCurrentQuestion(null);
+                    }}
+                  />
+                )}
+                {activePage === "ai-tutor-report" && (
+                  <AITutorHistory 
+                    onViewResult={(sessionId) => {
+                      setSelectedAITutorSessionId(sessionId);
+                      setActivePage("ai-tutor-result-detail");
+                    }}
+                    onStartNew={() => {
+                      setActivePage("ai-tutor-selection");
+                    }}
+                  />
+                )}
+                {activePage === "ai-tutor-result-detail" && (
+                  <AITutorResultDetails 
+                    sessionId={selectedAITutorSessionId as string} 
+                    onBack={() => {
+                      setActivePage("ai-tutor-report");
+                      setSelectedAITutorSessionId(null);
+                    }}
+                    onGoToDashboard={() => {
+                      setActivePage("dashboard");
+                      setSelectedAITutorSessionId(null);
                     }}
                   />
                 )}

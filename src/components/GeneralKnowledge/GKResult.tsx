@@ -14,7 +14,7 @@ import {
   Info,
   CheckCircle,
   TrendingUp,
-  BarChart2
+  // BarChart2
 } from 'lucide-react';
 import { GKService } from '../../services/GKService';
 import QuestionMathJax from '../../shared/mathjaxconfig/QuestionMathJax';
