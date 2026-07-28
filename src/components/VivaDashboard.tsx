@@ -296,113 +296,71 @@ const formatTimeFromDate = (dateString: any) => {
 
    
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F8FAFC] pb-12">
+    <div className="flex-1 overflow-y-auto bg-[#F8FAFC] pb-6">
       {/* Dynamic Header */}
-      <div className="bg-gradient-to-br from-indigo-700 via-blue-600 to-indigo-800 px-8 py-4 mb-8 shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-indigo-700 via-blue-600 to-indigo-800 px-8 py-4 mb-6 shadow-xl relative overflow-hidden">
         {/* Abstract background elements */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl" />
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-400/10 rounded-full -ml-10 -mb-10 blur-2xl" />
         
-        <div className=" mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+        <div className=" mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-inner">
-              <Activity className="w-8 h-8 text-white" />
+            <div className="p-2.5 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 shadow-inner">
+              <Activity className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Viva Performance Analytics</h1>
-              <p className="text-blue-100 font-medium text-sm">Elevate your readiness for oral assessments</p>
+              <h1 className="text-xl font-bold text-white tracking-tight">Viva Performance Analytics</h1>
+              <p className="text-blue-100 font-medium text-xs">Elevate your readiness for oral assessments</p>
             </div>
           </div>
-          {/* <div className="flex gap-3">
-            <button className="px-5 py-2.5 bg-white/10 backdrop-blur-md hover:bg-white/20 text-white rounded-xl font-bold transition-all border border-white/20 text-sm flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              This Month
-            </button>
-            <button className="px-5 py-2.5 bg-white text-indigo-600 hover:bg-indigo-50 rounded-xl font-bold transition-all shadow-lg text-sm flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              Download Report
-            </button>
-          </div> */}
         </div>
       </div>
 
-      <div className=" mx-auto px-8 space-y-8">
+      <div className=" mx-auto px-8 space-y-6">
         
-        {/* Row 1: KPI Grid & Gauges Split */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
-          
-          {/* Left: KPI Cards (3 columns x 2 rows) */}
-          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {/* Row 1: KPI Grid */}
+        <div className="grid grid-cols-1 gap-6">
+          {/* KPI Cards (6 columns on lg, 3 on md, 2 on sm) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {kpiData.map((kpi, idx) => (
-              <div key={idx} className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`p-3 rounded-2xl ${kpi.bg} ${kpi.color} group-hover:scale-110 transition-transform duration-300`}>
-                    <kpi.icon className="w-5 h-5" />
+              <div key={idx} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group">
+                <div className="flex items-start justify-between mb-2">
+                  <div className={`p-2 rounded-xl ${kpi.bg} ${kpi.color} group-hover:scale-105 transition-transform duration-300`}>
+                    <kpi.icon className="w-4 h-4" />
                   </div>
-                  <div className={`flex items-center gap-0.5 ${kpi.trendColor} font-bold text-xs`}>
-                    {kpi.trend}
-                    <ArrowUpRight className="w-3 h-3" />
-                  </div>
+                  {kpi.trend && (
+                    <div className={`flex items-center gap-0.5 ${kpi.trendColor} font-bold text-[10px]`}>
+                      {kpi.trend}
+                      <ArrowUpRight className="w-2.5 h-2.5" />
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">{kpi.value}</h3>
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">{kpi.label}</p>
-                  <div className="h-1 w-8 bg-gray-100 rounded-full group-hover:w-full transition-all duration-500" />
+                  <h3 className="text-lg font-bold text-gray-900 mb-0.5 truncate">{kpi.value}</h3>
+                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-1 truncate">{kpi.label}</p>
+                  <div className="h-0.5 w-6 bg-gray-100 rounded-full group-hover:w-full transition-all duration-500" />
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Right: Modern Performance Gauges */}
-          {/* <div className="lg:col-span-1 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col items-center justify-center">
-            <div className="w-full flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Target className="w-6 h-6 text-indigo-600" />
-                Vital Stat
-              </h3>
-              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full uppercase tracking-tighter">Live Update</span>
-            </div>
-            
-            <div className="flex flex-col gap-6 w-full items-center">
-              <ModernGauge 
-                value={85} 
-                label="Accuracy" 
-                color="#6366F1" 
-                subLabel="Above Class Avg"
-              />
-              <ModernGauge 
-                value={92} 
-                label="Attempt" 
-                color="#10B981" 
-                subLabel="Steady Progress"
-              />
-            </div>
-            
-            <div className="mt-8 p-4 bg-gray-50 rounded-2xl w-full border border-dashed border-gray-200">
-              <p className="text-xs text-gray-500 text-center font-medium leading-relaxed">
-                You're in the <span className="text-indigo-600 font-bold">top 12%</span> of students. Your accuracy pulse is exceptionally strong this week.
-              </p>
-            </div>
-          </div>*/}
         </div> 
 
-        {/* Row 2: Subject Pulse & Efficiency Radar Side-by-Side (2/3 vs 1/3) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Left: Subject-wise Bar Visualization (2/3 width) */}
-          <div className="lg:col-span-3 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 mb-8 flex items-center gap-2">
-              <Activity className="w-6 h-6 text-rose-500" />
+        {/* Row 2: Subject Pulse */}
+        <div className="grid grid-cols-1 gap-6">
+          {/* Subject-wise Bar Visualization */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+            <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-rose-500" />
               Subject Pulse
             </h3>
-            <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               {subjectAccuracyData.map((subject, idx) => (
                 <div key={idx} className="group">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-bold text-gray-700">{subject.subject_name}</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-gray-700">{subject.subject_name}</span>
                     <span className="text-xs font-bold text-gray-900" style={{ color: subject.fill }}>{subject.value}%</span>
                   </div>
-                  <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                     <div 
                       className="h-full rounded-full transition-all duration-1000 ease-out"
                       style={{ 
@@ -415,124 +373,67 @@ const formatTimeFromDate = (dateString: any) => {
                 </div>
               ))}
             </div>
-            {/* <div className="mt-8 pt-6 border-t border-gray-50 flex items-center justify-between">
-              <div className="text-center">
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Consistency</p>
-                <p className="text-sm font-bold text-indigo-600 font-mono">High</p>
-              </div>
-              <div className="text-center border-x border-gray-100 px-8">
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Top Subject</p>
-                <p className="text-sm font-bold text-emerald-600 font-mono">Biology</p>
-              </div>
-              <div className="text-center">
-                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Alerts</p>
-                <p className="text-sm font-bold text-rose-500 font-mono">0</p>
-              </div>
-            </div> */}
           </div>
-
-          {/* Right: Efficiency Radar (1/3 width) */}
-          {/* <div className="lg:col-span-1 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-              <Zap className="w-6 h-6 text-amber-500" />
-              Readiness Radar
-            </h3>
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                  <PolarGrid stroke="#F1F5F9" strokeWidth={2} />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#94A3B8', fontSize: 11, fontWeight: 700 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar
-                    name="Mastery"
-                    dataKey="score"
-                    stroke="#6366F1"
-                    strokeWidth={3}
-                    fill="#6366F1"
-                    fillOpacity={0.15}
-                  />
-                  <Radar
-                    name="Time Utility"
-                    dataKey="time"
-                    stroke="#10B981"
-                    strokeWidth={3}
-                    fill="#10B981"
-                    fillOpacity={0.1}
-                  />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                  />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ paddingTop: '20px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </div> */}
         </div>
 
         {/* History Table - Structured Professional Look */}
-        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden mb-12">
-          <div className="px-10 py-7 border-b border-gray-100 flex items-center justify-between bg-white">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <Calendar className="w-6 h-6 text-blue-600" />
+              <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-blue-600" />
                 Latest Viva Logs
               </h3>
-              <p className="text-xs text-gray-500 mt-1 font-medium">Historical audit trail of your performance</p>
+              <p className="text-[11px] text-gray-500 mt-0.5 font-medium">Historical audit trail of your performance</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Real-time Data Fetching</span>
-            </div>
+            {/* <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Real-time Data Fetching</span>
+            </div> */}
           </div>
           
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/80 border-b border-gray-200">
-                  <th className="px-8 py-5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Assessment Name</th>
-                  <th className="px-10 py-5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Started At</th>
-                  <th className="px-8 py-5 text-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">Obtained Marks</th>
-                  <th className="px-8 py-5 text-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">Percentage</th>
-                  <th className="px-10 py-5 text-right text-[11px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Assessment Name</th>
+                  <th className="px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Started At</th>
+                  <th className="px-6 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Obtained Marks</th>
+                  <th className="px-6 py-3 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Percentage</th>
+                  <th className="px-6 py-3 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {examHistory.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-10 py-8 text-center text-gray-500 font-medium">
+                    <td colSpan={5} className="px-6 py-6 text-center text-gray-500 text-xs font-medium">
                       No history found.
                     </td>
                   </tr>
                 )}
                 {examHistory.slice(0, 5).map((exam) => (
                   <tr key={exam.id} className="hover:bg-blue-50/50 transition-all duration-200 group">
-                    <td className="px-8 py-6">
-                      <span className="px-4 py-1.5 bg-gray-100 text-gray-700 font-bold rounded-xl text-[11px] group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors inline-block">
+                    <td className="px-6 py-3">
+                      <span className="px-3 py-1 bg-gray-100 text-gray-700 font-bold rounded-lg text-[10px] group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors inline-block">
                         {exam.subject}
                       </span>
                     </td>
-                    <td className="px-10 py-6">
+                    <td className="px-6 py-3">
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-900">{exam.date}</span>
-                        <span className="text-[11px] text-gray-500 font-medium">{exam.time}</span>
+                        <span className="text-xs font-bold text-gray-900">{exam.date}</span>
+                        <span className="text-[10px] text-gray-500 font-medium">{exam.time}</span>
                       </div>
                     </td>
-                    <td className="px-8 py-6 text-center">
-                      <span className="text-sm font-bold text-gray-900 font-mono tracking-tight">{exam.score}</span>
+                    <td className="px-6 py-3 text-center">
+                      <span className="text-xs font-bold text-gray-900 font-mono tracking-tight">{exam.score}</span>
                     </td>
-                    <td className="px-8 py-6">
-                      <div className="flex items-center justify-center gap-4">
-                        {/* <div className="w-32 bg-gray-100 h-2 rounded-full overflow-hidden shrink-0 border border-gray-200/50">
-                          <div 
-                            className="bg-gradient-to-r from-emerald-400 to-emerald-600 h-full rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)]" 
-                            style={{ width: exam.accuracy }}
-                          />
-                        </div> */}
-                        <span className="text-xs font-bold text-gray-700 min-w-[35px]">{exam.accuracy}</span>
+                    <td className="px-6 py-3">
+                      <div className="flex items-center justify-center">
+                        <span className="text-xs font-bold text-gray-700">{exam.accuracy}</span>
                       </div>
                     </td>
-                    <td className="px-10 py-6 text-right">
-                      <span className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider shadow-sm border ${
+                    <td className="px-6 py-3 text-right">
+                      <span className={`px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider shadow-sm border ${
                         exam.status === 'Exceptional' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
                         exam.status === 'Great' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                         'bg-blue-50 text-blue-700 border-blue-100'
@@ -546,13 +447,13 @@ const formatTimeFromDate = (dateString: any) => {
             </table>
           </div>
           
-          <div className="px-10 py-7 bg-gray-50/50 flex justify-center border-t border-gray-100">
+          <div className="px-6 py-4 bg-gray-50/50 flex justify-center border-t border-gray-100">
             <button 
               onClick={() => onNavigate('viva-result')}
-              className="flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-bold transition-all group py-2.5 px-8 bg-white rounded-2xl shadow-sm border border-gray-200 hover:shadow-md hover:-translate-y-0.5"
+              className="flex items-center gap-2 text-xs text-indigo-600 hover:text-indigo-800 font-bold transition-all group py-2 px-6 bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:-translate-y-0.5"
             >
               Analyze Full Performance History
-              <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </button>
           </div>
         </div>

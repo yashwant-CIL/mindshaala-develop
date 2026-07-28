@@ -1010,8 +1010,8 @@ export default function App() {
                 {activePage === "ai-tutor-report" && (
                   <AITutorHistory 
                     onViewResult={(sessionId) => {
-                      setSelectedAITutorSessionId(sessionId);
                       setActivePage("ai-tutor-result-detail");
+                      setSelectedAITutorSessionId(sessionId);
                     }}
                     onStartNew={() => {
                       setActivePage("ai-tutor-selection");
