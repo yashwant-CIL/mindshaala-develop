@@ -38,7 +38,9 @@ import {
   UserCheck,
   Menu,
   X,
-  Download
+  Download,
+  Upload,
+  Video
 } from 'lucide-react';
 import mindshaalLogo from '../assets/Mindshaala.png';
 import Cookies from 'js-cookie';
@@ -142,6 +144,10 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     { id: 'doubt-hub-workbench', label: 'Workbench', icon: MessageCircle, badge: 'TEACHER' },
   ];
 
+  const adminItems = [
+    { id: 'upload-video', label: 'Upload Video', icon: Video },
+  ];
+
   const bottomMenuItems = [
     { id: 'teacher-observation-board', label: 'Teacher Observations', icon: Eye, badge: 'AI' },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -167,6 +173,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const [isAITutorExpanded, setIsAITutorExpanded] = useState(isGroupActive(aiTutorItems));
   const [isSpeakAlongVivaExpanded, setIsSpeakAlongVivaExpanded] = useState(isGroupActive(speakAlongVivaItems));
   const [isDoubtSupportExpanded, setIsDoubtSupportExpanded] = useState(isGroupActive(doubtSupport));
+  const [isAdminExpanded, setIsAdminExpanded] = useState(isGroupActive(adminItems));
   const [isOthersExpanded, setIsOthersExpanded] = useState(isGroupActive(bottomMenuItems));
 
   // Auto-expand groups when currentPage changes
@@ -180,6 +187,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     if (isGroupActive(aiTutorItems)) setIsAITutorExpanded(true);
     if (isGroupActive(speakAlongVivaItems)) setIsSpeakAlongVivaExpanded(true);
     if (isGroupActive(doubtSupport)) setIsDoubtSupportExpanded(true);
+    if (isGroupActive(adminItems)) setIsAdminExpanded(true);
     if (isGroupActive(bottomMenuItems)) setIsOthersExpanded(true);
     if (isComputersActive) setIsComputersExpanded(true);
     if (isChemistryActive) setIsChemistryExpanded(true);
@@ -206,6 +214,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsAdminExpanded(false);
       handleMobileNavigate('viva-dashboard');
     }
   };
@@ -221,6 +230,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsAdminExpanded(false);
       handleMobileNavigate('conceptual-tutor-dashboard');
     }
   };
@@ -236,6 +246,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsAdminExpanded(false);
       handleMobileNavigate('speakalong-dashboard');
     }
   };
@@ -251,6 +262,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsAdminExpanded(false);
       handleMobileNavigate('take-test');
     }
   };
@@ -266,6 +278,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsAdminExpanded(false);
       handleMobileNavigate('ai-tutor-dashboard');
     }
   };
@@ -281,6 +294,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
       setIsAITutorExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsAdminExpanded(false);
       handleMobileNavigate('gk-dashboard');
     }
   };
@@ -296,7 +310,24 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
+      setIsAdminExpanded(false);
       handleMobileNavigate('doubt-hub');
+    }
+  };
+
+  const toggleAdmin = () => {
+    if (isAdminExpanded) {
+      setIsAdminExpanded(false);
+    } else {
+      setIsAdminExpanded(true);
+      setIsVivaPrepExpanded(false);
+      setIsConceptualVivaExpanded(false);
+      setIsSpeakAlongVivaExpanded(false);
+      setIsExamZoneExpanded(false);
+      setIsAITutorExpanded(false);
+      setIsGeneralKnowledgeExpanded(false);
+      setIsDoubtSupportExpanded(false);
+      handleMobileNavigate('upload-video');
     }
   };
 
@@ -698,6 +729,34 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
           )}
 
           <div className="my-4 border-t border-slate-100"></div>
+
+          {/* Admin Section */}
+          <button
+            onClick={toggleAdmin}
+            className={parentMenuClass(false, isAdminExpanded || isGroupActive(adminItems))}
+          >
+            <Shield className={`w-5 h-5 ${(isAdminExpanded || isGroupActive(adminItems)) ? 'text-blue-600' : 'text-slate-400'}`} />
+            <span className="flex-1 text-left">ADMIN</span>
+            {isAdminExpanded ? <ChevronDown className="w-4 h-4 opacity-50" /> : <ChevronRight className="w-4 h-4 opacity-50" />}
+          </button>
+          {isAdminExpanded && (
+            <div className="mt-1 mb-2 space-y-1">
+              {adminItems.map((item: any) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleMobileNavigate(item.id)}
+                    className={childMenuClass(isActive)}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="flex-1 text-left">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Others/Settings */}
           <button

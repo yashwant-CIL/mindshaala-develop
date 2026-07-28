@@ -95,6 +95,7 @@ import TheorySolutionScreen from "./components/test-series/components/TheorySolu
 import { Toaster, toast } from "react-hot-toast";
 import { Toaster as ShadcnToaster } from "./components/ui/toaster";
 
+import UploadVideo from "./components/admin-section/UploadVideo";
 import Cookies from "js-cookie";
 import LandingPage from "./components/LandingPage/LandingPage";
 import { CartPage } from "./components/CartPage";
@@ -652,6 +653,9 @@ export default function App() {
                         description="We're currently building a robust settings panel to help you customize your learning experience. Check back soon!" 
                         onBack={() => handleNavigate('dashboard')} 
                     />
+                )}
+                {activePage === "upload-video" && (
+                    <UploadVideo onBack={() => handleNavigate('dashboard')} />
                 )}
                 {activePage === "studyplanner" && (
                 <SmartStudyPlanner />
