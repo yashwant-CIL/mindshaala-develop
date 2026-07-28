@@ -98,7 +98,7 @@ export default function AITutorResultDetails({ sessionId, onBack, onGoToDashboar
   const fetchResult = async (userId: string | number) => {
     setLoading(true);
     try {
-      const data = await AITutorService.getAITutorResult(sessionId);
+      const data = await AITutorService.GetAITutorResult(sessionId);
       setResult(data);
     } catch (error) {
       toast.error("Failed to load result details");

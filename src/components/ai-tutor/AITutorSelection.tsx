@@ -81,7 +81,7 @@ export default function AITutorSelection({ onStartViva }: SelectionProps) {
   const fetchSubjects = async () => {
     setLoading(prev => ({ ...prev, subjects: true }));
     try {
-      const data = await AITutorService.getAllSubjects(subscriptionId!);
+      const data = await AITutorService.GetAllSubjects(subscriptionId!);
       setSubjects(data || []);
     } catch (error) {
       toast.error("Failed to load subjects");
@@ -93,7 +93,7 @@ export default function AITutorSelection({ onStartViva }: SelectionProps) {
   const fetchChapters = async (subjectId: number) => {
     setLoading(prev => ({ ...prev, chapters: true }));
     try {
-      const data = await AITutorService.getAllChapters(subjectId);
+      const data = await AITutorService.GetAllChapters(subjectId);
       setChapters(data || []);
     } catch (error) {
       toast.error("Failed to load chapters");
@@ -105,7 +105,7 @@ export default function AITutorSelection({ onStartViva }: SelectionProps) {
   const fetchTopics = async (chapterId: number) => {
     setLoading(prev => ({ ...prev, topics: true }));
     try {
-      const data = await AITutorService.getAllTopics(chapterId);
+      const data = await AITutorService.GetAllTopics(chapterId);
       setTopics(data || []);
     } catch (error) {
       toast.error("Failed to load topics");

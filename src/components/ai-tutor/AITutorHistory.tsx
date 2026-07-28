@@ -45,7 +45,7 @@ export default function AITutorHistory({ onViewResult, onStartNew }: HistoryProp
   const fetchHistory = async (userId: string | number, subId: string | number) => {
     setLoading(true);
     try {
-      const data = await AITutorService.getAITutorHistory(userId, subId);
+      const data = await AITutorService.GetAITutorHistory(userId, subId);
       console.log("AI Tutor History Reports:", data.sessions);
       
       if (data && Array.isArray(data.sessions)) {

@@ -121,13 +121,24 @@ export const API_ENDPOINT = {
     },
 
     AI_TUTOR: {
+        //dummy api endpoints 
+        AI_TUTOR_DASHBOARD_CARDS: (user_id: string | number , subscription_id : string | number) => `/api/ai_tutor/dashboard/cards?user_id=${user_id}&subscription_id=${subscription_id}`,
+        AI_TUTOR_DASHBOARD_WEAK_CHAPTERS: (user_id: string | number , subscription_id : string | number) => `/api/ai_tutor/dashboard/weak_chapters?user_id=${user_id}&subscription_id=${subscription_id}`,
+        AI_TUTOR_DASHBOARD_WEAK_TOPICS: (user_id: string | number , subscription_id : string | number) => `/api/ai_tutor/dashboard/weak_topics?user_id=${user_id}&subscription_id=${subscription_id}`,
+        AI_TUTOR_DASHBOARD_SUBJECT_RADAR:  (user_id: string | number , subscription_id : string | number) => `/api/ai_tutor/dashboard/radar?user_id=${user_id}&subscription_id=${subscription_id}`,
+        
+        //get all subjects , chapters , topics based on the selected subscription
+        GET_ALL_SUBJECTS: (subscription_id: number | string) => `/api/v1/cil/subscription_subject/get/all/by?subscription_id=${subscription_id}`,
+        GET_ALL_CHAPTERS: (subject_id: number | string) => `/api/v1/cil/chapter/get/all/by/subject_id?subject_id=${subject_id}`,
+        GET_ALL_TOPICS: (chapter_id: number | string) => `/api/v1/cil/topics/get/by/chapter_id?chapter_id=${chapter_id}`,
+        
+        //AI TUTOR ENDPOINTS
         AI_TUTOR_START: '/api/ai_tutor/session/start',
-        AI_TUTOR_SUBMIT_ANSWER: 'api/ai_tutor/session/answer',
-        AI_TUTOR_END: 'api/ai_tutor/session/end',
-        AI_TUTOR_HISTORY: (user_id: number | string | undefined, subscription_id: string | number ) => `/api/ai_tutor/sessions?user_id=${user_id}&subscription_id=${subscription_id}`,
-        AI_TUTOR_RESULT: (session_id: number | string) => `/api/ai_tutor/result?session_id=${session_id}`,
+        AI_TUTOR_SUBMIT_ANSWER: '/api/ai_tutor/session/answer',
+        AI_TUTOR_END: '/api/ai_tutor/session/end',
+        AI_TUTOR_HISTORY: (user_id:string | number | undefined, subscription_id: number | string) => `/api/ai_tutor/sessions?user_id=${user_id}&subscription_id=${subscription_id}`,
+        AI_TUTOR_RESULT: (session_id: string | number) => `/api/ai_tutor/result?session_id=${session_id}`,
     },
-
 
 
 

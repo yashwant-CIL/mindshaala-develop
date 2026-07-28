@@ -230,7 +230,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
       console.log("startAITutorSession payload:", payload);
 
-      const response = await AITutorService.startAITutorSession(payload);
+      const response = await AITutorService.StartAITutorSession(payload);
       console.log("startAITutorSession response:", response);
       if (response && response.session) {
         const newSessionId = response.session.session_id;
@@ -276,7 +276,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         is_intro: false,
         action: 'submit'
       });
-      const response = await AITutorService.submitAITutorAnswer(formData);
+      const response = await AITutorService.SubmitAITutorAnswer(formData);
       if (response && response.next_task) {
         setConceptualVivaData(response);
         handleNextTaskResponse(response.next_task, true);
@@ -354,7 +354,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
     try {
       const activeSessionId = sessionId || conceptualVivaData?.session?.session_id;
       if (activeSessionId) {
-        await AITutorService.endAITutorSession({ session_id: activeSessionId });
+        await AITutorService.EndAITutorSession({ session_id: activeSessionId });
         onFinish(activeSessionId);
       } else {
         onExit();
@@ -527,7 +527,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         action: 'set_knowledge_flag',
         audio_file: ""
       });
-      const response = await AITutorService.submitAITutorAnswer(formData);
+      const response = await AITutorService.SubmitAITutorAnswer(formData);
       console.log("submitAITutorAnswer (knowledge check) response:", response);
       if (response && response.next_task) {
         setConceptualVivaData(response);
@@ -596,7 +596,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         audio_file: `intro_${currentTask.subtopic_id}.wav`
       });
 
-      const response = await AITutorService.submitAITutorAnswer(formData);
+      const response = await AITutorService.SubmitAITutorAnswer(formData);
       console.log("submitAITutorAnswer (intro audio) response:", response);
       if (response && response.next_task) {
         setConceptualVivaData(response);
@@ -659,7 +659,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         action: 'submit',
         audio_file: ""
       });
-      const response = await AITutorService.submitAITutorAnswer(formData);
+      const response = await AITutorService.SubmitAITutorAnswer(formData);
       console.log("submitAITutorAnswer (continue explanation) response:", response);
       if (response && response.next_task) {
         setConceptualVivaData(response);
@@ -738,7 +738,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
           audio_file: `ans_${currentTask.question.question_id}.wav`
         });
 
-        const response = await AITutorService.submitAITutorAnswer(formData);
+        const response = await AITutorService.SubmitAITutorAnswer(formData);
         console.log("submitAITutorAnswer (audio question) response:", response);
         if (response) {
           setConceptualVivaData(response);
@@ -796,7 +796,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
           action: 'submit',
           audio_file: ""
         });
-        const response = await AITutorService.submitAITutorAnswer(formData);
+        const response = await AITutorService.SubmitAITutorAnswer(formData);
         console.log("submitAITutorAnswer (MCQ/TF question) response:", response);
         if (response) {
           setConceptualVivaData(response);
@@ -866,7 +866,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         action: 'skip',
         audio_file: ""
       });
-      const response = await AITutorService.submitAITutorAnswer(formData);
+      const response = await AITutorService.SubmitAITutorAnswer(formData);
       console.log("submitAITutorAnswer (skip subtopic) response:", response);
       if (response && response.next_task) {
         setConceptualVivaData(response);
@@ -912,7 +912,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         action: 'repeat',
         audio_file: ""
       });
-      const response = await AITutorService.submitAITutorAnswer(formData);
+      const response = await AITutorService.SubmitAITutorAnswer(formData);
       console.log("submitAITutorAnswer (repeat subtopic) response:", response);
       if (response && response.next_task) {
         setConceptualVivaData(response);
@@ -959,7 +959,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         action: 'skip_question',
         audio_file: ""
       });
-      const response = await AITutorService.submitAITutorAnswer(formData);
+      const response = await AITutorService.SubmitAITutorAnswer(formData);
       console.log("submitAITutorAnswer (skip question) response:", response);
       if (response && response.next_task) {
         setConceptualVivaData(response);
@@ -1610,7 +1610,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                   setIsFinishing(true);
                   try {
                     if (sessionId) {
-                      await AITutorService.endAITutorSession({ session_id: sessionId });
+                      await AITutorService.EndAITutorSession({ session_id: sessionId });
                       toast.success("Session ended successfully");
                     }
                   } catch (err) {

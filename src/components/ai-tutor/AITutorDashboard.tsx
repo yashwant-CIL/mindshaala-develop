@@ -84,10 +84,10 @@ export default function AITutorDashboard() {
       setLoading(true);
       try {
         const [cardsRes, chaptersRes, topicsRes, radarRes] = await Promise.all([
-          AITutorService.getAITutorDashboardCards(userId, subscriptionId),
-          AITutorService.getAITutorDashboardWeakChapters(userId, subscriptionId),
-          AITutorService.getAITutorDashboardWeakTopics(userId, subscriptionId),
-          AITutorService.getAITutorDashboardSubjectRadar(userId, subscriptionId),
+          AITutorService.DashboardCards(userId, subscriptionId),
+          AITutorService.DashboardWeakChapters(userId, subscriptionId),
+          AITutorService.DashboardWeakTopics(userId, subscriptionId),
+          AITutorService.DashboardSubjectRadar(userId, subscriptionId),
         ]);
 
         setCardsData(cardsRes?.data || cardsRes || null);
