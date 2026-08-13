@@ -140,6 +140,30 @@ export const API_ENDPOINT = {
         AI_TUTOR_RESULT: (session_id: string | number) => `/api/ai_tutor/result?session_id=${session_id}`,
     },
 
+    COMPETITIONS: {
+        //COMPETITION DASHBOARD ENDPOINTS
+        COMPETITION_DASHBOARD_CARDS: `/api/competition/dashboard/cards`,
+        COMPETITION_DASHBOARD_SUBJECTWISE_PERFORMANCE: `/api/competition/dashboard/subject-wise-performance-indicators`,
+        COMPETITION_DASHBOARD_WEAK_CHAPTERS: `/api/competition/dashboard/weak-chapters`,
+        COMPETITION_DASHBOARD_WEAK_TOPICS: `/api/competition/dashboard/weak-topics`,
+        COMPETITION_DASHBOARD_SUBJECT_RADAR: `/api/competition/dashboard/subject-radar`,
+
+        //Competitions 
+        GET_ALL_UPCOMING_COMPETITIONS:(subscription_id: string | number ) => `/api/v1/viva/competitions/upcoming/all?subscription_id=${subscription_id}`,
+        GET_UPCOMING_COMPETITIONS_FILTERED: (subscription_id: string | number , module_type: string | number ) => `/api/v1/viva/competitions/upcoming/all?subscription_id=${subscription_id}&module_type=${module_type}`,
+        REGISTER_FOR_COMPETITION:``,
+        GET_REGISTERED_COMPETITIONS: (user_id: string | number | undefined) =>`/api/competitions/registered-competitions?user_id=${user_id}`,
+        // GET_REGISTERED_COMPETITIONS_RESULTS: ``,
+
+        //Assessment ENDPOINTS
+        START_COMPETITION_ASSESSMENT: `/api/competition/assessments/start`,
+        SUBMIT_COMPETITION_ANSWERS: `/api/competition/assessments/asnwer-submit`,
+        END_COMPETITION_ASSESSMENT: `/api/competition/assessments/end`,
+        GET_LIST_COMPETITION_ASSESSMENT : (user_id: number | string | undefined) => `/api/competition/assessments/user?user_id=${user_id}`,
+        GET_RESULT_COMPETITION_ASSESSMENT: (competition_user_ass_id: number | string | undefined) => `/api/competition/assessments/results?competition_user_ass_id=${competition_user_ass_id}`
+
+    },
+
 
 
 }

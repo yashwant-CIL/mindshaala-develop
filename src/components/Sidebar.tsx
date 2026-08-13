@@ -38,7 +38,10 @@ import {
   UserCheck,
   Menu,
   X,
-  Download
+  Download,
+  Medal,
+  Trophy,
+  Award
 } from 'lucide-react';
 import mindshaalLogo from '../assets/Mindshaala.png';
 import Cookies from 'js-cookie';
@@ -72,6 +75,11 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     { id: 'innovative-features', label: 'Topper Features', icon: Sparkles, badge: 'NEW', highlight: true },
     { id: 'performance', label: 'Performance', icon: TrendingUp },
     { id: 'my-courses', label: 'My Courses', icon: BookOpen },
+  ];
+   const competitionSubmodules = [
+    { id: 'leaderboard', label: 'Leaderboard', icon: Medal },
+    { id: 'competitions', label: 'Competitions', icon: Trophy },
+    { id: 'competition-history', label: 'Result', icon: Award },
   ];
 
   const learningResources = [
@@ -153,9 +161,11 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const isGroupActive = (items: any[]) => items.some(item => item.id === currentPage);
   const isComputersActive = isGroupActive(computerSubmodules);
   const isChemistryActive = isGroupActive(chemistrySubmodules);
-
+  
   const [isComputersExpanded, setIsComputersExpanded] = useState(isComputersActive);
   const [isChemistryExpanded, setIsChemistryExpanded] = useState(isChemistryActive);
+
+  const isCompetitionActive = isGroupActive(competitionSubmodules) || currentPage === 'competition';
 
   // Group expansion states - Auto expand if active
   const [isLearningResourcesExpanded, setIsLearningResourcesExpanded] = useState(isGroupActive(learningResources));
@@ -168,6 +178,9 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const [isSpeakAlongVivaExpanded, setIsSpeakAlongVivaExpanded] = useState(isGroupActive(speakAlongVivaItems));
   const [isDoubtSupportExpanded, setIsDoubtSupportExpanded] = useState(isGroupActive(doubtSupport));
   const [isOthersExpanded, setIsOthersExpanded] = useState(isGroupActive(bottomMenuItems));
+  // Expanded states for Viva, Exam, and Competition groups
+  const [isCompetitionExpanded, setIsCompetitionExpanded] = useState(isCompetitionActive);
+
 
   // Auto-expand groups when currentPage changes
   useEffect(() => {
@@ -183,6 +196,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     if (isGroupActive(bottomMenuItems)) setIsOthersExpanded(true);
     if (isComputersActive) setIsComputersExpanded(true);
     if (isChemistryActive) setIsChemistryExpanded(true);
+    if(isGroupActive(competitionSubmodules || currentPage === 'competition')) setIsCompetitionExpanded(true);
   }, [currentPage]);
 
   // Mobile sidebar state
@@ -200,6 +214,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsVivaPrepExpanded(false);
     } else {
       setIsVivaPrepExpanded(true);
+      setIsCompetitionExpanded(false);
       setIsConceptualVivaExpanded(false);
       setIsSpeakAlongVivaExpanded(false);
       setIsExamZoneExpanded(false);
@@ -215,6 +230,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsConceptualVivaExpanded(false);
     } else {
       setIsConceptualVivaExpanded(true);
+      setIsCompetitionExpanded(false);
       setIsVivaPrepExpanded(false);
       setIsSpeakAlongVivaExpanded(false);
       setIsExamZoneExpanded(false);
@@ -230,6 +246,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsSpeakAlongVivaExpanded(false);
     } else {
       setIsSpeakAlongVivaExpanded(true);
+      setIsCompetitionExpanded(false);
       setIsVivaPrepExpanded(false);
       setIsConceptualVivaExpanded(false);
       setIsExamZoneExpanded(false);
@@ -245,6 +262,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
     } else {
       setIsExamZoneExpanded(true);
+      setIsCompetitionExpanded(false);
       setIsVivaPrepExpanded(false);
       setIsConceptualVivaExpanded(false);
       setIsSpeakAlongVivaExpanded(false);
@@ -260,6 +278,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
     } else {
       setIsAITutorExpanded(true);
+      setIsCompetitionExpanded(false);
       setIsVivaPrepExpanded(false);
       setIsConceptualVivaExpanded(false);
       setIsSpeakAlongVivaExpanded(false);
@@ -275,6 +294,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsGeneralKnowledgeExpanded(false);
     } else {
       setIsGeneralKnowledgeExpanded(true);
+      setIsCompetitionExpanded(false);
       setIsVivaPrepExpanded(false);
       setIsConceptualVivaExpanded(false);
       setIsSpeakAlongVivaExpanded(false);
@@ -290,6 +310,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsDoubtSupportExpanded(false);
     } else {
       setIsDoubtSupportExpanded(true);
+      setIsCompetitionExpanded(false);
       setIsVivaPrepExpanded(false);
       setIsConceptualVivaExpanded(false);
       setIsSpeakAlongVivaExpanded(false);
@@ -297,6 +318,23 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       handleMobileNavigate('doubt-hub');
+    }
+  };
+
+  // Toggle handler for Competition: default opens leaderboard!
+  const toggleCompetition = () => {
+    if (isCompetitionExpanded) {
+      setIsCompetitionExpanded(false);
+    } else {
+      setIsCompetitionExpanded(true);
+      setIsVivaPrepExpanded(false);
+      setIsDoubtSupportExpanded(false);
+      setIsConceptualVivaExpanded(false);
+      setIsSpeakAlongVivaExpanded(false);
+      setIsExamZoneExpanded(false);
+      setIsAITutorExpanded(false);
+      setIsGeneralKnowledgeExpanded(false);
+      handleMobileNavigate('leaderboard'); // By default leaderboard is selected and opened!
     }
   };
 
@@ -383,6 +421,34 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
               </button>
             );
           })}
+
+          {/* Competition Expandable Accordion Menu just below Dashboard */}
+          <button
+            onClick={toggleCompetition}
+            className={parentMenuClass(false, isCompetitionExpanded || isCompetitionActive)}
+          >
+            <Trophy className={`w-5 h-5 ${(isCompetitionExpanded || isCompetitionActive) ? 'text-blue-600' : 'text-slate-400'}`} />
+            <span className="flex-1 text-left">Competition</span>
+            {isCompetitionExpanded ? <ChevronDown className="w-4 h-4 opacity-50" /> : <ChevronRight className="w-4 h-4 opacity-50" />}
+          </button>
+          {isCompetitionExpanded && (
+            <div className="mt-1 mb-2 space-y-1">
+              {competitionSubmodules.map((item: any) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleMobileNavigate(item.id)}
+                    className={childMenuClass(isActive)}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="flex-1 text-left">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="my-4 border-t border-slate-100"></div>
 

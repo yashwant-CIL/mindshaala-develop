@@ -4,27 +4,26 @@ interface LaTeXRendererProps {
   content: string;
 }
 
-// Load MathJax configuration and script globally
+// Load MathJax configuration and script globally if not already present
 if (typeof window !== 'undefined' && !(window as any).mathJaxConfigured) {
-  // Configure MathJax before it loads
-  (window as any).MathJax = {
-    tex: {
-      inlineMath: [['$', '$'], ['\\(', '\\)']],
-      displayMath: [['$$', '$$'], ['\\[', '\\]']],
-      processEscapes: true,
-      processEnvironments: true
-    },
-    options: {
-      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
-    }
-  };
+  if (!(window as any).MathJax && !document.querySelector('script[src*="mathjax"]')) {
+    (window as any).MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true,
+        processEnvironments: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+      }
+    };
 
-  // Load MathJax script
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
-  script.async = true;
-  document.head.appendChild(script);
-  
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
+    script.async = true;
+    document.head.appendChild(script);
+  }
   (window as any).mathJaxConfigured = true;
 }
 

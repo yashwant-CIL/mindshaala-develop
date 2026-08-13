@@ -1,0 +1,9 @@
+{
+  "short_name": "MindShaala",
+  "name": "MindShaala Learning Platform",
+  "icons": [],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "display": "standalone"
+}
