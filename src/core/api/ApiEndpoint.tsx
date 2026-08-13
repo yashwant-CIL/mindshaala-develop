@@ -149,10 +149,10 @@ export const API_ENDPOINT = {
         COMPETITION_DASHBOARD_SUBJECT_RADAR: `/api/competition/dashboard/subject-radar`,
 
         //Competitions 
-        GET_ALL_UPCOMING_COMPETITIONS:(subscription_id: string | number ) => `/api/v1/viva/competitions/upcoming/all?subscription_id=${subscription_id}`,
-        GET_UPCOMING_COMPETITIONS_FILTERED: (subscription_id: string | number , module_type: string | number ) => `/api/v1/viva/competitions/upcoming/all?subscription_id=${subscription_id}&module_type=${module_type}`,
-        REGISTER_FOR_COMPETITION:``,
-        GET_REGISTERED_COMPETITIONS: (user_id: string | number | undefined) =>`/api/competitions/registered-competitions?user_id=${user_id}`,
+        GET_ALL_UPCOMING_COMPETITIONS:(subscription_id: string | number, user_id: string | number) => `/api/v1/viva/competitions/upcoming/all?subscription_id=${subscription_id}&user_id=${user_id}`,
+        GET_UPCOMING_COMPETITIONS_FILTERED: (subscription_id: string | number , module_type: string | number ) => `/api/v1/viva/competitions/upcoming?subscription_id=${subscription_id}&module_type=${module_type}`,
+        REGISTER_FOR_COMPETITION: `/api/v1/viva/competitions/enroll`,
+        GET_REGISTERED_COMPETITIONS: (user_id: string | number | undefined) =>`/api/v1/viva/user/my-competitions?user_id=${user_id}`,
         // GET_REGISTERED_COMPETITIONS_RESULTS: ``,
 
         //Assessment ENDPOINTS

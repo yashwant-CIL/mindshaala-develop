@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useCourse } from '../../context/CourseContext';
+import { CompetitionService } from '../../services/CompetitionService';
+import Cookies from 'js-cookie';
 import {
   Trophy,
   Calendar,
@@ -28,30 +31,72 @@ import {
   Star,
   Check,
   TrendingUp,
-  Smartphone
+  Smartphone,
+  Loader2,
+  HelpCircle,
+  FileText
 } from 'lucide-react';
 
-// Types
+// Reverse display mapping helper for module_type
+// Backend "VIVA" -> "Viva", "TAM" -> "Conceptual", "GK" -> "GK"
+export const getModuleTypeLabel = (moduleType?: string): string => {
+  if (!moduleType) return 'General';
+  const upper = moduleType.toUpperCase();
+  if (upper === 'VIVA') return 'Viva';
+  if (upper === 'TAM') return 'Conceptual';
+  if (upper === 'GK') return 'GK';
+  return moduleType;
+};
+
+// Helper for extracting fee information from backend fields fee_type and fee_amount
+export const getFeeInfo = (comp: CompetitionItem) => {
+  const isFreeType = comp.fee_type?.toLowerCase() === 'free';
+  const amount = comp.fee_amount ?? comp.fee ?? comp.entryFee ?? 0;
+  const isFree = isFreeType || amount === 0;
+  return { isFree, amount, feeType: comp.fee_type || (isFree ? 'Free' : 'Paid') };
+};
+
+// Types & Interface for Competition
 export interface CompetitionItem {
-  id: string;
+  competition_id?: number | string;
+  id?: string;
   title: string;
-  category: 'mathematics' | 'physics' | 'chemistry' | 'coding' | 'science';
-  description: string;
-  bannerImage?: string;
-  startDate: string;
-  registrationDeadline: string; // ISO string for live timer
-  startTime: string;
-  duration: string;
-  entryFee: number; // 0 for free
-  prizePool: string;
-  registeredCount: number;
-  maxCapacity: number;
-  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
-  tags: string[];
-  isRegistered?: boolean;
-  status: 'upcoming' | 'live' | 'completed';
-  prizes: { rank: string; reward: string }[];
-  syllabus: string[];
+  module_type?: string; // "VIVA" | "TAM" | "GK"
+  course_id?: number | null;
+  subject_id?: number;
+  subject_name?: string;
+  subscription_id?: number | string;
+  chapter_id?: string;
+  topic_id?: string;
+  category_id?: number | null;
+  viva_type?: string | null;
+  start_time?: string;
+  end_time?: string;
+  total_questions?: number;
+  total_marks?: number;
+  total_time?: number; // in seconds
+  gk_assessment_type?: string | null;
+  gk_creation_mode?: string | null;
+  created_by?: number;
+  fee_type?: string | null;
+  fee_amount?: number | null;
+  entryFee?: number; // Preserved parameter for fee
+  fee?: number;
+  is_enrolled: boolean;
+
+  // Parameters NOT currently in backend response (Commented out):
+  // category?: 'mathematics' | 'physics' | 'chemistry' | 'coding' | 'science';
+  // description?: string;
+  // prizePool?: string;
+  // prizes?: { rank: string; reward: string }[];
+  // registeredCount?: number;
+  // maxCapacity?: number;
+  // difficulty?: 'Beginner' | 'Intermediate' | 'Advanced';
+  // tags?: string[];
+  // syllabus?: string[];
+
+  // isRegistered?: boolean;
+  status?: 'upcoming' | 'live' | 'completed';
 }
 
 export interface OfferItem {
@@ -147,157 +192,157 @@ const MOCK_OFFERS: OfferItem[] = [
   }
 ];
 
-const MOCK_REGISTERED: CompetitionItem[] = [
-  {
-    id: 'reg-1',
-    title: 'National Mathematics Speed Cup',
-    category: 'mathematics',
-    description: 'Fast-paced mental math, algebra, geometry & quantitative logic exam.',
-    startDate: 'Tomorrow, 10:00 AM',
-    registrationDeadline: '2026-08-07T10:00:00',
-    startTime: '2026-08-07T10:00:00',
-    duration: '45 mins',
-    entryFee: 0,
-    prizePool: '₹25,000',
-    registeredCount: 1420,
-    maxCapacity: 2000,
-    difficulty: 'Intermediate',
-    tags: ['Algebra', 'Geometry', 'Speed Math'],
-    isRegistered: true,
-    status: 'upcoming',
-    prizes: [
-      { rank: '1st Rank', reward: '₹10,000 + Gold Medal + Trophy' },
-      { rank: '2nd Rank', reward: '₹5,000 + Silver Medal' },
-      { rank: '3rd Rank', reward: '₹2,500 + Bronze Medal' },
-      { rank: 'Top 50', reward: 'Merit Certificate + 500 XP' }
-    ],
-    syllabus: ['Real Numbers', 'Polynomials', 'Coordinate Geometry', 'Triangles', 'Trigonometry']
-  },
-  {
-    id: 'reg-2',
-    title: 'Physics Mechanics & Optics Championship',
-    category: 'physics',
-    description: 'Conceptual and numerical physics battle for High School students.',
-    startDate: '10 Aug 2026, 4:00 PM',
-    registrationDeadline: '2026-08-10T16:00:00',
-    startTime: '2026-08-10T16:00:00',
-    duration: '60 mins',
-    entryFee: 99,
-    prizePool: '₹15,000',
-    registeredCount: 890,
-    maxCapacity: 1000,
-    difficulty: 'Advanced',
-    tags: ['Kinematics', 'Newton Laws', 'Optics'],
-    isRegistered: true,
-    status: 'upcoming',
-    prizes: [
-      { rank: '1st Rank', reward: '₹7,000 + Physics Kit' },
-      { rank: '2nd Rank', reward: '₹4,000' },
-      { rank: 'Top 10%', reward: 'Certificate of Distinction' }
-    ],
-    syllabus: ['Laws of Motion', 'Work Power Energy', 'Ray Optics', 'Gravitation']
-  }
-];
+// const MOCK_REGISTERED: CompetitionItem[] = [
+//   {
+//     id: 'reg-1',
+//     title: 'National Mathematics Speed Cup',
+//     category: 'mathematics',
+//     description: 'Fast-paced mental math, algebra, geometry & quantitative logic exam.',
+//     startDate: 'Tomorrow, 10:00 AM',
+//     registrationDeadline: '2026-08-07T10:00:00',
+//     startTime: '2026-08-07T10:00:00',
+//     duration: '45 mins',
+//     entryFee: 0,
+//     prizePool: '₹25,000',
+//     registeredCount: 1420,
+//     maxCapacity: 2000,
+//     difficulty: 'Intermediate',
+//     tags: ['Algebra', 'Geometry', 'Speed Math'],
+//     isRegistered: true,
+//     status: 'upcoming',
+//     prizes: [
+//       { rank: '1st Rank', reward: '₹10,000 + Gold Medal + Trophy' },
+//       { rank: '2nd Rank', reward: '₹5,000 + Silver Medal' },
+//       { rank: '3rd Rank', reward: '₹2,500 + Bronze Medal' },
+//       { rank: 'Top 50', reward: 'Merit Certificate + 500 XP' }
+//     ],
+//     syllabus: ['Real Numbers', 'Polynomials', 'Coordinate Geometry', 'Triangles', 'Trigonometry']
+//   },
+//   {
+//     id: 'reg-2',
+//     title: 'Physics Mechanics & Optics Championship',
+//     category: 'physics',
+//     description: 'Conceptual and numerical physics battle for High School students.',
+//     startDate: '10 Aug 2026, 4:00 PM',
+//     registrationDeadline: '2026-08-10T16:00:00',
+//     startTime: '2026-08-10T16:00:00',
+//     duration: '60 mins',
+//     entryFee: 99,
+//     prizePool: '₹15,000',
+//     registeredCount: 890,
+//     maxCapacity: 1000,
+//     difficulty: 'Advanced',
+//     tags: ['Kinematics', 'Newton Laws', 'Optics'],
+//     isRegistered: true,
+//     status: 'upcoming',
+//     prizes: [
+//       { rank: '1st Rank', reward: '₹7,000 + Physics Kit' },
+//       { rank: '2nd Rank', reward: '₹4,000' },
+//       { rank: 'Top 10%', reward: 'Certificate of Distinction' }
+//     ],
+//     syllabus: ['Laws of Motion', 'Work Power Energy', 'Ray Optics', 'Gravitation']
+//   }
+// ];
 
-const MOCK_UPCOMING: CompetitionItem[] = [
-  {
-    id: 'comp-101',
-    title: 'All India Coding & Logic League 2026',
-    category: 'coding',
-    description: 'Algorithmic problem solving, Python/JS logic puzzles, and block coding challenge.',
-    startDate: '12 Aug 2026, 6:00 PM',
-    registrationDeadline: '2026-08-12T18:00:00',
-    startTime: '2026-08-12T18:00:00',
-    duration: '60 mins',
-    entryFee: 0,
-    prizePool: '₹50,000',
-    registeredCount: 2340,
-    maxCapacity: 3000,
-    difficulty: 'Intermediate',
-    tags: ['Python', 'Logic', 'Algorithms'],
-    isRegistered: false,
-    status: 'upcoming',
-    prizes: [
-      { rank: '1st Rank', reward: 'Smart Tablet + ₹15,000' },
-      { rank: '2nd Rank', reward: 'Smart Watch + ₹8,000' },
-      { rank: '3rd Rank', reward: '₹4,000 + Swag Box' },
-      { rank: 'Top 100', reward: 'Coder Certificate' }
-    ],
-    syllabus: ['Data Structures', 'Loops & Conditionals', 'Pattern Building', 'Logic Puzzles']
-  },
-  {
-    id: 'comp-102',
-    title: 'Organic Chemistry Reactions Sprint',
-    category: 'chemistry',
-    description: 'Identify mechanisms, reagents, and organic conversions under tight time pressure.',
-    startDate: '14 Aug 2026, 5:00 PM',
-    registrationDeadline: '2026-08-14T17:00:00',
-    startTime: '2026-08-14T17:00:00',
-    duration: '40 mins',
-    entryFee: 49,
-    prizePool: '₹10,000',
-    registeredCount: 610,
-    maxCapacity: 1000,
-    difficulty: 'Advanced',
-    tags: ['Hydrocarbons', 'Functional Groups', 'Reactions'],
-    isRegistered: false,
-    status: 'upcoming',
-    prizes: [
-      { rank: '1st Rank', reward: '₹5,000 + Chemistry Lab Kit' },
-      { rank: '2nd Rank', reward: '₹2,500' },
-      { rank: '3rd Rank', reward: '₹1,000' }
-    ],
-    syllabus: ['Alkanes & Alkenes', 'Aldehydes & Ketones', 'Isomerism', 'Named Reactions']
-  },
-  {
-    id: 'comp-103',
-    title: 'Junior Science & Environment Quest',
-    category: 'science',
-    description: 'Fun interactive quiz on General Science, Earth, Solar System, and Biology fundamentals.',
-    startDate: '16 Aug 2026, 11:00 AM',
-    registrationDeadline: '2026-08-16T11:00:00',
-    startTime: '2026-08-16T11:00:00',
-    duration: '30 mins',
-    entryFee: 0,
-    prizePool: '₹12,000',
-    registeredCount: 450,
-    maxCapacity: 800,
-    difficulty: 'Beginner',
-    tags: ['General Science', 'Biology', 'Space'],
-    isRegistered: false,
-    status: 'upcoming',
-    prizes: [
-      { rank: '1st Rank', reward: 'Telescope + ₹4,000' },
-      { rank: '2nd Rank', reward: 'Microscope Kit' },
-      { rank: '3rd Rank', reward: '₹1,500' }
-    ],
-    syllabus: ['Solar System', 'Plant Life', 'Human Body Systems', 'Ecology & Environment']
-  },
-  {
-    id: 'comp-104',
-    title: 'Advanced Calculus & Analytical Geometry',
-    category: 'mathematics',
-    description: 'Challenging calculus problems designed to test deep problem solving skills.',
-    startDate: '18 Aug 2026, 3:00 PM',
-    registrationDeadline: '2026-08-18T15:00:00',
-    startTime: '2026-08-18T15:00:00',
-    duration: '75 mins',
-    entryFee: 149,
-    prizePool: '₹30,000',
-    registeredCount: 320,
-    maxCapacity: 500,
-    difficulty: 'Advanced',
-    tags: ['Limits', 'Derivatives', 'Integration'],
-    isRegistered: false,
-    status: 'upcoming',
-    prizes: [
-      { rank: '1st Rank', reward: '₹12,000 + Trophy' },
-      { rank: '2nd Rank', reward: '₹7,000' },
-      { rank: '3rd Rank', reward: '₹4,000' }
-    ],
-    syllabus: ['Limits & Continuity', 'Differential Calculus', 'Definite Integrals', 'Vectors']
-  }
-];
+// const MOCK_UPCOMING: CompetitionItem[] = [
+//   {
+//     id: 'comp-101',
+//     title: 'All India Coding & Logic League 2026',
+//     category: 'coding',
+//     description: 'Algorithmic problem solving, Python/JS logic puzzles, and block coding challenge.',
+//     startDate: '12 Aug 2026, 6:00 PM',
+//     registrationDeadline: '2026-08-12T18:00:00',
+//     startTime: '2026-08-12T18:00:00',
+//     duration: '60 mins',
+//     entryFee: 0,
+//     prizePool: '₹50,000',
+//     registeredCount: 2340,
+//     maxCapacity: 3000,
+//     difficulty: 'Intermediate',
+//     tags: ['Python', 'Logic', 'Algorithms'],
+//     isRegistered: false,
+//     status: 'upcoming',
+//     prizes: [
+//       { rank: '1st Rank', reward: 'Smart Tablet + ₹15,000' },
+//       { rank: '2nd Rank', reward: 'Smart Watch + ₹8,000' },
+//       { rank: '3rd Rank', reward: '₹4,000 + Swag Box' },
+//       { rank: 'Top 100', reward: 'Coder Certificate' }
+//     ],
+//     syllabus: ['Data Structures', 'Loops & Conditionals', 'Pattern Building', 'Logic Puzzles']
+//   },
+//   {
+//     id: 'comp-102',
+//     title: 'Organic Chemistry Reactions Sprint',
+//     category: 'chemistry',
+//     description: 'Identify mechanisms, reagents, and organic conversions under tight time pressure.',
+//     startDate: '14 Aug 2026, 5:00 PM',
+//     registrationDeadline: '2026-08-14T17:00:00',
+//     startTime: '2026-08-14T17:00:00',
+//     duration: '40 mins',
+//     entryFee: 49,
+//     prizePool: '₹10,000',
+//     registeredCount: 610,
+//     maxCapacity: 1000,
+//     difficulty: 'Advanced',
+//     tags: ['Hydrocarbons', 'Functional Groups', 'Reactions'],
+//     isRegistered: false,
+//     status: 'upcoming',
+//     prizes: [
+//       { rank: '1st Rank', reward: '₹5,000 + Chemistry Lab Kit' },
+//       { rank: '2nd Rank', reward: '₹2,500' },
+//       { rank: '3rd Rank', reward: '₹1,000' }
+//     ],
+//     syllabus: ['Alkanes & Alkenes', 'Aldehydes & Ketones', 'Isomerism', 'Named Reactions']
+//   },
+//   {
+//     id: 'comp-103',
+//     title: 'Junior Science & Environment Quest',
+//     category: 'science',
+//     description: 'Fun interactive quiz on General Science, Earth, Solar System, and Biology fundamentals.',
+//     startDate: '16 Aug 2026, 11:00 AM',
+//     registrationDeadline: '2026-08-16T11:00:00',
+//     startTime: '2026-08-16T11:00:00',
+//     duration: '30 mins',
+//     entryFee: 0,
+//     prizePool: '₹12,000',
+//     registeredCount: 450,
+//     maxCapacity: 800,
+//     difficulty: 'Beginner',
+//     tags: ['General Science', 'Biology', 'Space'],
+//     isRegistered: false,
+//     status: 'upcoming',
+//     prizes: [
+//       { rank: '1st Rank', reward: 'Telescope + ₹4,000' },
+//       { rank: '2nd Rank', reward: 'Microscope Kit' },
+//       { rank: '3rd Rank', reward: '₹1,500' }
+//     ],
+//     syllabus: ['Solar System', 'Plant Life', 'Human Body Systems', 'Ecology & Environment']
+//   },
+//   {
+//     id: 'comp-104',
+//     title: 'Advanced Calculus & Analytical Geometry',
+//     category: 'mathematics',
+//     description: 'Challenging calculus problems designed to test deep problem solving skills.',
+//     startDate: '18 Aug 2026, 3:00 PM',
+//     registrationDeadline: '2026-08-18T15:00:00',
+//     startTime: '2026-08-18T15:00:00',
+//     duration: '75 mins',
+//     entryFee: 149,
+//     prizePool: '₹30,000',
+//     registeredCount: 320,
+//     maxCapacity: 500,
+//     difficulty: 'Advanced',
+//     tags: ['Limits', 'Derivatives', 'Integration'],
+//     isRegistered: false,
+//     status: 'upcoming',
+//     prizes: [
+//       { rank: '1st Rank', reward: '₹12,000 + Trophy' },
+//       { rank: '2nd Rank', reward: '₹7,000' },
+//       { rank: '3rd Rank', reward: '₹4,000' }
+//     ],
+//     syllabus: ['Limits & Continuity', 'Differential Calculus', 'Definite Integrals', 'Vectors']
+//   }
+// ];
 
 // Helper for live countdown calculation
 function calculateTimeLeft(targetDateStr: string) {
@@ -315,13 +360,48 @@ function calculateTimeLeft(targetDateStr: string) {
 }
 
 export const Competitions: React.FC = () => {
+  const { subscriptionId } = useCourse();
+  const activeSubscriptionId = subscriptionId || localStorage.getItem('subscription_id') || localStorage.getItem('subscriptionId');
+
+  // Retrieve user_id from LocalStorage or Cookies
+  const getActiveUserId = (): string | number | undefined => {
+    const directKeys = ['user_id', 'userId'];
+    for (const key of directKeys) {
+      const val = localStorage.getItem(key) || Cookies.get(key);
+      if (val) return val;
+    }
+
+    const objectKeys = ['user', 'userData', 'userInfo', 'profile'];
+    for (const key of objectKeys) {
+      const raw = localStorage.getItem(key) || Cookies.get(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          const idVal = parsed?.user_id || parsed?.userId;
+          if (idVal) return idVal;
+        } catch {
+          // ignore json parse failure
+        }
+      }
+    }
+
+    return undefined;
+  };
+
+  const activeUserId = getActiveUserId();
+
   const [activePosterIndex, setActivePosterIndex] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedModuleType, setSelectedModuleType] = useState<'ALL' | 'VIVA' | 'TAM' | 'GK'>('ALL');
   const [selectedFee, setSelectedFee] = useState<'all' | 'free' | 'paid'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [registeredCompetitions, setRegisteredCompetitions] = useState<CompetitionItem[]>(MOCK_REGISTERED);
-  const [upcomingCompetitions, setUpcomingCompetitions] = useState<CompetitionItem[]>(MOCK_UPCOMING);
+  const [registeredCompetitions, setRegisteredCompetitions] = useState<CompetitionItem[]>([]);
+  const [upcomingCompetitions, setUpcomingCompetitions] = useState<CompetitionItem[]>([]);
+  const [isLoadingCompetitions, setIsLoadingCompetitions] = useState<boolean>(false);
+  const [apiBackendMessage, setApiBackendMessage] = useState<string | null>(null);
   const [selectedModalComp, setSelectedModalComp] = useState<CompetitionItem | null>(null);
+  const [confirmModalComp, setConfirmModalComp] = useState<CompetitionItem | null>(null);
+  const [isRegistering, setIsRegistering] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedOfferId, setCopiedOfferId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'explore' | 'registered'>('explore');
 
@@ -333,20 +413,154 @@ export const Competitions: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Handle registration action
-  const handleRegister = (comp: CompetitionItem) => {
-    if (comp.isRegistered) return;
+  // Fetch registered competitions for user
+  const fetchRegisteredCompetitions = async (uid: string | number | undefined) => {
+    if (!uid) return;
+    try {
+      const response = await CompetitionService.GetAllRegisteredCompetitions(uid);
+      let dataList: CompetitionItem[] = [];
+      if (Array.isArray(response)) {
+        dataList = response;
+      } else if (response && typeof response === 'object' && Array.isArray(response.data)) {
+        dataList = response.data;
+      }
+      const markedList = dataList.map((item: CompetitionItem) => ({ ...item, is_enrolled: true }));
+      setRegisteredCompetitions(markedList);
+    } catch (err) {
+      console.error("Error fetching registered competitions:", err);
+    }
+  };
 
-    const updatedComp = { ...comp, isRegistered: true, registeredCount: comp.registeredCount + 1 };
+  useEffect(() => {
+    if (activeUserId) {
+      fetchRegisteredCompetitions(activeUserId);
+    }
+  }, [activeUserId]);
 
-    setUpcomingCompetitions((prev) =>
-      prev.map((c) => (c.id === comp.id ? updatedComp : c))
-    );
+  // Fetch upcoming competitions from backend based on subscriptionId and module filter
+  const fetchCompetitions = async (moduleType: string, subId: string | number, uid?: string | number) => {
+    setIsLoadingCompetitions(true);
+    setApiBackendMessage(null);
+    try {
+      let response: any;
+      if (moduleType === 'ALL') {
+        const userIdToPass = uid || activeUserId || getActiveUserId() || '';
+        response = await CompetitionService.GetAllUpcomingCompetitions(subId, userIdToPass);
+      } else {
+        response = await CompetitionService.GetUpcomingCompetitionsFiltered(subId, moduleType);
+      }
 
-    setRegisteredCompetitions((prev) => [updatedComp, ...prev]);
+      let dataList: CompetitionItem[] = [];
+      let backendMsg: string | null = null;
 
-    if (selectedModalComp?.id === comp.id) {
-      setSelectedModalComp(updatedComp);
+      if (Array.isArray(response)) {
+        dataList = response;
+      } else if (response && typeof response === 'object') {
+        if (Array.isArray(response.data)) {
+          dataList = response.data;
+        }
+        if (response.message) {
+          backendMsg = response.message;
+        }
+      }
+
+      setUpcomingCompetitions(dataList);
+      setApiBackendMessage(backendMsg);
+    } catch (err: any) {
+      console.error("Error fetching competitions:", err);
+      setUpcomingCompetitions([]);
+      setApiBackendMessage(err?.response?.data?.message || err?.message || "Failed to fetch competitions.");
+    } finally {
+      setIsLoadingCompetitions(false);
+    }
+  };
+
+  // Re-fetch whenever selected subscription context, module type, or user ID changes
+  useEffect(() => {
+    if (activeSubscriptionId) {
+      fetchCompetitions(selectedModuleType, activeSubscriptionId, activeUserId);
+    }
+  }, [activeSubscriptionId, selectedModuleType, activeUserId]);
+
+  // Sync isRegistered flag on upcoming competitions when registeredCompetitions updates
+  useEffect(() => {
+    if (registeredCompetitions.length > 0) {
+      const registeredIds = new Set(
+        registeredCompetitions.map((rc) => String(rc.competition_id || rc.id))
+      );
+      setUpcomingCompetitions((prev) =>
+        prev.map((c) => {
+          const cId = String(c.competition_id || c.id);
+          if (registeredIds.has(cId)) {
+            return { ...c, is_enrolled: true };
+          }
+          return c;
+        })
+      );
+    }
+  }, [registeredCompetitions]);
+
+  // Auto hide toast after 4s
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 4000);
+      return () => clearInterval(timer);
+    }
+  }, [toastMessage]);
+
+  // Trigger confirmation box when clicking Register
+  const handleRegisterClick = (comp: CompetitionItem) => {
+    if (comp.is_enrolled) return;
+    setConfirmModalComp(comp);
+  };
+
+  // Perform API call when user clicks YES in confirmation box
+  const handleConfirmRegistration = async () => {
+    if (!confirmModalComp) return;
+
+    setIsRegistering(true);
+    try {
+      const rawUserId = activeUserId || getActiveUserId();
+      const compIdStr = confirmModalComp.competition_id || confirmModalComp.id;
+
+      const payload = {
+        user_id: rawUserId,
+        competition_id: compIdStr,
+      };
+
+      console.log("Submitting competition registration payload:", payload);
+      const response = await CompetitionService.RegisterForCompetitions(payload);
+
+      const updatedComp = { ...confirmModalComp, is_enrolled: true };
+
+      setUpcomingCompetitions((prev) =>
+        prev.map((c) => ((c.competition_id || c.id) === compIdStr ? updatedComp : c))
+      );
+
+      setRegisteredCompetitions((prev) => {
+        const exists = prev.some((c) => (c.competition_id || c.id) === compIdStr);
+        return exists ? prev : [updatedComp, ...prev];
+      });
+
+      if ((selectedModalComp?.competition_id || selectedModalComp?.id) === compIdStr) {
+        setSelectedModalComp(updatedComp);
+      }
+
+      setConfirmModalComp(null);
+      setToastMessage({
+        type: 'success',
+        text: response?.message || `Successfully registered for "${confirmModalComp.title}"!`
+      });
+    } catch (error: any) {
+      console.error("Failed to register for competition:", error);
+      setToastMessage({
+        type: 'error',
+        text: error?.response?.data?.message || error?.message || 'Failed to register for competition. Please try again.'
+      });
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -356,19 +570,23 @@ export const Competitions: React.FC = () => {
     setTimeout(() => setCopiedOfferId(null), 2500);
   };
 
-  // Filtered upcoming competitions
+  // Search & Fee Filter logic over backend response list
   const filteredUpcoming = upcomingCompetitions.filter((comp) => {
-    const matchesCategory = selectedCategory === 'all' || comp.category === selectedCategory;
+    const { isFree, amount } = getFeeInfo(comp);
     const matchesFee =
       selectedFee === 'all' ||
-      (selectedFee === 'free' && comp.entryFee === 0) ||
-      (selectedFee === 'paid' && comp.entryFee > 0);
-    const matchesSearch =
-      comp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      comp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      comp.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      (selectedFee === 'free' && isFree) ||
+      (selectedFee === 'paid' && (!isFree || amount > 0));
 
-    return matchesCategory && matchesFee && matchesSearch;
+    const query = searchQuery.trim().toLowerCase();
+    const moduleLabel = getModuleTypeLabel(comp.module_type).toLowerCase();
+    const matchesSearch =
+      !query ||
+      comp.title?.toLowerCase().includes(query) ||
+      comp.subject_name?.toLowerCase().includes(query) ||
+      moduleLabel.includes(query);
+
+    return matchesFee && matchesSearch;
   });
 
   const totalRegisteredCount = registeredCompetitions.length;
@@ -581,19 +799,24 @@ export const Competitions: React.FC = () => {
               />
             </div>
 
-            {/* Category Pills */}
+            {/* Filter Tabs (Viva, Conceptual, GK) */}
             <div className="flex flex-wrap items-center gap-2">
-              {['all', 'mathematics', 'physics', 'chemistry', 'coding', 'science'].map((cat) => (
+              {[
+                { label: 'All', key: 'ALL' },
+                { label: 'Viva', key: 'VIVA' },
+                { label: 'Conceptual', key: 'TAM' },
+                { label: 'GK', key: 'GK' }
+              ].map((tab) => (
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
-                    selectedCategory === cat
+                  key={tab.key}
+                  onClick={() => setSelectedModuleType(tab.key as any)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    selectedModuleType === tab.key
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                      : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                      : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 hover:text-slate-900'
                   }`}
                 >
-                  {cat}
+                  {tab.label}
                 </button>
               ))}
             </div>
@@ -627,29 +850,39 @@ export const Competitions: React.FC = () => {
             </div>
           </div>
 
-          {/* Competitions Grid */}
-          {filteredUpcoming.length === 0 ? (
-            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
-              <Search className="w-10 h-10 text-slate-400 mx-auto" />
-              <p className="text-slate-700 font-semibold">No competitions found matching your search filters.</p>
+          {/* Competitions Grid & Loading / Empty State */}
+          {isLoadingCompetitions ? (
+            <div className="p-16 text-center bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center space-y-3">
+              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+              <p className="text-slate-600 font-medium text-sm">Loading competitions...</p>
+            </div>
+          ) : filteredUpcoming.length === 0 ? (
+            <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <Trophy className="w-12 h-12 text-slate-300 mx-auto" />
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-800">No Competitions Available</h3>
+                <p className="text-slate-500 text-sm max-w-md mx-auto">
+                  {apiBackendMessage || "No competitions found for the selected filter or subscription."}
+                </p>
+              </div>
               <button
                 onClick={() => {
-                  setSelectedCategory('all');
+                  setSelectedModuleType('ALL');
                   setSelectedFee('all');
                   setSearchQuery('');
                 }}
-                className="px-4 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors"
               >
                 Reset Filters
               </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredUpcoming.map((comp) => (
+              {filteredUpcoming.map((comp, idx) => (
                 <UpcomingCompCard
-                  key={comp.id}
+                  key={comp.competition_id || comp.id || idx}
                   comp={comp}
-                  onRegister={() => handleRegister(comp)}
+                  onRegister={() => handleRegisterClick(comp)}
                   onViewDetails={() => setSelectedModalComp(comp)}
                 />
               ))}
@@ -663,8 +896,35 @@ export const Competitions: React.FC = () => {
         <CompetitionDetailModal
           comp={selectedModalComp}
           onClose={() => setSelectedModalComp(null)}
-          onRegister={() => handleRegister(selectedModalComp)}
+          onRegister={() => handleRegisterClick(selectedModalComp)}
         />
+      )}
+
+      {/* 6. Registration Confirmation Modal Box */}
+      {confirmModalComp && (
+        <RegistrationConfirmationModal
+          comp={confirmModalComp}
+          isLoading={isRegistering}
+          onClose={() => setConfirmModalComp(null)}
+          onConfirm={handleConfirmRegistration}
+        />
+      )}
+
+      {/* 7. Toast Feedback Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed bottom-6 right-6 z-[70] px-5 py-3 rounded-2xl shadow-xl border flex items-center gap-3 text-sm font-semibold transition-all animate-fadeIn ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/20'
+              : 'bg-red-600 text-white border-red-500 shadow-red-600/20'
+          }`}
+        >
+          {toastMessage.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-white" /> : <AlertCircle className="w-5 h-5 text-white" />}
+          <span>{toastMessage.text}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-white/80 hover:text-white cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
     </div>
   );
@@ -726,36 +986,48 @@ const OfferCard: React.FC<{ offer: OfferItem; onCopy: (id: string, code: string)
 
 // Sub-Component: Registered Competition Card with Admit Card & Launch Timer - Light Theme
 const RegisteredCompCard: React.FC<{ comp: CompetitionItem; onViewDetails: () => void }> = ({ comp, onViewDetails }) => {
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(comp.registrationDeadline));
+  const targetDateStr = comp.start_time || comp.end_time || '';
+  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(targetDateStr));
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft(comp.registrationDeadline));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [comp.registrationDeadline]);
+    if (targetDateStr) {
+      const timer = setInterval(() => {
+        setTimeLeft(calculateTimeLeft(targetDateStr));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [targetDateStr]);
+
+  const moduleLabel = getModuleTypeLabel(comp.module_type);
+  const durationMins = comp.total_time ? Math.floor(comp.total_time / 60) : null;
+  const compFee = comp.fee ?? comp.entryFee ?? 0;
 
   return (
     <div className="bg-white border border-emerald-300 rounded-2xl p-6 space-y-4 shadow-sm relative overflow-hidden">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold uppercase tracking-wide flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Confirmed
             </span>
-            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-medium capitalize">
-              {comp.category}
+            {comp.subject_name && (
+              <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-medium">
+                {comp.subject_name}
+              </span>
+            )}
+            <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-medium">
+              {moduleLabel}
             </span>
           </div>
           <h3 className="text-lg font-bold text-slate-900">{comp.title}</h3>
         </div>
         <div className="text-right">
-          <div className="text-xs text-slate-400 font-medium">Prize Pool</div>
-          <div className="text-base font-extrabold text-amber-600">{comp.prizePool}</div>
+          <div className="text-xs text-slate-400 font-medium">Entry Fee</div>
+          <div className="text-base font-extrabold text-amber-600">
+            {compFee === 0 ? 'FREE' : `₹${compFee}`}
+          </div>
         </div>
       </div>
-
-      <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{comp.description}</p>
 
       {/* Timer Banner */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
@@ -771,10 +1043,10 @@ const RegisteredCompCard: React.FC<{ comp: CompetitionItem; onViewDetails: () =>
       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
         <div className="flex items-center gap-4 text-xs text-slate-500">
           <span className="flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" /> {comp.duration}
+            <Clock className="w-3.5 h-3.5" /> {durationMins ? `${durationMins} mins` : 'Timed Exam'}
           </span>
           <span className="flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> {comp.registeredCount} Candidates
+            <FileText className="w-3.5 h-3.5" /> {comp.total_questions ?? '--'} Questions
           </span>
         </div>
 
@@ -783,7 +1055,7 @@ const RegisteredCompCard: React.FC<{ comp: CompetitionItem; onViewDetails: () =>
             onClick={onViewDetails}
             className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors border border-slate-200"
           >
-            Rules & Syllabus
+            Details
           </button>
           <button className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-sm transition-all flex items-center gap-1">
             <Play className="w-3.5 h-3.5" /> Waiting Room
@@ -800,93 +1072,149 @@ const UpcomingCompCard: React.FC<{
   onRegister: () => void;
   onViewDetails: () => void;
 }> = ({ comp, onRegister, onViewDetails }) => {
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(comp.registrationDeadline));
+  const { isFree, amount } = getFeeInfo(comp);
+  const moduleLabel = getModuleTypeLabel(comp.module_type);
+
+  const targetDateStr = comp.start_time || comp.end_time || '';
+  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(targetDateStr));
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft(comp.registrationDeadline));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [comp.registrationDeadline]);
+    if (targetDateStr) {
+      const timer = setInterval(() => {
+        setTimeLeft(calculateTimeLeft(targetDateStr));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [targetDateStr]);
 
-  const slotsPercent = Math.round((comp.registeredCount / comp.maxCapacity) * 100);
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return 'TBA';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const durationMins = comp.total_time ? Math.floor(comp.total_time / 60) : null;
 
   return (
     <div className="bg-white border border-slate-200 hover:border-blue-300 rounded-2xl p-5 space-y-4 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group">
       <div className="space-y-3">
         {/* Top Badges */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
-              {comp.category}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Subject Name */}
+            {comp.subject_name && (
+              <span className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
+                {comp.subject_name}
+              </span>
+            )}
+            
+            {/* Module Type (Viva / Conceptual / GK) */}
+            <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold uppercase tracking-wider">
+              {moduleLabel}
             </span>
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                comp.difficulty === 'Beginner'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : comp.difficulty === 'Intermediate'
-                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                  : 'bg-red-50 text-red-700 border border-red-200'
-              }`}
-            >
-              {comp.difficulty}
-            </span>
+
+            {/* Viva Type if present */}
+            {comp.viva_type && (
+              <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-bold">
+                {comp.viva_type}
+              </span>
+            )}
+
+            {/* Commented out unsupported parameter: Category */}
+            {/* {comp.category && <span className="...">...</span>} */}
+            
+            {/* Commented out unsupported parameter: Difficulty */}
+            {/* {comp.difficulty && <span className="...">...</span>} */}
           </div>
 
+          {/* Fee Display */}
           <div className="text-right">
-            {comp.entryFee === 0 ? (
+            {isFree ? (
               <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[11px] font-black uppercase">
                 FREE ENTRY
               </span>
             ) : (
-              <span className="text-xs font-bold text-amber-600">Fee: ₹{comp.entryFee}</span>
+              <span className="text-xs font-bold text-amber-600">Fee: ₹{amount}</span>
             )}
           </div>
         </div>
 
-        {/* Title & Description */}
+        {/* Title */}
         <div>
-          <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
+          <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2">
             {comp.title}
           </h3>
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{comp.description}</p>
+          
+          {/* Commented out unsupported parameter: Description */}
+          {/* {comp.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{comp.description}</p>} */}
         </div>
 
-        {/* Prize Pool Display */}
-        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-amber-500" />
-            <span className="text-xs text-slate-500 font-medium">Prize Pool</span>
+        {/* Competition Metrics (Questions, Marks, Time) */}
+        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div className="text-[10px] text-slate-400 font-medium uppercase">Questions</div>
+            <div className="text-xs font-bold text-slate-800">{comp.total_questions ?? '--'}</div>
           </div>
+          <div className="border-x border-slate-200 px-1">
+            <div className="text-[10px] text-slate-400 font-medium uppercase">Marks</div>
+            <div className="text-xs font-bold text-slate-800">{comp.total_marks ?? '--'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400 font-medium uppercase">Duration</div>
+            <div className="text-xs font-bold text-slate-800">{durationMins ? `${durationMins} mins` : '--'}</div>
+          </div>
+        </div>
+
+        {/* Commented out unsupported parameter: Prize Pool */}
+        {/*
+        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+          <span className="text-xs text-slate-500 font-medium">Prize Pool</span>
           <span className="text-sm font-extrabold text-amber-600">{comp.prizePool}</span>
         </div>
+        */}
 
-        {/* Live Countdown Timer */}
-        <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center space-y-1">
-          <div className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider flex items-center justify-center gap-1">
-            <Timer className="w-3 h-3 text-blue-600" /> Registration Closes In
+        {/* Live Countdown Timer based on start_time / end_time */}
+        {targetDateStr && (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center space-y-1">
+            <div className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider flex items-center justify-center gap-1">
+              <Timer className="w-3 h-3 text-blue-600" /> Start: {formatDateTime(comp.start_time || comp.end_time)}
+            </div>
+            {timeLeft && !timeLeft.expired && (
+              <div className="grid grid-cols-4 gap-1 font-mono text-center pt-1">
+                <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
+                  <div className="text-xs font-bold text-slate-900">{timeLeft.days}</div>
+                  <div className="text-[9px] text-slate-400">DAYS</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
+                  <div className="text-xs font-bold text-slate-900">{String(timeLeft.hours).padStart(2, '0')}</div>
+                  <div className="text-[9px] text-slate-400">HRS</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
+                  <div className="text-xs font-bold text-slate-900">{String(timeLeft.minutes).padStart(2, '0')}</div>
+                  <div className="text-[9px] text-slate-400">MINS</div>
+                </div>
+                <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
+                  <div className="text-xs font-bold text-amber-600">{String(timeLeft.seconds).padStart(2, '0')}</div>
+                  <div className="text-[9px] text-slate-400">SECS</div>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="grid grid-cols-4 gap-1 font-mono text-center">
-            <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
-              <div className="text-xs font-bold text-slate-900">{timeLeft.days}</div>
-              <div className="text-[9px] text-slate-400">DAYS</div>
-            </div>
-            <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
-              <div className="text-xs font-bold text-slate-900">{String(timeLeft.hours).padStart(2, '0')}</div>
-              <div className="text-[9px] text-slate-400">HRS</div>
-            </div>
-            <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
-              <div className="text-xs font-bold text-slate-900">{String(timeLeft.minutes).padStart(2, '0')}</div>
-              <div className="text-[9px] text-slate-400">MINS</div>
-            </div>
-            <div className="bg-white border border-slate-200 rounded p-1 shadow-sm">
-              <div className="text-xs font-bold text-amber-600">{String(timeLeft.seconds).padStart(2, '0')}</div>
-              <div className="text-[9px] text-slate-400">SECS</div>
-            </div>
-          </div>
-        </div>
+        )}
 
-        {/* Registration Slots Progress Bar */}
+        {/* Commented out unsupported parameter: Registered Slots & Capacity Progress */}
+        {/*
         <div className="space-y-1">
           <div className="flex items-center justify-between text-[11px] text-slate-500">
             <span>{comp.registeredCount} registered</span>
@@ -896,6 +1224,10 @@ const UpcomingCompCard: React.FC<{
             <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full" style={{ width: `${slotsPercent}%` }} />
           </div>
         </div>
+        */}
+
+        {/* Commented out unsupported parameter: Tags */}
+        {/* {comp.tags && <div className="...">...</div>} */}
       </div>
 
       {/* Card Footer Actions */}
@@ -907,7 +1239,7 @@ const UpcomingCompCard: React.FC<{
           Details
         </button>
 
-        {comp.isRegistered ? (
+        {comp.is_enrolled ? (
           <button
             disabled
             className="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex-1 flex items-center justify-center gap-1 cursor-default"
@@ -933,17 +1265,43 @@ const CompetitionDetailModal: React.FC<{
   onClose: () => void;
   onRegister: () => void;
 }> = ({ comp, onClose, onRegister }) => {
+  const { isFree, amount } = getFeeInfo(comp);
+  const moduleLabel = getModuleTypeLabel(comp.module_type);
+  const durationMins = comp.total_time ? Math.floor(comp.total_time / 60) : null;
+
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return 'TBA';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-6 max-h-[90vh] flex flex-col">
         {/* Modal Header */}
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-start justify-between relative">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-bold uppercase border border-blue-200">
-                {comp.category}
+            <div className="flex items-center gap-2 flex-wrap">
+              {comp.subject_name && (
+                <span className="px-2.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-bold uppercase border border-blue-200">
+                  {comp.subject_name}
+                </span>
+              )}
+              <span className="px-2.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-xs font-bold uppercase border border-indigo-200">
+                {moduleLabel}
               </span>
-              <span className="text-xs text-slate-500">{comp.duration} exam</span>
+              {durationMins && <span className="text-xs text-slate-500">{durationMins} mins exam</span>}
             </div>
             <h2 className="text-xl md:text-2xl font-black text-slate-900">{comp.title}</h2>
           </div>
@@ -957,28 +1315,40 @@ const CompetitionDetailModal: React.FC<{
 
         {/* Modal Content Scrollable */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm text-slate-700">
+          {/* Schedule & Assessment details */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
+            <div>
+              <div className="text-[11px] text-slate-500 font-medium">Start Time</div>
+              <div className="text-xs font-bold text-slate-900 mt-1">{formatDateTime(comp.start_time)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500 font-medium">End Time</div>
+              <div className="text-xs font-bold text-slate-900 mt-1">{formatDateTime(comp.end_time)}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500 font-medium">Questions</div>
+              <div className="text-xs font-bold text-slate-900 mt-1">{comp.total_questions ?? '--'}</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500 font-medium">Total Marks</div>
+              <div className="text-xs font-bold text-amber-600 mt-1">{comp.total_marks ?? '--'}</div>
+            </div>
+          </div>
+
+          {/* Commented out unsupported parameter: Description */}
+          {/*
           <div>
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</h4>
             <p className="leading-relaxed text-slate-600">{comp.description}</p>
           </div>
+          */}
 
-          {/* Schedule info */}
-          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div>
-              <div className="text-xs text-slate-500 font-medium">Start Date & Time</div>
-              <div className="text-sm font-bold text-slate-900">{comp.startDate}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 font-medium">Total Prize Pool</div>
-              <div className="text-sm font-extrabold text-amber-600">{comp.prizePool}</div>
-            </div>
-          </div>
-
-          {/* Prize breakdown */}
+          {/* Commented out unsupported parameter: Prize breakdown */}
+          {/*
           <div className="space-y-2">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Prize Structure</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {comp.prizes.map((p, idx) => (
+              {comp.prizes?.map((p, idx) => (
                 <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center justify-between">
                   <span className="font-bold text-amber-700">{p.rank}</span>
                   <span className="text-xs text-slate-700 font-medium">{p.reward}</span>
@@ -986,18 +1356,21 @@ const CompetitionDetailModal: React.FC<{
               ))}
             </div>
           </div>
+          */}
 
-          {/* Syllabus Topics */}
+          {/* Commented out unsupported parameter: Syllabus Topics */}
+          {/*
           <div className="space-y-2">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Syllabus Covered</h4>
             <div className="flex flex-wrap gap-2">
-              {comp.syllabus.map((s, idx) => (
+              {comp.syllabus?.map((s, idx) => (
                 <span key={idx} className="px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">
                   • {s}
                 </span>
               ))}
             </div>
           </div>
+          */}
         </div>
 
         {/* Modal Footer */}
@@ -1005,11 +1378,11 @@ const CompetitionDetailModal: React.FC<{
           <div>
             <div className="text-xs text-slate-500">Entry Fee</div>
             <div className="text-lg font-black text-slate-900">
-              {comp.entryFee === 0 ? <span className="text-emerald-600">FREE</span> : `₹${comp.entryFee}`}
+              {isFree ? <span className="text-emerald-600">FREE</span> : `₹${amount}`}
             </div>
           </div>
 
-          {comp.isRegistered ? (
+          {comp.is_enrolled ? (
             <button disabled className="px-6 py-3 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-sm font-bold">
               Already Registered
             </button>
@@ -1021,6 +1394,129 @@ const CompetitionDetailModal: React.FC<{
               Confirm Registration
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Sub-Component: Registration Confirmation Modal Box - Light & Modern Theme
+const RegistrationConfirmationModal: React.FC<{
+  comp: CompetitionItem;
+  isLoading: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}> = ({ comp, isLoading, onClose, onConfirm }) => {
+  const { isFree, amount } = getFeeInfo(comp);
+  const moduleLabel = getModuleTypeLabel(comp.module_type);
+  const durationMins = comp.total_time ? Math.floor(comp.total_time / 60) : null;
+
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return 'TBA';
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl space-y-5">
+        {/* Modal Header */}
+        <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-start justify-between relative">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[11px] font-bold uppercase tracking-wider text-blue-100">
+              <HelpCircle className="w-3.5 h-3.5 text-amber-300" /> Confirm Registration
+            </div>
+            <h2 className="text-xl font-extrabold text-white">Register for Competition</h2>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Content - Competition Details */}
+        <div className="px-6 space-y-4 text-slate-700">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {comp.subject_name && (
+                <span className="px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-700 text-xs font-bold uppercase">
+                  {comp.subject_name}
+                </span>
+              )}
+              <span className="px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-xs font-bold uppercase">
+                {moduleLabel}
+              </span>
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-900 leading-snug">{comp.title}</h3>
+
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 text-xs">
+              <div>
+                <span className="text-slate-400 block font-medium">Start Time</span>
+                <span className="font-semibold text-slate-800">{formatDateTime(comp.start_time || comp.end_time)}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block font-medium">Entry Fee</span>
+                <span className="font-extrabold text-amber-600">{isFree ? 'FREE' : `₹${amount}`}</span>
+              </div>
+              {comp.total_questions != null && (
+                <div>
+                  <span className="text-slate-400 block font-medium">Questions</span>
+                  <span className="font-semibold text-slate-800">{comp.total_questions}</span>
+                </div>
+              )}
+              {durationMins != null && (
+                <div>
+                  <span className="text-slate-400 block font-medium">Duration</span>
+                  <span className="font-semibold text-slate-800">{durationMins} mins</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <p className="text-sm font-medium text-slate-700 text-center leading-relaxed">
+            Are you sure you want to register for <strong className="text-blue-600">{comp.title}</strong>?
+          </p>
+        </div>
+
+        {/* Modal Footer Action Buttons */}
+        <div className="p-6 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-3">
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700 transition-all cursor-pointer disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-md shadow-blue-600/25 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Registering...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" /> Yes, Register
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

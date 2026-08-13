@@ -17,9 +17,9 @@ export const CompetitionService = {
      * @param subscription_id 
      */
 
-    GetAllUpcomingCompetitions: async (subscription_id: string | number) => {
+    GetAllUpcomingCompetitions: async (subscription_id: string | number, user_id: string | number) => {
         try{
-            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_ALL_UPCOMING_COMPETITIONS(subscription_id));
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_ALL_UPCOMING_COMPETITIONS(subscription_id, user_id));
             console.log("Fetch all competitions",response.data);
             return response.data;
         } catch (error) {
