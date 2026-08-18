@@ -124,13 +124,14 @@ export default function ConceptualVivaDashboard() {
         value: item.weighted_percentage || item.value || item.mastery || 0,
         full: 100
       }))
-    : [
-        { subject: 'Physics', value: 0, full: 100 },
-        { subject: 'Chemistry', value: 0, full: 100 },
-        { subject: 'Biology', value: 0, full: 100 },
-        { subject: 'English', value: 0, full: 100 },
-        { subject: 'Math', value: 0, full: 100 },
-      ];
+    : []
+    // [
+    //     { subject: 'Physics', value: 0, full: 100 },
+    //     { subject: 'Chemistry', value: 0, full: 100 },
+    //     { subject: 'Biology', value: 0, full: 100 },
+    //     { subject: 'English', value: 0, full: 100 },
+    //     { subject: 'Math', value: 0, full: 100 },
+    //   ];
 
   const strongestSubject = mappedSubjectData.reduce((prev: any, current: any) => (prev.value > current.value) ? prev : current, { subject: 'Various Subjects', value: 0 });
   const strongestSubjectName = strongestSubject.subject;

@@ -21,7 +21,10 @@ import {
 } from 'lucide-react';
 import { ConceptualVivaService } from '../../services/ConceptualTutorService';
 import { toast } from 'react-hot-toast';
+import Swal from 'sweetalert2';
 import QuestionMathJax, { latexToText } from '../../shared/mathjaxconfig/QuestionMathJax';
+import { speakText, stopSpeech } from '../../utils/ttsHelper';
+
 
 interface SessionProps {
   initialParams: any;
@@ -136,6 +139,9 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
       formData.append('chapter_id', String(initialParams.chapter_id));
       formData.append('topic_id', String(initialParams.topic_id));
       formData.append('course_id', String(initialParams.course_id));
+      if (initialParams.viva_type) {
+        formData.append('viva_type', String(initialParams.viva_type));
+      }
 
       console.log("ConceptualVivaSession start payload (FormData entries):", Array.from(formData.entries()));
       
@@ -172,11 +178,33 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
       }
     } catch (error: any) {
       console.error("Error starting viva session:", error);
+      const isCil = initialParams?.viva_type === 'CIL' || initialParams?.vivaType === 'CIL';
+      
       if (error.response) {
         console.error("Server error response data:", error.response.data);
         console.error("Server error response status:", error.response.status);
+        
+        const apiMessage = error.response.data?.message || 
+                           error.response.data?.error || 
+                           error.response.data?.detail || 
+                           (typeof error.response.data === 'string' ? error.response.data : null);
+
+        if (isCil) {
+          if (apiMessage) {
+            toast.error(apiMessage);
+          } else {
+            toast.error(`Error starting CIL viva: ${error.response.status}`);
+          }
+        } else {
+          if (error.response.status === 403) {
+            toast.error(apiMessage || "Access Denied");
+          } else {
+            toast.error(`Error starting viva: ${error.response?.status || 'Unknown error'}`);
+          }
+        }
+      } else {
+        toast.error(`Error starting viva: ${error.message || 'Unknown error'}`);
       }
-      toast.error(`Error starting viva: ${error.response?.status || 'Unknown error'}`);
       onExit();
     } finally {
       setIsInitialLoading(false);
@@ -189,22 +217,10 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
     const speechText = text || currentQuestion?.question_transcrib;
     if (!speechText) return;
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(speechText);
-      
-      // Try to find an Indian voice (en-IN)
-      const voices = window.speechSynthesis.getVoices();
-      const indianVoice = voices.find(voice => voice.lang === 'en-IN' || voice.lang.includes('en-IN') || voice.name.includes('India'));
-      
-      if (indianVoice) {
-        utterance.voice = indianVoice;
-      }
-      
-      utterance.rate = 0.9; // Slightly slower for better clarity
-      utterance.pitch = 1;
-      window.speechSynthesis.speak(utterance);
-    }
+    speakText(speechText, {
+      rate: 0.9, // Slightly slower for better clarity
+      pitch: 1
+    });
   };
 
   useEffect(() => {
@@ -415,14 +431,35 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
 
   const handleFinishViva = async () => {
     if (!sessionId) return;
-    setIsFinishing(true);
-    try {
-      await ConceptualVivaService.endConceptualViva({ session_id: sessionId });
-      onFinish(sessionId);
-    } catch (error) {
-      toast.error("Failed to end viva session");
-    } finally {
-      setIsFinishing(false);
+
+    const result = await Swal.fire({
+      title: "End Session?",
+      text: "Are you sure you want to end this conceptual tutor session? Your current progress will be saved.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Yes, End",
+      cancelButtonText: "Cancel",
+      customClass: {
+        container: "!z-[99999]",
+        popup: "!z-[99999] rounded-2xl",
+        confirmButton: "text-sm px-4 py-2.5 bg-red-600 text-white rounded-xl font-bold min-w-[100px] hover:bg-red-700 transition-colors shadow-lg shadow-red-100 cursor-pointer",
+        cancelButton: "text-sm px-4 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold min-w-[100px] hover:bg-slate-200 transition-colors ml-3 cursor-pointer"
+      },
+      buttonsStyling: false
+    });
+
+    if (result.isConfirmed) {
+      stopSpeech();
+      setIsFinishing(true);
+      try {
+        await ConceptualVivaService.endConceptualViva({ session_id: sessionId });
+        await exitFullscreen();
+        onFinish(sessionId);
+      } catch (error) {
+        toast.error("Failed to end viva session");
+      } finally {
+        setIsFinishing(false);
+      }
     }
   };
 
@@ -432,36 +469,8 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
   const isQuestionLoaded = currentQuestion !== null;
   const isReady = isDataLoaded && isQuestionLoaded;
 
-  if (isInitialLoading || (!isReady && !isFinishing)) {
-    // If it's not loading but data is still missing, it's likely an error
-    if (!isInitialLoading && !isReady) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-[80vh] gap-6 p-8">
-          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-600 mb-4">
-            <AlertCircle className="w-10 h-10" />
-          </div>
-          <div className="text-center">
-            <h2 className="text-2xl font-black text-slate-800 mb-2">Failed to start the exam</h2>
-            <p className="text-slate-500 max-w-sm mb-8">Please try again after some time or contact support if the issue persists.</p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button 
-                onClick={() => window.location.reload()}
-                className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-200"
-              >
-                Retry Session
-              </button>
-              <button 
-                onClick={onExit}
-                className="w-full sm:w-auto px-8 py-3 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold hover:bg-slate-50 transition-all"
-              >
-                Exit Exam
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
+  // If it's loading, show the initializing session loader
+  if (isInitialLoading) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-50">
         <div className="relative">
@@ -480,6 +489,38 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
           <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
           <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
           <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce"></span>
+        </div>
+      </div>
+    );
+  }
+
+  // If we are not loading and we are not ready (and not finishing), it means we failed to start the session
+  if (!isReady && !isFinishing) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] gap-6 p-8">
+        <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center text-red-600 mb-4">
+          <AlertCircle className="w-10 h-10" />
+        </div>
+        <div className="text-center">
+          <h2 className="text-2xl font-black text-slate-800 mb-2">Failed to start the session</h2>
+          <p className="text-slate-500 max-w-sm mb-8">Please try again after some time or contact support if the issue persists.</p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full sm:w-auto px-8 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-200"
+            >
+              Retry Session
+            </button>
+            <button 
+              onClick={async () => {
+                await exitFullscreen();
+                onExit();
+              }}
+              className="w-full sm:w-auto px-8 py-3 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold hover:bg-slate-50 transition-all"
+            >
+              Exit Exam
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -707,39 +748,60 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                </div>
                
                {isSubmitting && (
-                 <div className="text-white/60 text-xs font-bold animate-pulse uppercase tracking-[0.2em]">
-                    Processing Answer...
-                 </div>
-               )}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Footer Nav */}
-      <div className="mt-8 flex justify-center items-center bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-         {canEnd ? (
-           <button 
-             onClick={handleFinishViva}
-             disabled={isFinishing}
-             className="flex items-center gap-2 px-12 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest"
-           >
-              {isFinishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <>FINISH SESSION <Target className="w-4 h-4" /></>}
-           </button>
-         ) : (
+                  <div className="text-white/60 text-xs font-bold animate-pulse uppercase tracking-[0.2em]">
+                     Processing Answer...
+                  </div>
+                )}
+             </div>
+           </div>
+         </div>
+       </div>
+       
+       {/* Footer Nav */}
+       <div className="mt-8 flex justify-center items-center bg-white p-4 rounded-3xl border border-slate-100 shadow-sm w-full">
+          {canEnd ? (
             <button 
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className={`flex items-center gap-2 px-12 py-4 font-black text-sm rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest ${
-                !isSubmitting 
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white' 
-                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              }`}
+              onClick={handleFinishViva}
+              disabled={isFinishing}
+              className="flex items-center gap-2 px-12 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest cursor-pointer"
             >
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <>SUBMIT & NEXT <ChevronRight className="w-4 h-4" /></>}
-           </button>
-         )}
-      </div>
-      </div>
+               {isFinishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <>FINISH SESSION <Target className="w-4 h-4" /></>}
+            </button>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+              <button 
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className={`flex items-center gap-2 px-12 py-4 font-black text-sm rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest cursor-pointer ${
+                  !isSubmitting 
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white' 
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <>SUBMIT & NEXT <ChevronRight className="w-4 h-4" /></>}
+              </button>
+              <div className="relative group w-full sm:w-auto flex justify-center">
+                <button 
+                  onClick={handleFinishViva}
+                  disabled={isSubmitting || isFinishing || Number(currentQuestion?.question_no) === 1}
+                  className={`flex items-center justify-center gap-2 px-12 py-4 font-black text-sm rounded-2xl transition-all shadow-md uppercase tracking-widest w-full sm:w-auto ${
+                    Number(currentQuestion?.question_no) === 1
+                      ? 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 hover:scale-105 active:scale-95 cursor-pointer'
+                  }`}
+                >
+                  {isFinishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <>END SESSION <Square className="w-4 h-4 text-slate-500 fill-slate-500" /></>}
+                </button>
+                {Number(currentQuestion?.question_no) === 1 && (
+                  <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-900 text-white text-xs px-3.5 py-2 rounded-xl whitespace-nowrap z-50 shadow-xl font-bold border border-slate-800 text-center animate-in fade-in zoom-in duration-200">
+                    You need to submit at least one question
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-slate-900"></div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+       </div>
+    </div>
   );
 }

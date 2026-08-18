@@ -126,7 +126,7 @@ axiosFastApiClient.interceptors.response.use(
 );
 
 const axiosVoiceClient = axios.create({
-    baseURL: import.meta.env.VITE_CONCEPTUAL_API_URL,
+    baseURL: import.meta.env.VITE_MINDSHAALA_API_URL
     // headers: {
     //     'Content-Type': 'application/json',   
     // }

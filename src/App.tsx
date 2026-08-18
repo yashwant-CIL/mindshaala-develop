@@ -561,7 +561,7 @@ export default function App() {
 
         {currentStep === "main" && (
           <div className="min-h-screen bg-gray-50 flex">
-            {activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && (
+            {activePage !== "conceptual-tutor-session" && activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && (
               <Sidebar
                   activePage={activePage}
                   onNavigate={handleNavigate}
