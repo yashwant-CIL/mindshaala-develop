@@ -156,9 +156,9 @@ export const API_ENDPOINT = {
         // GET_REGISTERED_COMPETITIONS_RESULTS: ``,
 
         //Assessment ENDPOINTS
-        START_COMPETITION_ASSESSMENT: `/api/competition/assessments/start`,
-        SUBMIT_COMPETITION_ANSWERS: `/api/competition/assessments/asnwer-submit`,
-        END_COMPETITION_ASSESSMENT: `/api/competition/assessments/end`,
+        START_COMPETITION_ASSESSMENT: `/api/v3/mindshaala/start-assessment`,
+        SUBMIT_COMPETITION_ANSWERS: `/api/v3/mindshaala/submit-answer`,
+        END_COMPETITION_ASSESSMENT: `/api/v3/mindshaala/end-assessment`,
         GET_LIST_COMPETITION_ASSESSMENT : (user_id: number | string | undefined) => `/api/competition/assessments/user?user_id=${user_id}`,
         GET_RESULT_COMPETITION_ASSESSMENT: (competition_user_ass_id: number | string | undefined) => `/api/competition/assessments/results?competition_user_ass_id=${competition_user_ass_id}`
 

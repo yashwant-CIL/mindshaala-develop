@@ -93,7 +93,7 @@ export const CompetitionService = {
 
     EndCompetition: async (payload: any) => {
         try{
-            const response = await axiosMindShaalaClient(API_ENDPOINT.COMPETITIONS.END_COMPETITION_ASSESSMENT,payload);
+            const response = await axiosMindShaalaClient.post(API_ENDPOINT.COMPETITIONS.END_COMPETITION_ASSESSMENT,payload);
             console.log("Competition ended successdully ", response.data);
             return response.data
         }catch(error){

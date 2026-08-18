@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useCourse } from '../../context/CourseContext';
 import { CompetitionService } from '../../services/CompetitionService';
 import Cookies from 'js-cookie';
+import { getNetworkNow, useNetworkNow } from '../../utils/networkTime';
+import { CompetitionWaitingRoom } from './CompetitionWaitingRoom';
+import { CompetitionExamScreen } from './CompetitionExamScreen';
 import {
   Trophy,
   Calendar,
@@ -68,7 +71,7 @@ export interface CompetitionItem {
   subscription_id?: number | string;
   chapter_id?: string;
   topic_id?: string;
-  category_id?: number | null;
+  category_id?: number | string | null;
   viva_type?: string | null;
   start_time?: string;
   end_time?: string;
@@ -77,6 +80,7 @@ export interface CompetitionItem {
   total_time?: number; // in seconds
   gk_assessment_type?: string | null;
   gk_creation_mode?: string | null;
+  category_ids?: (number | string)[];
   created_by?: number;
   fee_type?: string | null;
   fee_amount?: number | null;
@@ -344,18 +348,26 @@ const MOCK_OFFERS: OfferItem[] = [
 //   }
 // ];
 
-// Helper for live countdown calculation
-function calculateTimeLeft(targetDateStr: string) {
-  const difference = +new Date(targetDateStr) - +new Date();
-  if (difference <= 0) {
-    return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
+// Helper for live countdown calculation using internet network timestamp
+function calculateTimeLeft(targetDateStr: string, currentNowMs?: number) {
+  if (!targetDateStr) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true, totalMs: 0 };
   }
+  const nowMs = currentNowMs ?? getNetworkNow();
+  const targetTimeMs = new Date(targetDateStr).getTime();
+  const difference = targetTimeMs - nowMs;
+
+  if (isNaN(targetTimeMs) || difference <= 0) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true, totalMs: difference };
+  }
+
   return {
     days: Math.floor(difference / (1000 * 60 * 60 * 24)),
     hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
     minutes: Math.floor((difference / 1000 / 60) % 60),
     seconds: Math.floor((difference / 1000) % 60),
-    expired: false
+    expired: false,
+    totalMs: difference
   };
 }
 
@@ -404,6 +416,8 @@ export const Competitions: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedOfferId, setCopiedOfferId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'explore' | 'registered'>('explore');
+  const [waitingRoomComp, setWaitingRoomComp] = useState<CompetitionItem | null>(null);
+  const [activeExamComp, setActiveExamComp] = useState<CompetitionItem | null>(null);
 
   // Auto slide poster banner
   useEffect(() => {
@@ -459,17 +473,25 @@ export const Competitions: React.FC = () => {
         if (Array.isArray(response.data)) {
           dataList = response.data;
         }
-        if (response.message) {
+        if (response.detail) {
+          backendMsg = response.detail;
+        } else if (response.message) {
           backendMsg = response.message;
         }
       }
 
       setUpcomingCompetitions(dataList);
-      setApiBackendMessage(backendMsg);
+      setApiBackendMessage(backendMsg || (dataList.length === 0 ? "No upcoming competitions" : null));
     } catch (err: any) {
       console.error("Error fetching competitions:", err);
       setUpcomingCompetitions([]);
-      setApiBackendMessage(err?.response?.data?.message || err?.message || "Failed to fetch competitions.");
+      const errMsg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        (typeof err?.response?.data === 'string' ? err?.response?.data : null) ||
+        err?.message ||
+        "No upcoming competitions";
+      setApiBackendMessage(errMsg);
     } finally {
       setIsLoadingCompetitions(false);
     }
@@ -481,6 +503,14 @@ export const Competitions: React.FC = () => {
       fetchCompetitions(selectedModuleType, activeSubscriptionId, activeUserId);
     }
   }, [activeSubscriptionId, selectedModuleType, activeUserId]);
+
+  // Callback when any upcoming competition timer expires to refresh API data
+  const handleUpcomingTimerEnded = () => {
+    if (activeSubscriptionId) {
+      console.log("Timer ended for an upcoming competition. Fetching updated competition list from API...");
+      fetchCompetitions(selectedModuleType, activeSubscriptionId, activeUserId);
+    }
+  };
 
   // Sync isRegistered flag on upcoming competitions when registeredCompetitions updates
   useEffect(() => {
@@ -591,6 +621,38 @@ export const Competitions: React.FC = () => {
 
   const totalRegisteredCount = registeredCompetitions.length;
   const currentPoster = MOCK_POSTERS[activePosterIndex];
+
+  // Render Full Screen Waiting Room if Active
+  if (waitingRoomComp) {
+    return (
+      <CompetitionWaitingRoom
+        comp={waitingRoomComp}
+        onStartExam={() => {
+          setActiveExamComp(waitingRoomComp);
+          setWaitingRoomComp(null);
+        }}
+        onExit={() => setWaitingRoomComp(null)}
+      />
+    );
+  }
+
+  // Render Full Screen Competition Exam Screen if Active
+  if (activeExamComp) {
+    return (
+      <CompetitionExamScreen
+        comp={activeExamComp}
+        userId={activeUserId}
+        onExit={() => setActiveExamComp(null)}
+        onComplete={(result) => {
+          setActiveExamComp(null);
+          setToastMessage({
+            type: 'success',
+            text: 'Competition submitted successfully!'
+          });
+        }}
+      />
+    );
+  }
 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-4 md:p-6 lg:p-8 space-y-8 font-sans">
@@ -775,7 +837,13 @@ export const Competitions: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {registeredCompetitions.map((comp) => (
-                <RegisteredCompCard key={comp.id} comp={comp} onViewDetails={() => setSelectedModalComp(comp)} />
+                <RegisteredCompCard
+                  key={comp.competition_id || comp.id}
+                  comp={comp}
+                  onViewDetails={() => setSelectedModalComp(comp)}
+                  onStart={() => setActiveExamComp(comp)}
+                  onEnterWaitingRoom={() => setWaitingRoomComp(comp)}
+                />
               ))}
             </div>
           )}
@@ -860,12 +928,14 @@ export const Competitions: React.FC = () => {
             <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <Trophy className="w-12 h-12 text-slate-300 mx-auto" />
               <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-800">No Competitions Available</h3>
+                <h3 className="text-base font-bold text-slate-800">
+                  {apiBackendMessage || "No upcoming competitions"}
+                </h3>
                 <p className="text-slate-500 text-sm max-w-md mx-auto">
-                  {apiBackendMessage || "No competitions found for the selected filter or subscription."}
+                  There are currently no upcoming competitions available.
                 </p>
               </div>
-              <button
+              {/* <button
                 onClick={() => {
                   setSelectedModuleType('ALL');
                   setSelectedFee('all');
@@ -874,7 +944,7 @@ export const Competitions: React.FC = () => {
                 className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors"
               >
                 Reset Filters
-              </button>
+              </button> */}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -884,6 +954,7 @@ export const Competitions: React.FC = () => {
                   comp={comp}
                   onRegister={() => handleRegisterClick(comp)}
                   onViewDetails={() => setSelectedModalComp(comp)}
+                  onTimerEnded={handleUpcomingTimerEnded}
                 />
               ))}
             </div>
@@ -936,14 +1007,8 @@ const OfferCard: React.FC<{ offer: OfferItem; onCopy: (id: string, code: string)
   onCopy,
   isCopied
 }) => {
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(offer.expiryDate));
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft(offer.expiryDate));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [offer.expiryDate]);
+  const nowMs = useNetworkNow(1000);
+  const timeLeft = calculateTimeLeft(offer.expiryDate, nowMs);
 
   return (
     <div className="relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-5 space-y-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all">
@@ -985,18 +1050,29 @@ const OfferCard: React.FC<{ offer: OfferItem; onCopy: (id: string, code: string)
 };
 
 // Sub-Component: Registered Competition Card with Admit Card & Launch Timer - Light Theme
-const RegisteredCompCard: React.FC<{ comp: CompetitionItem; onViewDetails: () => void }> = ({ comp, onViewDetails }) => {
-  const targetDateStr = comp.start_time || comp.end_time || '';
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(targetDateStr));
+const RegisteredCompCard: React.FC<{
+  comp: CompetitionItem;
+  onViewDetails: () => void;
+  onStart?: () => void;
+  onEnterWaitingRoom?: () => void;
+}> = ({ comp, onViewDetails, onStart, onEnterWaitingRoom }) => {
+  const nowMs = useNetworkNow(1000);
 
-  useEffect(() => {
-    if (targetDateStr) {
-      const timer = setInterval(() => {
-        setTimeLeft(calculateTimeLeft(targetDateStr));
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [targetDateStr]);
+  const startTimeMs = comp.start_time ? new Date(comp.start_time).getTime() : 0;
+  const totalDurationMs = comp.total_time ? comp.total_time * 1000 : 3600000;
+  const endTimeMs = comp.end_time
+    ? new Date(comp.end_time).getTime()
+    : (startTimeMs > 0 ? startTimeMs + totalDurationMs : 0);
+
+  const isBeforeStart = startTimeMs > 0 && nowMs < startTimeMs;
+  const isLive = startTimeMs > 0 && nowMs >= startTimeMs && (endTimeMs === 0 || nowMs <= endTimeMs);
+  const isEnded = endTimeMs > 0 && nowMs > endTimeMs;
+
+  const diffToStart = startTimeMs > 0 ? startTimeMs - nowMs : 0;
+  const isWaitingRoomActive = isBeforeStart && diffToStart <= 10 * 60 * 1000; // <= 10 minutes
+
+  const targetDateStr = comp.start_time || comp.end_time || '';
+  const timeLeft = calculateTimeLeft(targetDateStr, nowMs);
 
   const moduleLabel = getModuleTypeLabel(comp.module_type);
   const durationMins = comp.total_time ? Math.floor(comp.total_time / 60) : null;
@@ -1029,15 +1105,43 @@ const RegisteredCompCard: React.FC<{ comp: CompetitionItem; onViewDetails: () =>
         </div>
       </div>
 
-      {/* Timer Banner */}
+      {/* Timer Banner / Status Header */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-          <Timer className="w-4 h-4 text-amber-600 animate-pulse" />
-          <span>Exam Begins In:</span>
-        </div>
-        <div className="font-mono text-sm font-black text-amber-600 tracking-wider">
-          {timeLeft.days}d {String(timeLeft.hours).padStart(2, '0')}h {String(timeLeft.minutes).padStart(2, '0')}m {String(timeLeft.seconds).padStart(2, '0')}s
-        </div>
+        {isBeforeStart && (
+          <>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+              <Timer className="w-4 h-4 text-amber-600 animate-pulse" />
+              <span>Exam Begins In:</span>
+            </div>
+            <div className="font-mono text-sm font-black text-amber-600 tracking-wider">
+              {timeLeft.days}d {String(timeLeft.hours).padStart(2, '0')}h {String(timeLeft.minutes).padStart(2, '0')}m {String(timeLeft.seconds).padStart(2, '0')}s
+            </div>
+          </>
+        )}
+
+        {isLive && (
+          <>
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
+              <Sparkles className="w-4 h-4 text-emerald-600 animate-bounce" />
+              <span className="font-bold">Competition is NOW LIVE!</span>
+            </div>
+            <div className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold uppercase animate-pulse">
+              Live Now
+            </div>
+          </>
+        )}
+
+        {(isEnded || (!isBeforeStart && !isLive && endTimeMs > 0)) && (
+          <>
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+              <Clock className="w-4 h-4 text-slate-400" />
+              <span>Status:</span>
+            </div>
+            <div className="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-bold uppercase">
+              Competition Ended
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
@@ -1051,15 +1155,46 @@ const RegisteredCompCard: React.FC<{ comp: CompetitionItem; onViewDetails: () =>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Details button is always rendered */}
           <button
             onClick={onViewDetails}
-            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors border border-slate-200"
+            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors border border-slate-200 cursor-pointer"
           >
             Details
           </button>
-          <button className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-bold text-white shadow-sm transition-all flex items-center gap-1">
-            <Play className="w-3.5 h-3.5" /> Waiting Room
-          </button>
+
+          {/* Condition 1: Timer running -> Show Waiting Room button (active only when <= 10 mins before start) */}
+          {isBeforeStart && (
+            <button
+              onClick={isWaitingRoomActive ? (onEnterWaitingRoom || onViewDetails) : undefined}
+              disabled={!isWaitingRoomActive}
+              title={!isWaitingRoomActive ? "Waiting room opens 10 minutes before start time" : "Enter Waiting Room"}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                isWaitingRoomActive
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm cursor-pointer shadow-emerald-600/20'
+                  : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-70'
+              }`}
+            >
+              <Play className="w-3.5 h-3.5" /> Waiting Room
+              {!isWaitingRoomActive && (
+                <span className="text-[9px] bg-slate-300/80 text-slate-600 px-1.5 py-0.5 rounded ml-1 font-semibold">
+                  (Opens in &lt;10m)
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Condition 2: Timer is 0 / Exam Live -> Show Start button until endtime */}
+          {isLive && (
+            <button
+              onClick={onStart || onViewDetails}
+              className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition-all flex items-center gap-1 cursor-pointer animate-pulse"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" /> Start
+            </button>
+          )}
+
+          {/* Condition 3: End time has passed -> ONLY details button is rendered (handled above) */}
         </div>
       </div>
     </div>
@@ -1071,21 +1206,28 @@ const UpcomingCompCard: React.FC<{
   comp: CompetitionItem;
   onRegister: () => void;
   onViewDetails: () => void;
-}> = ({ comp, onRegister, onViewDetails }) => {
+  onTimerEnded?: () => void;
+}> = ({ comp, onRegister, onViewDetails, onTimerEnded }) => {
   const { isFree, amount } = getFeeInfo(comp);
   const moduleLabel = getModuleTypeLabel(comp.module_type);
 
+  const nowMs = useNetworkNow(1000);
   const targetDateStr = comp.start_time || comp.end_time || '';
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(targetDateStr));
+  const [timeLeft, setTimeLeft] = useState(() => calculateTimeLeft(targetDateStr, nowMs));
+  const [hasFiredExpiry, setHasFiredExpiry] = useState(false);
 
   useEffect(() => {
     if (targetDateStr) {
-      const timer = setInterval(() => {
-        setTimeLeft(calculateTimeLeft(targetDateStr));
-      }, 1000);
-      return () => clearInterval(timer);
+      const calculated = calculateTimeLeft(targetDateStr, nowMs);
+      setTimeLeft(calculated);
+      if (calculated.expired && !hasFiredExpiry) {
+        setHasFiredExpiry(true);
+        if (onTimerEnded) {
+          onTimerEnded();
+        }
+      }
     }
-  }, [targetDateStr]);
+  }, [targetDateStr, nowMs, hasFiredExpiry, onTimerEnded]);
 
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return 'TBA';
