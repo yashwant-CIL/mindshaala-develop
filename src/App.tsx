@@ -14,6 +14,10 @@ import { MyCourses } from "./components/MyCourses";
 import { CoursesAndMaterials } from "./components/CoursesAndMaterials";
 import { StudyMaterial } from "./components/StudyMaterial";
 import { MapPractice } from "./components/MapPractice";
+import PhysicsPhenomenon from "./components/activity-hub/PhysicsPhenomenon";
+import ExplainBiology from "./components/activity-hub/ExplainBiology";
+import EngineeringConcept from "./components/activity-hub/EngineeringConcept";
+import MathGenius from "./components/activity-hub/MathGenius";
 import { TakeTest } from "./components/TakeTest";
 import { TheoryTestPage } from "./components/TheoryTestPage";
 import { EvaluationReport } from "./components/EvaluationReport";
@@ -81,6 +85,7 @@ import SpeakAlongSession from "./components/speakalong-viva/SpeakAlongSession";
 import GKDashboard from "./components/GeneralKnowledge/GKDashboard";
 import GKExams from "./components/GeneralKnowledge/GKExams";
 import GKExamRunner from "./components/GeneralKnowledge/GKExamRunner";
+import GKPreparation from "./components/GeneralKnowledge/GKPreparation";
 import GKProfile from "./components/GeneralKnowledge/GKProfile";
 import GKResult from "./components/GeneralKnowledge/GKResult";
 import { Volume2, AlertCircle, ArrowLeft, BrainCircuit } from "lucide-react";
@@ -641,6 +646,10 @@ export default function App() {
                 />
                 )}
                 {activePage === "mappractice" && <MapPractice />}
+                {activePage === "physics-phenomenon" && <PhysicsPhenomenon onNavigate={handleNavigate} />}
+                {activePage === "explain-biology" && <ExplainBiology onNavigate={handleNavigate} />}
+                {activePage === "engineering-concept" && <EngineeringConcept onNavigate={handleNavigate} />}
+                {activePage === "math-genius" && <MathGenius onNavigate={handleNavigate} />}
                 {activePage === "notifications" && (
                 <Notifications
                 onBack={() => setActivePage("dashboard")}
@@ -1035,6 +1044,9 @@ export default function App() {
                   <GKDashboard 
                     onNavigate={handleNavigate} 
                   />
+                )}
+                {activePage === "gk-preparation" && (
+                  <GKPreparation onNavigate={handleNavigate} />
                 )}
                 {activePage === "gk-exams" && (
                   <GKExams 

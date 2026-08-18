@@ -1088,7 +1088,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
              <div className="space-y-3">
                <span className="text-[10px] font-black text-violet-500 uppercase tracking-widest">Pre-Assessment Inquiry</span>
                <h3 className="text-2xl font-black text-slate-800 tracking-tight max-w-md mx-auto">
-                 Did you know about <span className="text-violet-600">{currentTask?.subtopic_name}</span>?
+                 Are you aware about <span className="text-violet-600">{currentTask?.subtopic_name}</span>?
                </h3>
                <p className="text-slate-400 text-xs max-w-sm mx-auto">
                  Choose honestly. The AI Tutor uses this check to either explain the basics or test your knowledge directly.

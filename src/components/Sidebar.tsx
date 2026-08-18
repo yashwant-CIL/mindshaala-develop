@@ -38,7 +38,11 @@ import {
   UserCheck,
   Menu,
   X,
-  Download
+  Download,
+  Zap,
+  Dna,
+  Wrench,
+  Calculator
 } from 'lucide-react';
 import mindshaalLogo from '../assets/Mindshaala.png';
 import Cookies from 'js-cookie';
@@ -81,6 +85,10 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
 
   const activityHub = [
     { id: 'mappractice', label: 'Map Practice', icon: MapPin },
+    { id: 'physics-phenomenon', label: 'Physics Phenomenon', icon: Zap },
+    { id: 'explain-biology', label: 'Explain Biology', icon: Dna },
+    { id: 'engineering-concept', label: 'Engineering Concept', icon: Wrench },
+    { id: 'math-genius', label: 'Math Genius', icon: Calculator },
   ];
 
   const computerSubmodules = [
@@ -120,6 +128,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
 
   const generalKnowledgeItems = [
     { id: 'gk-profile', label: 'GK Profile', icon: UserCheck, badge: 'NEW' },
+    { id: 'gk-preparation', label: 'GK Preparation', icon: BookOpen, badge: 'FACTS' },
     { id: 'gk-dashboard', label: 'GK Dashboard', icon: LayoutDashboard },
     { id: 'gk-exams', label: 'GK Exams', icon: ClipboardCheck, badge: 'NEW' },
     { id: 'gk-result', label: 'GK Results', icon: FileText, badge: 'NEW' },
@@ -595,13 +604,20 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
           </button>
           {isActivityHubExpanded && (
             <div className="mt-1 mb-2 space-y-1">
-              <button
-                onClick={() => handleMobileNavigate('mappractice')}
-                className={childMenuClass(currentPage === 'mappractice')}
-              >
-                <MapPin className={`w-4 h-4 ${currentPage === 'mappractice' ? 'text-white' : 'text-slate-400'}`} />
-                <span className="flex-1 text-left">Map Practice</span>
-              </button>
+              {activityHub.map((item: any) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleMobileNavigate(item.id)}
+                    className={childMenuClass(isActive)}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="flex-1 text-left">{item.label}</span>
+                  </button>
+                );
+              })}
 
               {/* Computer Lab Collapsible */}
               <div className="w-[85%] mx-auto ml-6">
