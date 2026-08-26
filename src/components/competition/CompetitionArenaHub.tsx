@@ -12,13 +12,15 @@ export const CompetitionArenaHub: React.FC<{ initialTab?: CompetitionTabType }> 
 }) => {
   const [activeTab, setActiveTab] = useState<CompetitionTabType>(initialTab);
   const [selectedAttemptId, setSelectedAttemptId] = useState<string>('attempt-101');
+  const [selectedAttemptData, setSelectedAttemptData] = useState<any>(null);
 
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
 
-  const handleSelectAttempt = (attemptId: string) => {
+  const handleSelectAttempt = (attemptId: string, attemptData?: any) => {
     setSelectedAttemptId(attemptId);
+    setSelectedAttemptData(attemptData);
     setActiveTab('competition-result');
   };
 
@@ -39,7 +41,7 @@ export const CompetitionArenaHub: React.FC<{ initialTab?: CompetitionTabType }> 
         </div>
 
         {/* Tab Navigation Pills */}
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+        {/* <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
           <button
             onClick={() => setActiveTab('leaderboard')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer ${
@@ -75,7 +77,7 @@ export const CompetitionArenaHub: React.FC<{ initialTab?: CompetitionTabType }> 
             <FileText className={`w-4 h-4 ${activeTab === 'competition-history' || activeTab === 'competition-result' ? 'text-amber-300' : 'text-blue-600'}`} />
             Result
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Tab Content Rendering */}
@@ -83,11 +85,16 @@ export const CompetitionArenaHub: React.FC<{ initialTab?: CompetitionTabType }> 
         {activeTab === 'leaderboard' && <Leaderboard />}
         {activeTab === 'competitions' && <Competitions />}
         {activeTab === 'competition-history' && (
-          <CompetitionHistory onSelectCompetition={handleSelectAttempt} />
+          <CompetitionHistory
+            onSelectCompetition={handleSelectAttempt}
+            onExploreCompetitions={() => setActiveTab('competitions')}
+          />
         )}
         {activeTab === 'competition-result' && (
           <CompetitionResult
             attemptId={selectedAttemptId}
+            attemptData={selectedAttemptData}
+            moduleType={selectedAttemptData?.moduleType || selectedAttemptData?.module_type}
             onBack={() => setActiveTab('competition-history')}
           />
         )}

@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { CompetitionService } from '../../services/CompetitionService';
+import { toast } from 'react-hot-toast';
+import Cookies from 'js-cookie';
 import {
   ArrowLeft,
   Trophy,
@@ -16,7 +19,9 @@ import {
   BarChart2,
   Check,
   Zap,
-  Tag
+  Tag,
+  Loader2,
+  MessageSquareText
 } from 'lucide-react';
 
 export interface QuestionAttempt {
@@ -26,24 +31,29 @@ export interface QuestionAttempt {
   options: string[];
   selectedOption: number | null; // 0-indexed option, or null if unattempted
   correctOption: number; // 0-indexed option
+  userLetter?: string;
+  correctLetter?: string;
   isCorrect: boolean;
   isSkipped: boolean;
   explanation: string;
+  aiFeedback?: string;
   timeSpent: string;
   topic: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
+  userTranscription?: string;
 }
 
 export interface CompetitionAttemptResult {
   attemptId: string;
   competitionTitle: string;
   category: string;
+  moduleType?: string;
   attemptDate: string;
   score: number;
   maxScore: number;
   percentage: number;
-  rank: number;
-  totalParticipants: number;
+  rank?: number;
+  totalParticipants?: number;
   percentile: number;
   timeTaken: string;
   totalQuestions: number;
@@ -56,12 +66,14 @@ export interface CompetitionAttemptResult {
   questions: QuestionAttempt[];
 }
 
-// Sample Mock Detailed Results for Competitions
+/*
+// Sample Fallback Mock Detailed Results commented out - Competition result relies strictly on API data
 export const MOCK_DETAILED_RESULTS: Record<string, CompetitionAttemptResult> = {
   'attempt-101': {
     attemptId: 'attempt-101',
     competitionTitle: 'National Mathematics Speed Cup 2026',
     category: 'mathematics',
+    moduleType: 'GK',
     attemptDate: '05 Aug 2026, 10:45 AM',
     score: 925,
     maxScore: 1000,
@@ -89,9 +101,12 @@ export const MOCK_DETAILED_RESULTS: Record<string, CompetitionAttemptResult> = {
         options: ['13 / 4', '19 / 4', '25 / 4', '7 / 2'],
         selectedOption: 0,
         correctOption: 0,
+        userLetter: 'A',
+        correctLetter: 'A',
         isCorrect: true,
         isSkipped: false,
         explanation: 'α + β = 5/2 and αβ = 3/2. Using α² + β² = (α + β)² - 2αβ = (5/2)² - 2(3/2) = 25/4 - 3 = 13/4.',
+        aiFeedback: 'Great accuracy! Quick mental calculation of roots demonstrated high proficiency.',
         timeSpent: '1m 12s',
         topic: 'Algebra & Polynomials',
         difficulty: 'Medium'
@@ -103,9 +118,12 @@ export const MOCK_DETAILED_RESULTS: Record<string, CompetitionAttemptResult> = {
         options: ['1 unit', '2 units', '3 units', '4 units'],
         selectedOption: 1,
         correctOption: 1,
+        userLetter: 'B',
+        correctLetter: 'B',
         isCorrect: true,
         isSkipped: false,
         explanation: 'Distance formula between parallel lines Ax + By + C₁ = 0 and Ax + By + C₂ = 0 is d = |C₁ - C₂| / √(A² + B²) = |7 - (-3)| / √(3² + (-4)²) = 10 / 5 = 2 units.',
+        aiFeedback: 'Accurate application of standard distance formula.',
         timeSpent: '1m 45s',
         topic: 'Coordinate Geometry',
         difficulty: 'Easy'
@@ -117,9 +135,12 @@ export const MOCK_DETAILED_RESULTS: Record<string, CompetitionAttemptResult> = {
         options: ['2', '2√3', '4', '√3 / 2'],
         selectedOption: 1,
         correctOption: 1,
+        userLetter: 'B',
+        correctLetter: 'B',
         isCorrect: true,
         isSkipped: false,
         explanation: 'tan(75°) = 2 + √3 and tan(15°) = 2 - √3. Therefore, tan(75°) - tan(15°) = (2 + √3) - (2 - √3) = 2√3.',
+        aiFeedback: 'Good knowledge of trigonometric values.',
         timeSpent: '2m 10s',
         topic: 'Trigonometry',
         difficulty: 'Medium'
@@ -131,9 +152,12 @@ export const MOCK_DETAILED_RESULTS: Record<string, CompetitionAttemptResult> = {
         options: ['1210', '1221', '1254', '1280'],
         selectedOption: 1,
         correctOption: 1,
+        userLetter: 'B',
+        correctLetter: 'B',
         isCorrect: true,
         isSkipped: false,
         explanation: 'Two-digit numbers leaving remainder 1 modulo 4 form an AP: 13, 17, 21, ..., 97. Number of terms n = ((97 - 13)/4) + 1 = 22. Sum S₂₂ = 22/2 * (13 + 97) = 11 * 110 = 1221.',
+        aiFeedback: 'Excellent arithmetic progression calculation under time pressure.',
         timeSpent: '2m 30s',
         topic: 'Algebra & Polynomials',
         difficulty: 'Hard'
@@ -145,155 +169,262 @@ export const MOCK_DETAILED_RESULTS: Record<string, CompetitionAttemptResult> = {
         options: ['√2 sin θ', '√2 cos θ', 'sin θ', '-√2 sin θ'],
         selectedOption: 0,
         correctOption: 0,
+        userLetter: 'A',
+        correctLetter: 'A',
         isCorrect: true,
         isSkipped: false,
         explanation: 'Squaring both sides: sin²θ + cos²θ + 2sinθcosθ = 2cos²θ => 2sinθcosθ = cos²θ - sin²θ. Divide both sides by (cosθ + sinθ) = √2 cosθ to get cosθ - sinθ = 2sinθcosθ / (√2 cosθ) = √2 sinθ.',
+        aiFeedback: 'Clever trigonometric identity simplification!',
         timeSpent: '1m 55s',
         topic: 'Trigonometry',
         difficulty: 'Medium'
-      },
-      {
-        id: 'q6',
-        questionNumber: 6,
-        questionText: 'Find the area of the triangle formed by the points (0,0), (4,0), and (0,6).',
-        options: ['10 sq units', '12 sq units', '24 sq units', '16 sq units'],
-        selectedOption: 1,
-        correctOption: 1,
-        isCorrect: true,
-        isSkipped: false,
-        explanation: 'Right-angled triangle at origin with base 4 and height 6. Area = (1/2) * base * height = (1/2) * 4 * 6 = 12 sq units.',
-        timeSpent: '0m 50s',
-        topic: 'Coordinate Geometry',
-        difficulty: 'Easy'
-      },
-      {
-        id: 'q7',
-        questionNumber: 7,
-        questionText: 'Find the number of real roots of the equation x⁴ + 4x² + 5 = 0.',
-        options: ['0', '2', '4', '1'],
-        selectedOption: 0,
-        correctOption: 0,
-        isCorrect: true,
-        isSkipped: false,
-        explanation: 'Let t = x² ≥ 0. Equation becomes t² + 4t + 5 = 0. Discriminant D = 16 - 20 = -4 < 0. No real values of t exist, so 0 real roots.',
-        timeSpent: '1m 10s',
-        topic: 'Algebra & Polynomials',
-        difficulty: 'Medium'
-      },
-      {
-        id: 'q8',
-        questionNumber: 8,
-        questionText: 'If the centroid of a triangle with vertices (a, 1), (b, 3), and (4, c) is (2, 2), find (a + b + c).',
-        options: ['4', '5', '6', '7'],
-        selectedOption: 0,
-        correctOption: 0,
-        isCorrect: true,
-        isSkipped: false,
-        explanation: 'Centroid x = (a + b + 4)/3 = 2 => a + b = 2. Centroid y = (1 + 3 + c)/3 = 2 => 4 + c = 6 => c = 2. So a + b + c = 2 + 2 = 4.',
-        timeSpent: '2m 05s',
-        topic: 'Coordinate Geometry',
-        difficulty: 'Medium'
-      },
-      {
-        id: 'q9',
-        questionNumber: 9,
-        questionText: 'Simplify: (1 + tan²θ) / (1 + cot²θ).',
-        options: ['sec²θ', 'tan²θ', 'cot²θ', 'sin²θ'],
-        selectedOption: 0,
-        correctOption: 1,
-        isCorrect: false,
-        isSkipped: false,
-        explanation: '1 + tan²θ = sec²θ and 1 + cot²θ = cosec²θ. sec²θ / cosec²θ = (1/cos²θ) / (1/sin²θ) = sin²θ / cos²θ = tan²θ.',
-        timeSpent: '2m 40s',
-        topic: 'Trigonometry',
-        difficulty: 'Medium'
-      },
-      {
-        id: 'q10',
-        questionNumber: 10,
-        questionText: 'If x + 1/x = 3, find the value of x³ + 1/x³.',
-        options: ['18', '27', '36', '24'],
-        selectedOption: null,
-        correctOption: 0,
-        isCorrect: false,
-        isSkipped: true,
-        explanation: 'Formula: (x + 1/x)³ = x³ + 1/x³ + 3(x + 1/x). Substituting x + 1/x = 3: 3³ = x³ + 1/x³ + 3(3) => 27 = x³ + 1/x³ + 9 => x³ + 1/x³ = 18.',
-        timeSpent: '0m 00s',
-        topic: 'Algebra & Polynomials',
-        difficulty: 'Hard'
-      }
-    ]
-  },
-  'attempt-102': {
-    attemptId: 'attempt-102',
-    competitionTitle: 'Physics Mechanics & Optics Championship',
-    category: 'physics',
-    attemptDate: '01 Aug 2026, 4:15 PM',
-    score: 880,
-    maxScore: 1000,
-    percentage: 88.0,
-    rank: 7,
-    totalParticipants: 890,
-    percentile: 99.2,
-    timeTaken: '48m 10s / 60m',
-    totalQuestions: 8,
-    correctCount: 7,
-    incorrectCount: 1,
-    skippedCount: 0,
-    xpEarned: 1400,
-    rewardBadge: 'Silver Medal Certificate',
-    topicBreakdown: [
-      { topic: 'Kinematics & Laws of Motion', total: 4, correct: 4, percentage: 100 },
-      { topic: 'Ray Optics', total: 4, correct: 3, percentage: 75 }
-    ],
-    questions: [
-      {
-        id: 'pq1',
-        questionNumber: 1,
-        questionText: 'A body falls freely from rest. What is the distance covered in the 3rd second of its fall? (g = 10 m/s²)',
-        options: ['15 m', '25 m', '45 m', '30 m'],
-        selectedOption: 1,
-        correctOption: 1,
-        isCorrect: true,
-        isSkipped: false,
-        explanation: 'Formula for distance in nth second: Sₙ = u + (g/2)(2n - 1). Here u = 0, g = 10, n = 3. S₃ = (10/2)(2(3) - 1) = 5(5) = 25 m.',
-        timeSpent: '1m 20s',
-        topic: 'Kinematics & Laws of Motion',
-        difficulty: 'Easy'
-      },
-      {
-        id: 'pq2',
-        questionNumber: 2,
-        questionText: 'What is the focal length of a concave mirror having radius of curvature R = 30 cm?',
-        options: ['15 cm', '-15 cm', '30 cm', '-30 cm'],
-        selectedOption: 1,
-        correctOption: 1,
-        isCorrect: true,
-        isSkipped: false,
-        explanation: 'Focal length f = R/2. By sign convention for concave mirror, focal length is negative, so f = -30/2 = -15 cm.',
-        timeSpent: '0m 45s',
-        topic: 'Ray Optics',
-        difficulty: 'Easy'
       }
     ]
   }
 };
+*/
 
-export const CompetitionResult: React.FC<{
+export interface CompetitionResultProps {
   attemptId: string;
+  attemptData?: any;
+  moduleType?: string;
   onBack: () => void;
-}> = ({ attemptId, onBack }) => {
-  const [filterType, setFilterType] = useState<'all' | 'correct' | 'incorrect' | 'skipped'>('all');
+}
 
-  const resultData = MOCK_DETAILED_RESULTS[attemptId] || MOCK_DETAILED_RESULTS['attempt-101'];
+export const CompetitionResult: React.FC<CompetitionResultProps> = ({
+  attemptId,
+  attemptData,
+  moduleType = 'GK',
+  onBack
+}) => {
+  const [filterType, setFilterType] = useState<'all' | 'correct' | 'incorrect' | 'skipped'>('all');
+  const [resultData, setResultData] = useState<CompetitionAttemptResult | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Helper to map letter string ('A', 'B', 'C', 'D') to index (0, 1, 2, 3)
+  const letterToIdx = (letter?: string | number): number | null => {
+    if (letter === null || letter === undefined || letter === '') return null;
+    if (typeof letter === 'number') return letter;
+    const upper = String(letter).trim().toUpperCase();
+    if (upper === 'A' || upper === 'OPTION A' || upper === '1') return 0;
+    if (upper === 'B' || upper === 'OPTION B' || upper === '2') return 1;
+    if (upper === 'C' || upper === 'OPTION C' || upper === '3') return 2;
+    if (upper === 'D' || upper === 'OPTION D' || upper === '4') return 3;
+    if (upper === 'E' || upper === 'OPTION E' || upper === '5') return 4;
+    const num = Number(upper);
+    return isNaN(num) ? null : num;
+  };
+
+  // Fetch Result API
+  useEffect(() => {
+    let isMounted = true;
+    const fetchResult = async () => {
+      setIsLoading(true);
+      try {
+        const rawModType = String(moduleType || attemptData?.moduleType || attemptData?.module_type || 'GK').toUpperCase();
+        const rawUserId = attemptData?.user_id || localStorage.getItem('user_id') || Cookies.get('user_id') || '';
+        const rawSessionId = attemptData?.session_id || attemptData?.session_Id || attemptId;
+        const rawGkUserAssId = attemptData?.gk_user_ass_id || attemptData?.gk_user_assessment_id || attemptData?.gk_user_assId || attemptId;
+
+        console.log("Fetching result details:", { rawModType, rawUserId, rawSessionId, rawGkUserAssId });
+        const res = await CompetitionService.GetCompetitionResult(
+          rawModType,
+          rawUserId,
+          (rawModType === 'VIVA' || rawModType === 'TAM') ? rawSessionId : undefined,
+          rawModType === 'GK' ? rawGkUserAssId : undefined
+        );
+        
+        const payload = res?.data?.data || res?.data || res?.result || res || attemptData;
+        const sessionObj = payload?.session || payload;
+        
+        const rawQList: any[] = Array.isArray(payload?.answers)
+          ? payload.answers
+          : (Array.isArray(payload?.details)
+            ? payload.details
+            : (Array.isArray(payload?.questions)
+              ? payload.questions
+              : (Array.isArray(payload?.gk_answers)
+                ? payload.gk_answers
+                : (Array.isArray(payload?.question_attempts)
+                  ? payload.question_attempts
+                  : (Array.isArray(payload) ? payload : [])))));
+
+        if (payload && (rawQList.length > 0 || payload.session || payload.details || payload.questions || payload.gk_answers || payload.answers || payload.session_id || payload.gk_user_ass_id)) {
+          let correct = 0;
+          let incorrect = 0;
+          let skipped = 0;
+
+          const parsedQuestions: QuestionAttempt[] = rawQList.map((q: any, idx: number) => {
+            const qText = q.question_latex || q.gk_question || q.question_text || q.question || q.title || `Question ${idx + 1}`;
+            
+            let opts: string[] = [];
+            if (Array.isArray(q.options) && q.options.length > 0) {
+              opts = q.options;
+            } else if (q.option_a !== undefined || q.option_b !== undefined || q.option_c !== undefined || q.option_d !== undefined) {
+              opts = [q.option_a, q.option_b, q.option_c, q.option_d].filter((opt) => opt !== undefined && opt !== null && opt !== '');
+            } else {
+              opts = [];
+            }
+
+            const rawUserAns = q.user_transcription || (q.user_answer ?? q.selected_option ?? q.selectedOption);
+            const rawCorrAns = q.answer_description || (q.correct_answer ?? q.correct_option ?? q.correctOption ?? '');
+
+            const userIdx = letterToIdx(q.user_answer ?? q.selected_option ?? q.selectedOption);
+            const corrIdx = letterToIdx(q.correct_answer ?? q.correct_option ?? q.correctOption);
+
+            const rawStatus = String(q.status || '').toUpperCase();
+            const isSkipped = rawStatus === 'UNATTEMPTED' || rawStatus === 'SKIPPED' || rawStatus === 'UN_ATTEMPTED' || (!q.user_transcription && (q.user_answer === null || q.user_answer === undefined || q.user_answer === '' || String(q.user_answer).toUpperCase() === 'NONE'));
+            const isCorrect = !isSkipped && (
+              rawStatus === 'CORRECT' ||
+              rawStatus === 'COMPLETED' ||
+              q.is_correct === true ||
+              Number(q.ai_score || 0) > 0 ||
+              (userIdx !== null && corrIdx !== null && userIdx === corrIdx)
+            );
+
+            if (isSkipped) skipped++;
+            else if (isCorrect) correct++;
+            else incorrect++;
+
+            const timeSec = Number(q.total_time_taken || q.time_taken_seconds || q.time_taken || q.timeSpent || 0);
+
+            return {
+              id: String(q.question_id || q.gk_question_id || q.v_ans_id || q.id || `q-${idx + 1}`),
+              questionNumber: idx + 1,
+              questionText: qText,
+              options: opts,
+              selectedOption: userIdx,
+              correctOption: corrIdx ?? 0,
+              userLetter: isSkipped ? 'Unattempted' : (userIdx !== null ? String.fromCharCode(65 + userIdx) : 'Recorded Response'),
+              correctLetter: corrIdx !== null ? String.fromCharCode(65 + corrIdx) : 'Model Answer',
+              isCorrect,
+              isSkipped,
+              explanation: q.answer_description || q.gk_answer || q.answer_explanation || q.explanation || q.gk_explanation || q.solution || 'Detailed solution for this question.',
+              aiFeedback: q.ai_feedback || q.speech_transcript || q.feedback_text || (isCorrect ? 'Strong response precision!' : (isSkipped ? 'Question was not attempted.' : 'Review fundamental concepts for this question.')),
+              timeSpent: timeSec > 0 ? `${timeSec}s` : (q.timeSpent || 'Viva Oral'),
+              topic: q.topic_name || q.subject || q.topic || sessionObj.subject_name || sessionObj.assessment_name || sessionObj.gk_assessment_name || 'General Knowledge',
+              difficulty: q.difficulty || (idx % 3 === 0 ? 'Easy' : idx % 3 === 1 ? 'Medium' : 'Hard'),
+              userTranscription: q.user_transcription || undefined
+            };
+          });
+
+          const totalQ = parsedQuestions.length > 0 ? parsedQuestions.length : Number(sessionObj.total_questions || sessionObj.total_marks || sessionObj.gk_total_marks || 10);
+          const score = Number(sessionObj.total_score ?? sessionObj.score ?? sessionObj.marks_obtained ?? correct);
+          const maxScore = Number(sessionObj.gk_total_marks ?? sessionObj.max_score ?? sessionObj.total_marks ?? sessionObj.maxScore ?? (totalQ * 1));
+          
+          const percentage = sessionObj.percentage !== undefined && sessionObj.percentage !== null
+            ? Number(sessionObj.percentage)
+            : (sessionObj.accuracy !== undefined && sessionObj.accuracy !== null
+              ? Number(sessionObj.accuracy)
+              : (maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(1)) : 0));
+
+          const finalCorrect = sessionObj.attempted_count !== undefined
+            ? Number(sessionObj.attempted_count)
+            : (sessionObj.correct_count !== undefined ? Number(sessionObj.correct_count) : correct);
+          const finalIncorrect = sessionObj.incorrect_count !== undefined
+            ? Number(sessionObj.incorrect_count)
+            : incorrect;
+          const finalSkipped = sessionObj.unattempted_count !== undefined
+            ? Number(sessionObj.unattempted_count)
+            : (sessionObj.skip_count !== undefined ? Number(sessionObj.skip_count) : (sessionObj.skipped_count !== undefined ? Number(sessionObj.skipped_count) : skipped));
+
+          let timeTakenStr = sessionObj.time_taken || sessionObj.timeTaken;
+          if (!timeTakenStr && (sessionObj.completed_at || sessionObj.end_time) && (sessionObj.started_at || sessionObj.start_time)) {
+            const startMs = new Date(sessionObj.started_at || sessionObj.start_time).getTime();
+            const endMs = new Date(sessionObj.completed_at || sessionObj.end_time).getTime();
+            if (!isNaN(startMs) && !isNaN(endMs) && endMs >= startMs) {
+              const diffSec = Math.floor((endMs - startMs) / 1000);
+              const m = Math.floor(diffSec / 60);
+              const s = diffSec % 60;
+              timeTakenStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+            }
+          }
+          if (!timeTakenStr && (sessionObj.total_time || sessionObj.gk_total_time)) {
+            const totalSec = Number(sessionObj.total_time || sessionObj.gk_total_time);
+            const m = Math.floor(totalSec / 60);
+            const s = totalSec % 60;
+            timeTakenStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+          }
+          if (!timeTakenStr) {
+            timeTakenStr = `${Math.round(totalQ * 1.5)} mins`;
+          }
+
+          const formattedResult: CompetitionAttemptResult = {
+            attemptId: String(attemptId),
+            competitionTitle: sessionObj.assessment_name || sessionObj.gk_assessment_name || sessionObj.competition_title || sessionObj.title || attemptData?.title || 'Competition Assessment Result',
+            category: (sessionObj.module_type || rawModType || moduleType || 'VIVA').toLowerCase(),
+            moduleType: sessionObj.module_type || rawModType || moduleType || 'VIVA',
+            attemptDate: sessionObj.completed_at || sessionObj.end_time || sessionObj.submitted_at || sessionObj.created_at || sessionObj.started_at || attemptData?.attemptDate || 'Today',
+            score,
+            maxScore,
+            percentage,
+            rank: (sessionObj.rank !== undefined && sessionObj.rank !== null && sessionObj.rank !== '') 
+              ? Number(sessionObj.rank) 
+              : ((sessionObj.user_rank !== undefined && sessionObj.user_rank !== null && sessionObj.user_rank !== '') 
+                ? Number(sessionObj.user_rank) 
+                : (attemptData?.rank !== undefined && attemptData?.rank !== null ? Number(attemptData.rank) : undefined)),
+            totalParticipants: Number(sessionObj.total_participants || sessionObj.participants || 100),
+            percentile: Number(sessionObj.percentile || (percentage >= 90 ? 98.5 : percentage)),
+            timeTaken: timeTakenStr,
+            totalQuestions: totalQ,
+            correctCount: finalCorrect,
+            incorrectCount: finalIncorrect,
+            skippedCount: finalSkipped,
+            xpEarned: Math.round(percentage * 15),
+            rewardBadge: percentage >= 90 ? 'Gold Medal Merit Certificate' : 'Merit Certificate',
+            topicBreakdown: sessionObj.topicBreakdown || [
+              { topic: 'Viva Oral & Concepts', total: totalQ, correct: finalCorrect, percentage }
+            ],
+            questions: parsedQuestions
+          };
+
+          if (isMounted) setResultData(formattedResult);
+        } else {
+          const errorMsg = res?.message || "Competition result details not found on server.";
+          console.error(errorMsg);
+          toast.error(errorMsg);
+          if (isMounted) onBack();
+        }
+      } catch (err: any) {
+        console.error("Failed to load result from API:", err);
+        const errorMsg = err?.response?.data?.message || err?.message || "Failed to load competition result from server.";
+        toast.error(errorMsg);
+        if (isMounted) onBack();
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchResult();
+    return () => {
+      isMounted = false;
+    };
+  }, [attemptId, attemptData]);
+
+  if (isLoading) {
+    return (
+      <div className="w-full min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4 p-8">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+        <p className="text-slate-600 font-bold text-base">Loading detailed competition report & AI feedback...</p>
+      </div>
+    );
+  }
+
+  if (!resultData) {
+    return null;
+  }
+
+  const activeResult = resultData;
 
   // Filtered questions based on selected pill
-  const filteredQuestions = resultData.questions.filter((q) => {
+  const filteredQuestions = activeResult.questions.filter((q) => {
     if (filterType === 'correct') return q.isCorrect;
     if (filterType === 'incorrect') return !q.isCorrect && !q.isSkipped;
     if (filterType === 'skipped') return q.isSkipped;
     return true;
   });
+
+  const activeModuleUpper = (activeResult.moduleType || moduleType || 'GK').toUpperCase();
 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-4 md:p-6 lg:p-8 space-y-8 font-sans">
@@ -307,14 +438,14 @@ export const CompetitionResult: React.FC<{
           Back to Competition History
         </button>
 
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <button className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer">
             <Share2 className="w-3.5 h-3.5 text-slate-500" /> Share Result
           </button>
           <button className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 cursor-pointer">
             <Download className="w-3.5 h-3.5" /> Download Report (PDF)
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Main Result Summary Header Card */}
@@ -323,15 +454,15 @@ export const CompetitionResult: React.FC<{
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold uppercase tracking-wider">
-                {resultData.category}
+                {activeModuleUpper} Module
               </span>
-              <span className="text-xs text-slate-500">{resultData.attemptDate}</span>
+              <span className="text-xs text-slate-500">{activeResult.attemptDate}</span>
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {resultData.competitionTitle}
+              {activeResult.competitionTitle}
             </h1>
             <p className="text-xs text-slate-500">
-              Detailed performance analysis, topic breakdown, and step-by-step question solutions.
+              Detailed performance analysis, topic breakdown, AI feedback, and step-by-step question solutions.
             </p>
           </div>
 
@@ -343,8 +474,12 @@ export const CompetitionResult: React.FC<{
               </div>
               <div>
                 <div className="text-[11px] text-slate-500 uppercase font-semibold">National Rank</div>
-                <div className="text-xl font-black text-amber-700">Rank #{resultData.rank}</div>
-                <div className="text-[10px] text-amber-600 font-bold">Top {resultData.percentile}% Percentile</div>
+                {activeResult.rank !== undefined && activeResult.rank !== null ? (
+                  <div className="text-xl font-black text-amber-700">Rank #{activeResult.rank}</div>
+                ) : (
+                  <div className="text-sm font-bold text-slate-400 py-0.5">Not Declared</div>
+                )}
+                {/* <div className="text-[10px] text-amber-600 font-bold">Top {activeResult.percentile}% Percentile</div> */}
               </div>
             </div>
 
@@ -355,9 +490,9 @@ export const CompetitionResult: React.FC<{
               <div>
                 <div className="text-[11px] text-slate-500 uppercase font-semibold">Total Score</div>
                 <div className="text-xl font-black text-slate-900">
-                  {resultData.score} <span className="text-xs text-slate-500 font-normal">/ {resultData.maxScore}</span>
+                  {activeResult.score} <span className="text-xs text-slate-500 font-normal">/ {activeResult.maxScore}</span>
                 </div>
-                <div className="text-[10px] text-blue-700 font-bold">{resultData.percentage}% Score</div>
+                <div className="text-[10px] text-blue-700 font-bold">{activeResult.percentage}% Score</div>
               </div>
             </div>
           </div>
@@ -370,7 +505,7 @@ export const CompetitionResult: React.FC<{
               <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Correct Answers
             </div>
             <div className="text-2xl font-black text-emerald-800">
-              {resultData.correctCount} <span className="text-xs font-semibold text-emerald-600">/ {resultData.totalQuestions}</span>
+              {activeResult.correctCount} <span className="text-xs font-semibold text-emerald-600">/ {activeResult.totalQuestions}</span>
             </div>
           </div>
 
@@ -379,7 +514,7 @@ export const CompetitionResult: React.FC<{
               <XCircle className="w-4 h-4 text-red-600" /> Incorrect Answers
             </div>
             <div className="text-2xl font-black text-red-800">
-              {resultData.incorrectCount} <span className="text-xs font-semibold text-red-600">Questions</span>
+              {activeResult.incorrectCount} <span className="text-xs font-semibold text-red-600">Questions</span>
             </div>
           </div>
 
@@ -388,7 +523,7 @@ export const CompetitionResult: React.FC<{
               <AlertCircle className="w-4 h-4 text-amber-600" /> Unattempted / Skipped
             </div>
             <div className="text-2xl font-black text-amber-800">
-              {resultData.skippedCount} <span className="text-xs font-semibold text-amber-600">Skipped</span>
+              {activeResult.skippedCount} <span className="text-xs font-semibold text-amber-600">Skipped</span>
             </div>
           </div>
 
@@ -396,13 +531,13 @@ export const CompetitionResult: React.FC<{
             <div className="flex items-center gap-1.5 text-indigo-700 text-xs font-bold">
               <Clock className="w-4 h-4 text-indigo-600" /> Time Taken
             </div>
-            <div className="text-2xl font-black text-indigo-900">{resultData.timeTaken}</div>
+            <div className="text-2xl font-black text-indigo-900">{activeResult.timeTaken}</div>
           </div>
         </div>
       </div>
 
       {/* Topic-Wise Performance Breakdown Section */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
+      {/* <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-600" />
@@ -412,7 +547,7 @@ export const CompetitionResult: React.FC<{
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {resultData.topicBreakdown.map((t, idx) => (
+          {activeResult.topicBreakdown.map((t, idx) => (
             <div key={idx} className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
                 <span>{t.topic}</span>
@@ -430,7 +565,7 @@ export const CompetitionResult: React.FC<{
             </div>
           ))}
         </div>
-      </div>
+      </div> */}
 
       {/* Question-By-Question Detailed Review Section */}
       <div className="space-y-6">
@@ -438,9 +573,9 @@ export const CompetitionResult: React.FC<{
           <div>
             <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-indigo-600" />
-              Attempted Questions & Answer Solutions
+              Attempted Questions, AI Feedback & Solutions
             </h2>
-            <p className="text-xs text-slate-500">Review selected choices, correct answers, and step-by-step AI explanations.</p>
+            <p className="text-xs text-slate-500">Review selected choices, correct answers, step-by-step reasoning, and AI feedback.</p>
           </div>
 
           {/* Filter Pills */}
@@ -451,7 +586,7 @@ export const CompetitionResult: React.FC<{
                 filterType === 'all' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              All ({resultData.questions.length})
+              All ({activeResult.questions.length})
             </button>
             <button
               onClick={() => setFilterType('correct')}
@@ -459,7 +594,7 @@ export const CompetitionResult: React.FC<{
                 filterType === 'correct' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Correct ({resultData.correctCount})
+              Correct ({activeResult.correctCount})
             </button>
             <button
               onClick={() => setFilterType('incorrect')}
@@ -467,7 +602,7 @@ export const CompetitionResult: React.FC<{
                 filterType === 'incorrect' ? 'bg-red-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Incorrect ({resultData.incorrectCount})
+              Incorrect ({activeResult.incorrectCount})
             </button>
             <button
               onClick={() => setFilterType('skipped')}
@@ -475,7 +610,7 @@ export const CompetitionResult: React.FC<{
                 filterType === 'skipped' ? 'bg-amber-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Skipped ({resultData.skippedCount})
+              Skipped ({activeResult.skippedCount})
             </button>
           </div>
         </div>
@@ -489,7 +624,7 @@ export const CompetitionResult: React.FC<{
         ) : (
           <div className="space-y-6">
             {filteredQuestions.map((q) => (
-              <QuestionReviewCard key={q.id} question={q} />
+              <QuestionReviewCard key={q.id} question={q} moduleType={activeModuleUpper} />
             ))}
           </div>
         )}
@@ -498,8 +633,8 @@ export const CompetitionResult: React.FC<{
   );
 };
 
-// Sub-Component: Question Review Card
-const QuestionReviewCard: React.FC<{ question: QuestionAttempt }> = ({ question }) => {
+// Sub-Component: Question Review Card with AI Feedback & GK Answer Explanation
+const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: string }> = ({ question, moduleType = 'GK' }) => {
   return (
     <div
       className={`bg-white border rounded-3xl p-6 space-y-5 shadow-sm transition-all ${
@@ -617,13 +752,34 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt }> = ({ question 
         })}
       </div>
 
-      {/* AI Solution Explanation Box */}
-      <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 space-y-2 mt-3">
-        <div className="flex items-center gap-2 text-xs font-extrabold text-blue-900 uppercase tracking-wider">
-          <Sparkles className="w-4 h-4 text-blue-600" /> AI Solution Explanation
+      {/* Transcribed Spoken Response (for Viva) */}
+      {question.userTranscription && (
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-1 mt-3">
+          <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Recorded Answer</div>
+          <p className="text-xs text-slate-700 italic font-sans">"{question.userTranscription}"</p>
         </div>
-        <p className="text-xs text-slate-700 leading-relaxed font-sans">{question.explanation}</p>
-      </div>
+      )}
+
+      {/* AI Feedback Section */}
+      {question.aiFeedback && (
+        <div className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-4 space-y-2 mt-3">
+          <div className="flex items-center gap-2 text-xs font-extrabold text-indigo-900 uppercase tracking-wider">
+            <Sparkles className="w-4 h-4 text-indigo-600" /> AI Feedback & Evaluation
+          </div>
+          <p className="text-xs text-slate-700 leading-relaxed font-sans">{question.aiFeedback}</p>
+        </div>
+      )}
+
+      {/* Answer Explanation / Model Solution Box */}
+      {question.explanation && (
+        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-2 mt-2">
+          <div className="flex items-center gap-2 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
+            <BookOpen className="w-4 h-4 text-amber-600" />
+            {moduleType === 'GK' ? 'GK Answer Explanation' : 'Model Answer & Solution'}
+          </div>
+          <p className="text-xs text-slate-700 leading-relaxed font-sans">{question.explanation}</p>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React from "react";
 import axiosClient, { axiosMindShaalaClient } from "../core/api/AxiosClient";
 import { API_ENDPOINT } from "../core/api/ApiEndpoint";
+import Cookies from "js-cookie";
 
 
 export const CompetitionService = {
@@ -14,12 +15,13 @@ export const CompetitionService = {
 
     /**
      * Fetch all Upcoming competitions
+     * @param user_id
      * @param subscription_id 
+     * @param module_type
      */
-
-    GetAllUpcomingCompetitions: async (subscription_id: string | number, user_id: string | number) => {
+    GetAllUpcomingCompetitions: async (user_id?: string | number, subscription_id?: string | number, module_type?: string | number) => {
         try{
-            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_ALL_UPCOMING_COMPETITIONS(subscription_id, user_id));
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_ALL_UPCOMING_COMPETITIONS(user_id || '', subscription_id, module_type));
             console.log("Fetch all competitions",response.data);
             return response.data;
         } catch (error) {
@@ -30,16 +32,23 @@ export const CompetitionService = {
 
     /**
      * Fetch upcoming competitions by filter
-     * @param subscription_id 
-     * @param module_type 
+     * @param user_id
+     * @param subscription_id
+     * @param module_type
      */
-    GetUpcomingCompetitionsFiltered: async (subscription_id: string | number, module_type: string | number) => {
-        try{
-            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_UPCOMING_COMPETITIONS_FILTERED(subscription_id, module_type));
+    GetUpcomingCompetitionsFiltered: async (
+        user_id?: string | number,
+        subscription_id?: string | number,
+        module_type?: string | number
+    ) => {
+        try {
+            const response = await axiosMindShaalaClient.get(
+                API_ENDPOINT.COMPETITIONS.GET_UPCOMING_COMPETITIONS_FILTERED(user_id || '', subscription_id, module_type)
+            );
             console.log("Fetch filtered upcoming competitions", response.data);
             return response.data;
         } catch (error) {
-            console.error("Error fetching filtered upcoming competitions",error);
+            console.error("Error fetching filtered upcoming competitions", error);
             throw error;
         }
     },
@@ -70,6 +79,7 @@ export const CompetitionService = {
     },
 
     StartCompetition: async (payload: any) => {
+        console.log("Start Competition Payload", payload);
         try{
             const response = await axiosMindShaalaClient.post(API_ENDPOINT.COMPETITIONS.START_COMPETITION_ASSESSMENT,payload);
             console.log("Assessment Started", response.data);
@@ -102,24 +112,86 @@ export const CompetitionService = {
         }
     },
 
-    GetCompetitionHistory: async (userId: string | number) => {
-        try{
-            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_LIST_COMPETITION_ASSESSMENT(userId));
+    GetCompetitionHistory: async (userId?: string | number, moduleType: string = 'GK', subscriptionId?: string | number) => {
+        let activeSubId = subscriptionId;
+        const upperMod = moduleType.toUpperCase();
+        if ((upperMod === 'VIVA' || upperMod === 'TAM') && !activeSubId) {
+            const keys = ['subscription_id', 'subscriptionId', 'selectedCourseId', 'course_id'];
+            for (const key of keys) {
+                const val = typeof window !== 'undefined' ? (localStorage.getItem(key) || Cookies.get(key)) : null;
+                if (val) {
+                    activeSubId = val;
+                    break;
+                }
+            }
+            if (!activeSubId && typeof window !== 'undefined') {
+                const objectKeys = ['selectedCourse', 'course', 'user', 'userData', 'userInfo', 'profile'];
+                for (const key of objectKeys) {
+                    const raw = localStorage.getItem(key) || Cookies.get(key);
+                    if (raw) {
+                        try {
+                            const parsed = JSON.parse(raw);
+                            const idVal = parsed?.subscription_id || parsed?.subscriptionId || parsed?.selectedCourseId || parsed?.id;
+                            if (idVal) {
+                                activeSubId = idVal;
+                                break;
+                            }
+                        } catch {
+                            // ignore parse error
+                        }
+                    }
+                }
+            }
+        }
+
+        console.log("Competition History", userId, moduleType, activeSubId);
+        try {
+            const response = await axiosMindShaalaClient.get(
+                API_ENDPOINT.COMPETITIONS.GET_LIST_COMPETITION_ASSESSMENT(userId, moduleType, activeSubId)
+            );
             console.log("Fetch competition history", response.data);
-            return response.data
-        }catch(error){
-            console.error("Error fetching the competition history",error);
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching the competition history", error);
             throw error;
         }
     },
 
-    GetCompetitionResult: async (competitionId: string | number ) => {
-        try{
-            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_RESULT_COMPETITION_ASSESSMENT(competitionId));
+    GetCompetitionResult: async (
+        moduleTypeOrId: string | number,
+        userId?: string | number,
+        sessionId?: string | number,
+        gkUserAssId?: string | number
+    ) => {
+        try {
+            let modType = String(moduleTypeOrId);
+            let uid = userId;
+            let sId: string | number | undefined = undefined;
+            let gkId: string | number | undefined = undefined;
+
+            const upperMod = modType.toUpperCase();
+            const validModules = ['VIVA', 'TAM', 'GK', 'ALL'];
+
+            if (!validModules.includes(upperMod)) {
+                // Fallback for legacy single argument call (e.g. competitionId / gk_user_ass_id)
+                gkId = moduleTypeOrId;
+                modType = 'GK';
+            } else {
+                modType = upperMod;
+                if (upperMod === 'GK') {
+                    gkId = gkUserAssId || sessionId;
+                } else if (upperMod === 'VIVA' || upperMod === 'TAM') {
+                    sId = sessionId || gkUserAssId;
+                }
+            }
+
+            const response = await axiosMindShaalaClient.get(
+                API_ENDPOINT.COMPETITIONS.GET_RESULT_COMPETITION_ASSESSMENT(modType, uid, sId, gkId)
+            );
             console.log("Fetch competition result", response.data);
             return response.data;
-        }catch(error){
-            console.error("Error fetching the competition result",error);
+        } catch (error) {
+            console.error("Error fetching the competition result", error);
             throw error;
         }
     },
