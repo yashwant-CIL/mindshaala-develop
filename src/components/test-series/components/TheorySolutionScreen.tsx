@@ -9,8 +9,6 @@ import {
 import { motion } from 'framer-motion';
 import { SolutionService, AssessmentSolution } from '../../../services/SolutionService';
 import { QuestionMathJax } from '../../../shared/mathjaxconfig/QuestionMathJax';
-import { MathJaxContext } from 'better-react-mathjax';
-import { QuestionMathJaxConfig } from '../../../shared/mathjaxconfig/QuestionMathJax';
 import { getDeterministicShuffle } from '../../../shared/utils/ShuffleUtils';
 import { Badge } from '../../../components/ui/badge'; 
 

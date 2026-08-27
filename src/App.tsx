@@ -115,6 +115,7 @@ import ReturnPolicy from "./components/LandingPage/LandingPageComponents/OurPoli
 import Terms from "./components/LandingPage/LandingPageComponents/OurPolicies/Terms&Conditions/Terms";
 import Dispute from "./components/LandingPage/LandingPageComponents/OurPolicies/DisputeResolution/Dispute";
 import Disclaimer from "./components/LandingPage/LandingPageComponents/OurPolicies/Disclaimer/Disclaimer";
+import { TheoryMobileUploadPage } from "./components/test-series/components/ExamScreens/TheoryMobileUploadPage";
 // import Footer from "./components/LandingPage/LandingPageComponents/Footer/Footer";
 
 // Existing user data for 9764696566
@@ -524,6 +525,7 @@ export default function App() {
             
             <Route path="/test-series/solutions/:userAssId" element={<MCQsolutionScreen />} />
             <Route path="/test-series/theory-solutions/:userAssId" element={<TheorySolutionScreen />} />
+            <Route path="/theory-mobile-upload" element={<TheoryMobileUploadPage />} />
 
             <Route path="/" element={
               <>
