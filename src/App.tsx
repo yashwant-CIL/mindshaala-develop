@@ -116,6 +116,7 @@ import ReturnPolicy from "./components/LandingPage/LandingPageComponents/OurPoli
 import Terms from "./components/LandingPage/LandingPageComponents/OurPolicies/Terms&Conditions/Terms";
 import Dispute from "./components/LandingPage/LandingPageComponents/OurPolicies/DisputeResolution/Dispute";
 import Disclaimer from "./components/LandingPage/LandingPageComponents/OurPolicies/Disclaimer/Disclaimer";
+import { CompetitionArenaHub } from "./components/competition";
 // import Footer from "./components/LandingPage/LandingPageComponents/Footer/Footer";
 
 // Existing user data for 9764696566
@@ -1144,6 +1145,11 @@ export default function App() {
                       onBack={() => setActivePage("dashboard")}
                     />
                   )}
+                  {activePage === "competition" && <CompetitionArenaHub />}
+                  {activePage === "competitions" && <CompetitionArenaHub initialTab="competitions" />}
+                  {activePage === "leaderboard" && <CompetitionArenaHub initialTab="leaderboard" />}
+                  {activePage === "competition-history" && <CompetitionArenaHub initialTab="competition-history" />}
+                  {activePage === "competition-result" && <CompetitionArenaHub initialTab="competition-result" />}
                 </div>
               </div>
 

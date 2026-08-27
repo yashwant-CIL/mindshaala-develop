@@ -20,7 +20,6 @@ import { toast } from 'react-hot-toast';
 import Swal from 'sweetalert2';
 import { unlockSpeech } from '../../utils/ttsHelper';
 
-
 interface Subject {
   subject_id: number;
   subject_name: string;
@@ -42,7 +41,7 @@ interface SelectionProps {
 }
 
 export default function ConceptualVivaSelection({ onStartViva }: SelectionProps) {
-  const { subscriptionId, courseId, userAssId } = useCourse();
+  const { subscriptionId, courseId } = useCourse();
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -57,7 +56,7 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
   const [topicSearch, setTopicSearch] = useState('');
   const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
 
-  const [userSubscriptions, setUserSubscriptions] = useState({
+  const [userSubscriptions] = useState({
     hasCIL: true,
     hasPRO: true
   });
@@ -79,7 +78,7 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
       });
     } else {
       const currentActive = userSubscriptions.hasCIL ? 'CIL' : 'PRO';
-      toast((t) => (
+      toast(() => (
         <div className="flex items-center justify-between gap-3 w-full">
           <div className="flex items-center gap-2">
             <span className="text-base shrink-0">🔒</span>
@@ -281,17 +280,19 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
             <div className="relative flex items-center bg-slate-100 p-1.5 rounded-full border border-slate-200 w-56 shadow-inner">
               {/* Sliding Pill Background with Gradient */}
               <div
-                className={`absolute top-1 bottom-1 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 shadow-md transition-all duration-300 ease-out ${vivaType === 'CIL'
-                  ? 'left-1 w-[calc(50%-4px)]'
-                  : 'left-[calc(50%+2px)] w-[calc(50%-4px)]'
-                  }`}
+                className={`absolute top-1 bottom-1 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 shadow-md transition-all duration-300 ease-out ${
+                  vivaType === 'CIL'
+                    ? 'left-1 w-[calc(50%-4px)]'
+                    : 'left-[calc(50%+2px)] w-[calc(50%-4px)]'
+                }`}
               />
 
               {/* CIL Switch Button */}
               <button
                 onClick={() => handleToggleSwitch('CIL')}
-                className={`relative z-10 flex-1 py-1.5 flex items-center justify-center gap-1.5 text-center text-xs font-extrabold uppercase tracking-wider transition-colors duration-300 ${vivaType === 'CIL' ? 'text-white' : 'text-slate-500 hover:text-slate-800'
-                  }`}
+                className={`relative z-10 flex-1 py-1.5 flex items-center justify-center gap-1.5 text-center text-xs font-extrabold uppercase tracking-wider transition-colors duration-300 ${
+                  vivaType === 'CIL' ? 'text-white' : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
                 {userSubscriptions.hasCIL ? (
                   <Unlock className="w-3.5 h-3.5 transition-transform duration-300" />
@@ -304,8 +305,9 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
               {/* PRO Switch Button */}
               <button
                 onClick={() => handleToggleSwitch('PRO')}
-                className={`relative z-10 flex-1 py-1.5 flex items-center justify-center gap-1.5 text-center text-xs font-extrabold uppercase tracking-wider transition-colors duration-300 ${vivaType === 'PRO' ? 'text-white' : 'text-slate-500 hover:text-slate-800'
-                  }`}
+                className={`relative z-10 flex-1 py-1.5 flex items-center justify-center gap-1.5 text-center text-xs font-extrabold uppercase tracking-wider transition-colors duration-300 ${
+                  vivaType === 'PRO' ? 'text-white' : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
                 {userSubscriptions.hasPRO ? (
                   <Unlock className="w-3.5 h-3.5 transition-transform duration-300" />
@@ -394,13 +396,15 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
                   <button
                     key={subject.subject_id}
                     onClick={() => handleSubjectSelect(subject.subject_id)}
-                    className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 group ${selectedSubject === subject.subject_id
+                    className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 group ${
+                      selectedSubject === subject.subject_id
                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                         : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-                      }`}
+                    }`}
                   >
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${selectedSubject === subject.subject_id ? 'bg-white/20' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
-                      }`}>
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                      selectedSubject === subject.subject_id ? 'bg-white/20' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+                    }`}>
                       <BookMarked className="w-5 h-5" />
                     </div>
                     <span className="font-bold text-left flex-1">{subject.subject_name}</span>
@@ -457,13 +461,15 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
                       <button
                         key={chapter.chapter_id}
                         onClick={() => handleChapterSelect(chapter.chapter_id)}
-                        className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 group ${selectedChapter === chapter.chapter_id
+                        className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 group ${
+                          selectedChapter === chapter.chapter_id
                             ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
                             : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-                          }`}
+                        }`}
                       >
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${selectedChapter === chapter.chapter_id ? 'bg-white/20' : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'
-                          }`}>
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                          selectedChapter === chapter.chapter_id ? 'bg-white/20' : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'
+                        }`}>
                           <Layers className="w-5 h-5" />
                         </div>
                         <span className="font-bold text-left flex-1 text-sm">{chapter.chapter_name}</span>
@@ -522,13 +528,15 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
                       <button
                         key={topic.topic_id}
                         onClick={() => handleTopicSelect(topic.topic_id)}
-                        className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 group ${selectedTopic === topic.topic_id
+                        className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all duration-300 group ${
+                          selectedTopic === topic.topic_id
                             ? 'bg-purple-600 text-white shadow-lg shadow-purple-200'
                             : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-                          }`}
+                        }`}
                       >
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${selectedTopic === topic.topic_id ? 'bg-white/20' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
-                          }`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                          selectedTopic === topic.topic_id ? 'bg-white/20' : 'bg-purple-100 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                        }`}>
                           <div className={`w-2 h-2 rounded-full ${selectedTopic === topic.topic_id ? 'bg-white' : 'bg-purple-600 group-hover:bg-white'}`}></div>
                         </div>
                         <span className="font-bold text-left flex-1 text-sm">{topic.topic_name}</span>
@@ -547,10 +555,11 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
                   <button
                     onClick={handleStartViva}
                     disabled={!selectedTopic || loading.starting}
-                    className={`w-full py-4 rounded-xl font-black text-lg flex items-center justify-center gap-3 transition-all duration-500 overflow-hidden relative group overflow-hidden ${selectedTopic && !loading.starting
+                    className={`w-full py-4 rounded-xl font-black text-lg flex items-center justify-center gap-3 transition-all duration-500 overflow-hidden relative group ${
+                      selectedTopic && !loading.starting
                         ? 'bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-xl shadow-blue-200 hover:scale-[1.02] active:scale-95'
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                      }`}
+                    }`}
                   >
                     {loading.starting ? (
                       <>

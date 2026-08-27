@@ -140,6 +140,56 @@ export const API_ENDPOINT = {
         AI_TUTOR_RESULT: (session_id: string | number) => `/api/ai_tutor/result?session_id=${session_id}`,
     },
 
+    COMPETITIONS: {
+        //COMPETITION DASHBOARD ENDPOINTS
+        COMPETITION_DASHBOARD_CARDS: `/api/competition/dashboard/cards`,
+        COMPETITION_DASHBOARD_SUBJECTWISE_PERFORMANCE: `/api/competition/dashboard/subject-wise-performance-indicators`,
+        COMPETITION_DASHBOARD_WEAK_CHAPTERS: `/api/competition/dashboard/weak-chapters`,
+        COMPETITION_DASHBOARD_WEAK_TOPICS: `/api/competition/dashboard/weak-topics`,
+        COMPETITION_DASHBOARD_SUBJECT_RADAR: `/api/competition/dashboard/subject-radar`,
+
+        GET_ALL_UPCOMING_COMPETITIONS: (user_id: string | number, subscription_id?: string | number, module_type?: string | number,) => {
+            const params: string[] = [];
+            if (subscription_id) params.push(`subscription_id=${subscription_id}`);
+            if (module_type && module_type !== 'ALL') params.push(`module_type=${module_type}`);
+            return `/api/v3/mindshaala/competitions?user_id=${user_id}${params.length > 0 ? `&${params.join('&')}` : ''}`;
+        },
+        GET_UPCOMING_COMPETITIONS_FILTERED: (user_id: string | number, subscription_id?: string | number, module_type?: string | number) => {
+            const params: string[] = [];
+            if (subscription_id) params.push(`subscription_id=${subscription_id}`);
+            if (module_type) params.push(`module_type=${module_type}`);
+            return `/api/v3/mindshaala/competitions?user_id=${user_id}${params.length > 0 ? `&${params.join('&')}` : ''}`;
+        },
+        REGISTER_FOR_COMPETITION: `/api/v3/mindshaala/competitions/enroll`,
+        GET_REGISTERED_COMPETITIONS: (user_id: string | number | undefined) =>`/api/v3/mindshaala/user/my-competitions?user_id=${user_id}`,
+        // GET_REGISTERED_COMPETITIONS_RESULTS: ``,
+
+        //Assessment ENDPOINTS
+        START_COMPETITION_ASSESSMENT: `/api/v3/mindshaala/start-assessment`,
+        SUBMIT_COMPETITION_ANSWERS: `/api/v3/mindshaala/submit-answer`,
+        END_COMPETITION_ASSESSMENT: `/api/v3/mindshaala/end-assessment`,
+        // GET_LIST_COMPETITION_ASSESSMENT : (user_id: number | string | undefined , module_type: string ,subscription_id?: number) => `/api?user_id=${user_id}&module_type=${module_type}`,
+        // GET_RESULT_COMPETITION_ASSESSMENT: (module_type: string ,user_id: number, session_id?: number ,gk_user_ass_id?: number ) => `/api/competition/assessments/results?competition_user_ass_id=${competition_user_ass_id}`
+                GET_LIST_COMPETITION_ASSESSMENT: (user_id: number | string | undefined, module_type: string, subscription_id?: number | string) => {
+            const isTamOrViva = module_type === 'TAM' || module_type === 'VIVA';
+            const subParam = (isTamOrViva && subscription_id) ? `&subscription_id=${subscription_id}` : '';
+            return `/api/v3/mindshaala/user-sessions?user_id=${user_id}&module_type=${module_type}${subParam}`;
+        },
+        GET_RESULT_COMPETITION_ASSESSMENT: (module_type: string, user_id: number | string | undefined, session_id?: number | string, gk_user_ass_id?: number | string) => {
+            const upperMod = (module_type || '').toUpperCase();
+            const isTamOrViva = upperMod === 'VIVA' || upperMod === 'TAM';
+            let extraParam = '';
+            if (isTamOrViva && session_id) {
+                extraParam = `&session_id=${session_id}`;
+            } else if (upperMod === 'GK' && gk_user_ass_id) {
+                extraParam = `&gk_user_ass_id=${gk_user_ass_id}`;
+            }
+            return `/api/v3/mindshaala/session?module_type=${module_type}&user_id=${user_id}${extraParam}`;
+        }
+
+
+    },
+
 
 
 }
