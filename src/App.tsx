@@ -30,6 +30,7 @@ import { Notifications } from "./components/Notifications";
 // import { AdvancedAnalytics } from "./components/AdvancedAnalytics";
 // import { QuestionBank } from "./components/QuestionBank";
 import { MySubscriptions } from "./components/MySubscriptions";
+import { LibrarySubscription } from "./components/LibrarySubscription";
 import { MentorDashboard } from "./components/MentorDashboard";
 import { MentorDoubtResolution } from "./components/MentorDoubtResolution";
 import { RequestOneOnOneSession } from "./components/RequestOneOnOneSession";
@@ -675,6 +676,12 @@ export default function App() {
                 {activePage === "subscription" && (
                 <MySubscriptions
                 onBack={() => setActivePage("dashboard")}
+                />
+                )}
+                {activePage === "library-subscription" && (
+                <LibrarySubscription
+                onBack={() => setActivePage("dashboard")}
+                onNavigate={handleNavigate}
                 />
                 )}
                 {activePage === "mentordashboard" && (

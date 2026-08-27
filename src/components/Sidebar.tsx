@@ -5,6 +5,7 @@ import {
   TrendingUp,
   BookMarked,
   BookOpen,
+  Library,
   MapPin,
   ClipboardCheck,
   Bell,
@@ -149,6 +150,10 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const doubtSupport = [
     { id: 'doubt-hub', label: 'Doubt Hub', icon: HelpCircle, badge: 'NEW' },
     { id: 'doubt-hub-workbench', label: 'Workbench', icon: MessageCircle, badge: 'TEACHER' },
+  ];
+
+  const librarySubscriptionItems = [
+    { id: 'library-subscription', label: 'Library Subscription', icon: Library, badge: 'NEW' },
   ];
 
   const bottomMenuItems = [
@@ -712,6 +717,27 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
               })}
             </div>
           )}
+
+          {/* Library Subscription */}
+          {librarySubscriptionItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentPage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleMobileNavigate(item.id)}
+                className={parentMenuClass(isActive, false)}
+              >
+                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.badge && (
+                  <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
           <div className="my-4 border-t border-slate-100"></div>
 
