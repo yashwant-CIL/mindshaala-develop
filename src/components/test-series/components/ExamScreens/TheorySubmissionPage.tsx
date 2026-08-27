@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import Cookies from "js-cookie";
 import { 
   Loader2, 
   AlertCircle, 
@@ -14,16 +15,28 @@ import {
   X,
   Send,
   Plus,
-  Maximize2
+  Maximize2,
+  MousePointerClick,
+  Edit3,
+  UploadCloud,
+  HelpCircle,
+  Camera,
+  QrCode,
+  Laptop,
+  Smartphone,
+  Copy,
+  ExternalLink,
+  Crop
 } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { Badge } from "../../../../components/ui/badge";
 import { useToast } from "../../../../hooks/use-toast";
 import { TestService } from "../../../../services/TestServices";
 import { useCourse } from "../../../../context/CourseContext";
-import QuestionMathJax, { QuestionMathJaxConfig } from "../../../../shared/mathjaxconfig/QuestionMathJax";
-import { MathJaxContext } from "better-react-mathjax";
+import QuestionMathJax from "../../../../shared/mathjaxconfig/QuestionMathJax";
 import { getDeterministicShuffle } from "../../../../shared/utils/ShuffleUtils";
+import { ImageCropperModal } from "./ImageCropperModal";
+import { QRCodeSVG } from "../../../../shared/utils/QRCodeGenerator";
 
 interface TheorySubmissionPageProps {
     onComplete: () => void;
@@ -108,7 +121,12 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
     const { userAssId } = useCourse();
     
     // Recovery Logic: Handle reloads/browser restarts by checking localStorage
-    const [effectiveUserAssId, setEffectiveUserAssId] = useState<string | null>(null);
+    const [effectiveUserAssId, setEffectiveUserAssId] = useState<string | null>(() => {
+        const idFromState = (location.state as any)?.user_ass_id;
+        const idFromStorage = localStorage.getItem("userAssId");
+        const finalId = userAssId || idFromState || idFromStorage;
+        return finalId ? finalId.toString() : null;
+    });
 
     useEffect(() => {
         const idFromState = (location.state as any)?.user_ass_id;
@@ -116,9 +134,11 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
         const finalId = userAssId || idFromState || idFromStorage;
 
         if (finalId) {
-            setEffectiveUserAssId(finalId.toString());
-            // Persist for next reload
-            if (finalId) localStorage.setItem("userAssId", finalId.toString());
+            const strId = finalId.toString();
+            if (effectiveUserAssId !== strId) {
+                setEffectiveUserAssId(strId);
+            }
+            localStorage.setItem("userAssId", strId);
         } else {
             // Truly lost session: Redirect to home/tests
             toast({
@@ -147,6 +167,41 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
     const [pendingImages, setPendingImages] = useState<Record<string, File[]>>({});
     const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
+    // Upload Options Modal & QR Code states
+    const [uploadModalOpen, setUploadModalOpen] = useState<boolean>(false);
+    const [uploadModalContext, setUploadModalContext] = useState<{
+        qid: string;
+        uaid: string;
+        sectionNumber: string;
+        sectionName: string;
+        questionNumber: string;
+    } | null>(null);
+    const [activeUploadOption, setActiveUploadOption] = useState<"OPTIONS" | "DEVICE" | "CAMERA" | "QR">("OPTIONS");
+    const [croppingImage, setCroppingImage] = useState<File | null>(null);
+    const desktopCameraInputRef = useRef<HTMLInputElement>(null);
+    const desktopFileInputRef = useRef<HTMLInputElement>(null);
+
+    // Auto-sync polling when QR Modal is active
+    useEffect(() => {
+        if (uploadModalOpen && activeUploadOption === "QR" && uploadModalContext?.qid) {
+            const interval = setInterval(() => {
+                fetchData(true);
+            }, 3000);
+            return () => clearInterval(interval);
+        }
+    }, [uploadModalOpen, activeUploadOption, uploadModalContext]);
+
+    // Close QR modal if answer images are detected via polling
+    useEffect(() => {
+        if (uploadModalOpen && activeUploadOption === "QR" && uploadModalContext?.qid) {
+            const qid = uploadModalContext.qid;
+            if (userAnswers[qid]?.user_answer_images || userAnswers[qid]?.user_answer_image) {
+                setUploadModalOpen(false);
+                toast({ title: "Mobile Upload Detected", description: "Answer sheet uploaded successfully from mobile device!" });
+            }
+        }
+    }, [userAnswers, uploadModalOpen, activeUploadOption, uploadModalContext]);
+
     const sanitizeLatex = (val: string | null | undefined): string => {
         if (!val) return "";
         return val
@@ -167,10 +222,12 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
         }
     }, [effectiveUserAssId]);
 
-    const fetchData = async () => {
+    const fetchData = async (isSilent: boolean = false) => {
         try {
-            console.log("TheorySubmissionPage: fetchData START");
-            setLoading(true);
+            console.log("TheorySubmissionPage: fetchData START, isSilent:", isSilent);
+            if (!isSilent) {
+                setLoading(true);
+            }
             const data = await TestService.getTheoryExamQuestions(effectiveUserAssId!.toString());
             console.log("TheorySubmissionPage: fetchData DATA RECEIVED:", !!data);
             if (data && data.section_data) {
@@ -190,6 +247,32 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                 const newShuffles: Record<string, string[]> = {};
                 const newMatchMappings: Record<string, string> = {};
 
+                // Collect questions with user_answer_id to check status via TestService.getUserAnswer
+                const allQuestionsWithId: any[] = [];
+                for (const section of data.section_data) {
+                    if (section.question_data) {
+                        for (const q of section.question_data) {
+                            if (q.user_answer_id) {
+                                allQuestionsWithId.push(q);
+                            }
+                        }
+                    }
+                }
+
+                const userAnswerResults: Record<string, any> = {};
+                await Promise.all(
+                    allQuestionsWithId.map(async (q) => {
+                        try {
+                            const res = await TestService.getUserAnswer(q.user_answer_id);
+                            if (res) {
+                                userAnswerResults[q.question_id] = res;
+                            }
+                        } catch (err) {
+                            console.warn(`getUserAnswer failed for user_answer_id ${q.user_answer_id}:`, err);
+                        }
+                    })
+                );
+
                 for (const section of data.section_data) {
                     if (!section.question_data) continue;
                     const questions = section.question_data;
@@ -198,36 +281,42 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                         const q = questions[i];
                         const qType = q.question_type_name?.toLowerCase().trim() || "";
                         
-                        // Extract answer directly from question data if it exists
                         if (q.user_answer_id) {
-                            const hasUserAnswer = q.user_answer !== null && q.user_answer !== undefined && q.user_answer !== "";
-                            const hasUserImage = q.user_answer_image !== null && q.user_answer_image !== undefined && q.user_answer_image !== "";
-                            const hasAnyContent = hasUserAnswer || hasUserImage;
+                            const fetchedAnswerObj = userAnswerResults[q.question_id];
+                            
+                            const userAnswerVal = fetchedAnswerObj?.user_answer ?? q.user_answer;
+                            const userAnswerImg = fetchedAnswerObj?.user_answer_image ?? fetchedAnswerObj?.user_answer_images ?? q.user_answer_image;
+                            const attemptStatus = fetchedAnswerObj?.attempt_status ?? q.attempt_status;
+
+                            // Rule: Base submitted state ONLY on attempt_status === "ANSWERED"
+                            const isAlreadySubmitted = attemptStatus === "ANSWERED";
 
                             const latest = {
                                 user_answer_id: q.user_answer_id,
-                                user_answer: q.user_answer,
-                                user_answer_image: q.user_answer_image,
-                                answer_submission_time: q.answer_submission_time
+                                user_answer: userAnswerVal,
+                                user_answer_image: userAnswerImg,
+                                user_answer_images: userAnswerImg,
+                                attempt_status: attemptStatus,
+                                answer_submission_time: fetchedAnswerObj?.answer_submission_time || q.answer_submission_time
                             };
                             newAnswers[q.question_id] = latest;
+
+                            if (isAlreadySubmitted) {
+                                newSaved[q.question_id] = true;
+                            } else {
+                                newSaved[q.question_id] = false;
+                            }
 
                             if (qType === "match the following") {
                                 // Match logic handled group-wise below
                             } else if (qType === "theory mcq 1 marks" || qType === "assertion&reasoning") {
                                 const alpha = latest.user_answer;
-                                if (alpha && alpha.length === 1 && hasAnyContent) {
+                                if (alpha && alpha.length === 1) {
                                     newMcq[q.question_id] = alpha.toUpperCase().charCodeAt(0) - 65;
-                                    newSaved[q.question_id] = true;
                                 }
                             } else if (qType === "name the following" || qType === "fill in the blanks") {
-                                if (hasAnyContent) {
-                                    newText[q.question_id] = latest.user_answer || "";
-                                    newSaved[q.question_id] = true;
-                                }
-                            } else if (qType === "image question") {
-                                if (hasAnyContent) {
-                                    newSaved[q.question_id] = true;
+                                if (latest.user_answer) {
+                                    newText[q.question_id] = latest.user_answer;
                                 }
                             }
                         }
@@ -246,12 +335,21 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                             newShuffles[groupId] = shuffled;
 
                             for (const mq of group) {
-                                if (mq.user_answer && mq.user_answer.trim() !== "") {
-                                    const letterIdx = shuffled.indexOf(mq.user_answer);
+                                const fetchedAnswerObj = userAnswerResults[mq.question_id];
+                                const userAnswerVal = fetchedAnswerObj?.user_answer ?? mq.user_answer;
+                                const attemptStatus = fetchedAnswerObj?.attempt_status ?? mq.attempt_status;
+                                const isSubmitted = attemptStatus === "ANSWERED";
+
+                                if (userAnswerVal && userAnswerVal.trim() !== "") {
+                                    const letterIdx = shuffled.indexOf(userAnswerVal);
                                     if (letterIdx !== -1) {
                                         newMatchMappings[mq.question_id] = String.fromCharCode(65 + letterIdx);
-                                        newSaved[mq.question_id] = true;
                                     }
+                                }
+                                if (isSubmitted) {
+                                    newSaved[mq.question_id] = true;
+                                } else {
+                                    newSaved[mq.question_id] = false;
                                 }
                             }
                             i = j;
@@ -266,46 +364,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                 setSavedMcq(newSaved);
                 setMatchShuffles(newShuffles);
                 setMatchMappings(newMatchMappings);
-                console.log("TheorySubmissionPage: fetchData SUCCESS - Initial states updated");
-
-                // SEPARATE SYNC PHASE: Call getUserAnswer for each question to be 100% sure
-                console.log("TheorySubmissionPage: Starting Granular Sync Phase...");
-                const allQuestions: any[] = [];
-                data.section_data.forEach((s: any) => s.question_data?.forEach((q: any) => allQuestions.push(q)));
-
-                await Promise.all(allQuestions.map(async (q) => {
-                    if (q.user_answer_id) {
-                        try {
-                            const res = await TestService.getUserAnswer(q.user_answer_id);
-                            if (res && (res.user_answer || res.user_answer_image)) {
-                                const qType = q.question_type_name?.toLowerCase().trim() || "";
-                                // Update saved state
-                                setSavedMcq(prev => ({ ...prev, [q.question_id]: true }));
-                                
-                                // Update specific answer state if needed
-                                if (qType === "theory mcq 1 marks" || qType === "assertion&reasoning") {
-                                    const alpha = res.user_answer;
-                                    if (alpha && alpha.length === 1) {
-                                        setMcqAnswers(prev => ({ ...prev, [q.question_id]: alpha.toUpperCase().charCodeAt(0) - 65 }));
-                                    }
-                                } else if (qType === "name the following" || qType === "fill in the blanks") {
-                                    setTextAnswers(prev => ({ ...prev, [q.question_id]: res.user_answer || "" }));
-                                } else if (qType === "match the following") {
-                                    const shuffled = newShuffles[q.question_id] || [];
-                                    if (res.user_answer && shuffled.length > 0) {
-                                        const letterIdx = shuffled.indexOf(res.user_answer);
-                                        if (letterIdx !== -1) {
-                                            setMatchMappings(prev => ({ ...prev, [q.question_id]: String.fromCharCode(65 + letterIdx) }));
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            console.warn(`Sync failed for question ${q.question_id}`, err);
-                        }
-                    }
-                }));
-                console.log("TheorySubmissionPage: Granular Sync Phase COMPLETE");
+                console.log("TheorySubmissionPage: fetchData SUCCESS - Initial states updated with TestService.getUserAnswer status check");
             } else {
                 console.warn("TheorySubmissionPage: fetchData - No section data found in response");
                 setError("No assessment content found.");
@@ -605,7 +664,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
         }));
     };
 
-    const renderSubmissionUI = (question: any) => {
+    const renderSubmissionUI = (question: any, section: any = {}, questionIndex: number = 0) => {
         const currentAnswer = userAnswers[question.question_id];
         const qai = question.question_id;
         const qType = question.question_type_name?.toLowerCase().trim() || "";
@@ -733,10 +792,22 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
 
                     <div className="flex items-center gap-4">
                         {!savedMcq[qai] && pending.length === 0 && (
-                            <label className="flex items-center gap-2 px-8 py-4 bg-white text-indigo-600 border-2 border-indigo-600 rounded-2xl cursor-pointer hover:bg-indigo-600 hover:text-white transition-all font-black uppercase text-[10px] tracking-widest ring-offset-2 focus-within:ring-2 ring-indigo-600">
+                            <Button
+                                onClick={() => {
+                                    setUploadModalContext({
+                                        qid: qai,
+                                        uaid: question.user_answer_id,
+                                        sectionNumber: (section.section_number || 1).toString(),
+                                        sectionName: section.section_heading || "Theory Section",
+                                        questionNumber: (questionIndex + 1).toString(),
+                                    });
+                                    setActiveUploadOption("OPTIONS");
+                                    setUploadModalOpen(true);
+                                }}
+                                className="flex items-center gap-2 px-8 py-4 bg-white text-indigo-600 border-2 border-indigo-600 rounded-2xl cursor-pointer hover:bg-indigo-600 hover:text-white transition-all font-black uppercase text-[10px] tracking-widest ring-offset-2 focus-within:ring-2 ring-indigo-600"
+                            >
                                 <Upload className="w-4 h-4" /> Upload Answer Sheets
-                                <input type="file" multiple className="hidden" accept="image/*" onChange={(e) => handleImageSelection(e, qai)} />
-                            </label>
+                            </Button>
                         )}
                         
                         {pending.length > 0 && (
@@ -843,9 +914,9 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                                         </Button>
                                     )}
                                     {savedMcq[q.question_id] && (
-                                        <Button variant="ghost" size="icon" className="w-10 h-10 text-emerald-600 hover:bg-emerald-100 rounded-xl" onClick={() => setSavedMcq(prev => ({ ...prev, [q.question_id]: false }))}>
-                                            <RefreshCw className="w-4 h-4" />
-                                        </Button>
+                                        <div className="w-10 h-10 text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-center shadow-sm">
+                                            <Check className="w-5 h-5 text-emerald-600" />
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -857,7 +928,24 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
     };
 
     const renderContentMain = () => {
-        // console.log("TheorySubmissionPage: renderContentMain CALLED");
+        const rawApiInstructions = 
+            questionPaperData?.instructions || 
+            questionPaperData?.instruction_data || 
+            questionPaperData?.instructions_data || 
+            questionPaperData?.exam_details?.instructions || 
+            [];
+
+        const defaultGeneralInstructions = [
+            "All questions are mandatory.",
+            "Review all questions before submitting.",
+            "Keep your handwritten answers ready for upload.",
+            "Avoid switching tabs or closing the window."
+        ];
+
+        const generalInstructionsList = Array.isArray(rawApiInstructions) && rawApiInstructions.length > 0
+            ? rawApiInstructions.map((inst: any) => typeof inst === 'string' ? inst : (inst.instruction_name || inst.instruction_text || inst.description || JSON.stringify(inst)))
+            : defaultGeneralInstructions;
+
         return (
             <div className="fixed inset-0 z-[99999] bg-slate-50 overflow-y-auto font-outfit">
                 <header className="bg-white/95 backdrop-blur-xl border-b sticky top-0 z-[110000] shadow-sm">
@@ -880,6 +968,89 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                 </header>
 
                 <main className="max-w-7xl mx-auto p-10 pb-40 space-y-8">
+                    {/* PREVIOUS ORIGINAL INSTRUCTIONS UI (COMMENTED OUT AS REQUESTED) */}
+                    {/* 
+                    <div className="mb-12 bg-blue-50/50 border border-blue-100/50 p-6 md:p-8 rounded-[2rem] relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                         <AlertCircle className="w-24 h-24" />
+                      </div>
+                      <h3 className="font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        <PlayCircle className="w-5 h-5" /> General Instructions
+                      </h3>
+                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                        {[
+                          "All questions are mandatory.",
+                          "Review all questions before submitting.",
+                          "Keep your handwritten answers ready for upload.",
+                          "Avoid switching tabs or closing the window."
+                        ].map((inst, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm text-blue-800">
+                            <ChevronRight className="w-4 h-4 mt-0.5 shrink-0 opacity-50" />
+                            {inst}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    */}
+
+                    {/* System & General Instructions */}
+                    <div className="bg-gradient-to-br from-indigo-50/80 via-blue-50/50 to-slate-50 border border-indigo-100 p-6 md:p-8 rounded-[2rem] shadow-sm relative overflow-hidden space-y-6">
+                        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                            <HelpCircle className="w-28 h-28 text-indigo-900" />
+                        </div>
+                        <h3 className="font-extrabold text-indigo-950 text-base flex items-center gap-2">
+                            <HelpCircle className="w-5 h-5 text-indigo-600" />
+                            <span>System Instructions & Attempt Guidelines</span>
+                        </h3>
+
+                        {/* 1. How to Attempt Questions */}
+                        <div>
+                            <h4 className="text-[11px] font-black uppercase tracking-wider text-indigo-900/70 mb-3">How to Attempt Questions</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                                <div className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-indigo-100/80 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-blue-50 text-blue-600 rounded-xl shrink-0 mt-0.5">
+                                        <MousePointerClick className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h5 className="font-bold text-slate-900 mb-1">MCQ, True/False & Choice</h5>
+                                        <p className="text-slate-600 leading-relaxed">Select the correct option directly on the screen.</p>
+                                    </div>
+                                </div>
+                                <div className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-indigo-100/80 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-purple-50 text-purple-600 rounded-xl shrink-0 mt-0.5">
+                                        <Edit3 className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h5 className="font-bold text-slate-900 mb-1">Fill in the Blanks</h5>
+                                        <p className="text-slate-600 leading-relaxed">Write your answer with the complete sentence.</p>
+                                    </div>
+                                </div>
+                                <div className="bg-white/90 backdrop-blur-sm p-4 rounded-2xl border border-indigo-100/80 shadow-sm flex items-start gap-3">
+                                    <div className="p-2 bg-amber-50 text-amber-600 rounded-xl shrink-0 mt-0.5">
+                                        <UploadCloud className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <h5 className="font-bold text-slate-900 mb-1">Theory Questions</h5>
+                                        <p className="text-slate-600 leading-relaxed">Write your answer on paper and submit/upload a photo of the answer sheet below.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. General Exam Rules / API Instructions */}
+                        <div className="pt-4 border-t border-indigo-100/80">
+                            <h4 className="text-[11px] font-black uppercase tracking-wider text-indigo-900/70 mb-3">General Examination Rules</h4>
+                            <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                                {generalInstructionsList.map((instText: string, i: number) => (
+                                    <li key={i} className="flex items-start gap-2.5 text-xs text-indigo-950 font-medium">
+                                        <ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-indigo-500" />
+                                        <span>{instText}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+
                     {questionPaperData?.section_data?.map((section: any, sIdx: number) => {
                         const progress = getSectionProgress(section);
                         const isExpanded = !!expandedSections[section.assessment_section_id];
@@ -958,7 +1129,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                                                                     {q.question_diagrams_url?.map((url: string, di: number) => (
                                                                         <img key={di} src={`${import.meta.env.VITE_API_URL}/api/v1/cil/images/${url}`} className="mb-8 rounded-[2rem] border-4 border-white shadow-xl max-h-96 object-contain" />
                                                                     ))}
-                                                                    {renderSubmissionUI(q)}
+                                                                    {renderSubmissionUI(q, section, idx)}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -984,12 +1155,176 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                             {submitting ? "Submitting..." : "End Paper"}
                         </Button>
                     </div>
+
+                    {/* 3-Option Upload Modal */}
+                    {uploadModalOpen && uploadModalContext && (
+                        <div className="fixed inset-0 z-[999999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-white rounded-[2rem] max-w-lg w-full p-6 md:p-8 shadow-2xl border border-slate-100 relative overflow-hidden animate-in fade-in zoom-in duration-300">
+                                {/* Header */}
+                                <div className="flex items-center justify-between pb-6 border-b border-slate-100 mb-6">
+                                    <div>
+                                        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 mb-2">
+                                            Question #{uploadModalContext.questionNumber} Upload
+                                        </Badge>
+                                        <h3 className="text-xl font-black text-slate-900">Choose Upload Method</h3>
+                                        <p className="text-xs text-slate-500 font-medium mt-1">
+                                            Section {uploadModalContext.sectionNumber}: {uploadModalContext.sectionName}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setUploadModalOpen(false)}
+                                        className="rounded-full text-slate-400 hover:text-slate-900"
+                                    >
+                                        <X className="w-6 h-6" />
+                                    </Button>
+                                </div>
+
+                                {/* Hidden Desktop Inputs */}
+                                <input
+                                    ref={desktopFileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const files = Array.from(e.target.files || []);
+                                        if (files.length > 0) {
+                                            setCroppingImage(files[0]);
+                                        }
+                                        e.target.value = "";
+                                    }}
+                                />
+                                <input
+                                    ref={desktopCameraInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const files = Array.from(e.target.files || []);
+                                        if (files.length > 0) {
+                                            setCroppingImage(files[0]);
+                                        }
+                                        e.target.value = "";
+                                    }}
+                                />
+
+                                {/* 3 Options Grid */}
+                                {activeUploadOption === "OPTIONS" && (
+                                    <div className="space-y-4">
+                                        {/* Option 1: Device Upload */}
+                                        <button
+                                            onClick={() => desktopFileInputRef.current?.click()}
+                                            className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-slate-100 hover:border-indigo-600 hover:bg-indigo-50/50 transition-all text-left group cursor-pointer"
+                                        >
+                                            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                                <Laptop className="w-6 h-6" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="font-bold text-slate-900 text-sm mb-0.5">1. Direct Device Upload</h4>
+                                                <p className="text-xs text-slate-500">Pick image files from your computer/device. Includes crop & adjust tools.</p>
+                                            </div>
+                                        </button>
+
+                                        {/* Option 2: Camera Capture */}
+                                        <button
+                                            onClick={() => desktopCameraInputRef.current?.click()}
+                                            className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-slate-100 hover:border-blue-600 hover:bg-blue-50/50 transition-all text-left group cursor-pointer"
+                                        >
+                                            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                <Camera className="w-6 h-6" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="font-bold text-slate-900 text-sm mb-0.5">2. Open Camera & Capture</h4>
+                                                <p className="text-xs text-slate-500">Take single or multiple photos directly using your webcam/camera with cropping.</p>
+                                            </div>
+                                        </button>
+
+                                        {/* Option 3: Scan QR Code */}
+                                        <button
+                                            onClick={() => setActiveUploadOption("QR")}
+                                            className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-slate-100 hover:border-emerald-600 hover:bg-emerald-50/50 transition-all text-left group cursor-pointer"
+                                        >
+                                            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                                <QrCode className="w-6 h-6" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="font-bold text-slate-900 text-sm mb-0.5">3. Scan QR Code (Mobile Upload)</h4>
+                                                <p className="text-xs text-slate-500">Scan QR from mobile to open dedicated camera page with instant cropping & auto-sync.</p>
+                                            </div>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* QR Code Option Detail */}
+                                {activeUploadOption === "QR" && (
+                                    <div className="text-center space-y-6">
+                                        <div className="p-4 bg-slate-50 rounded-3xl inline-block border border-slate-200 shadow-inner">
+                                            <QRCodeSVG
+                                                value={`${window.location.origin}/theory-mobile-upload?user_ass_id=${effectiveUserAssId}&user_answer_id=${uploadModalContext.uaid}&question_id=${uploadModalContext.qid}&section_number=${uploadModalContext.sectionNumber}&section_name=${encodeURIComponent(uploadModalContext.sectionName)}&question_number=${uploadModalContext.questionNumber}&token=${encodeURIComponent(Cookies.get("token") || localStorage.getItem("token") || localStorage.getItem("accessToken") || "")}`}
+                                                size={210}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <h4 className="font-bold text-slate-900 text-sm flex items-center justify-center gap-2">
+                                                <Smartphone className="w-4 h-4 text-emerald-600" /> Scan with your phone's camera
+                                            </h4>
+                                            <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                                                Scan this QR code to open the authenticated upload portal on your mobile device. Your desktop will sync automatically once submitted.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => setActiveUploadOption("OPTIONS")}
+                                                className="flex-1 rounded-xl text-slate-600"
+                                            >
+                                                Back to Options
+                                            </Button>
+                                            <Button
+                                                variant="secondary"
+                                                onClick={() => {
+                                                    const token = Cookies.get("token") || localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+                                                    const url = `${window.location.origin}/theory-mobile-upload?user_ass_id=${effectiveUserAssId}&user_answer_id=${uploadModalContext.uaid}&question_id=${uploadModalContext.qid}&section_number=${uploadModalContext.sectionNumber}&section_name=${encodeURIComponent(uploadModalContext.sectionName)}&question_number=${uploadModalContext.questionNumber}&token=${encodeURIComponent(token)}`;
+                                                    navigator.clipboard.writeText(url);
+                                                    toast({ title: "Link Copied", description: "Mobile upload link copied to clipboard!" });
+                                                }}
+                                                className="rounded-xl flex items-center gap-2"
+                                            >
+                                                <Copy className="w-4 h-4" /> Copy Link
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Image Cropper Modal */}
+                    <ImageCropperModal
+                        isOpen={!!croppingImage}
+                        imageFile={croppingImage}
+                        onClose={() => setCroppingImage(null)}
+                        onCropComplete={(croppedFile) => {
+                            if (uploadModalContext) {
+                                setPendingImages((prev) => ({
+                                    ...prev,
+                                    [uploadModalContext.qid]: [...(prev[uploadModalContext.qid] || []), croppedFile],
+                                }));
+                                setUploadModalOpen(false);
+                                toast({ title: "Page Cropped", description: "Cropped page added to pending answer sheet." });
+                            }
+                            setCroppingImage(null);
+                        }}
+                    />
                 </main>
             </div>
         );
     };
-
-    // console.log("TheorySubmissionPage: Render Loop - loading:", loading, "isTypeset:", isTypeset, "hasData:", !!questionPaperData, "error:", !!error);
 
     if (error) {
         return (
@@ -1002,7 +1337,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                         <h3 className="font-black text-3xl text-slate-900 uppercase tracking-tight">Access Denied</h3>
                         <p className="text-sm text-slate-400 font-medium leading-relaxed">{error}</p>
                     </div>
-                    <Button onClick={fetchData} className="w-full h-16 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl shadow-slate-900/20">Reconnect Portal</Button>
+                    <Button onClick={() => fetchData()} className="w-full h-16 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl shadow-slate-900/20">Reconnect Portal</Button>
                 </div>
             </div>
         );
@@ -1010,29 +1345,27 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <MathJaxContext config={QuestionMathJaxConfig}>
-                {(loading || !isTypeset) && (
-                    <div className="fixed inset-0 z-[999999] bg-slate-50 flex flex-col items-center justify-center gap-6">
-                        <div className="w-24 h-24 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center shadow-2xl shadow-indigo-600/40 animate-pulse">
-                            <Loader2 className="w-12 h-12 text-white animate-spin" />
-                        </div>
-                        <div className="text-center">
-                            <p className="text-slate-900 font-black uppercase tracking-[0.4em] text-[10px] mb-3 antialiased">Finalizing Portal Environment</p>
-                            <div className="w-64 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
-                                <div className="h-full bg-indigo-600 animate-progress-indefinite" />
-                            </div>
+            {(loading || !isTypeset) && (
+                <div className="fixed inset-0 z-[999999] bg-slate-50 flex flex-col items-center justify-center gap-6">
+                    <div className="w-24 h-24 rounded-[2.5rem] bg-indigo-600 flex items-center justify-center shadow-2xl shadow-indigo-600/40 animate-pulse">
+                        <Loader2 className="w-12 h-12 text-white animate-spin" />
+                    </div>
+                    <div className="text-center">
+                        <p className="text-slate-900 font-black uppercase tracking-[0.4em] text-[10px] mb-3 antialiased">Finalizing Portal Environment</p>
+                        <div className="w-64 h-1.5 bg-slate-200 rounded-full overflow-hidden shadow-inner">
+                            <div className="h-full bg-indigo-600 animate-progress-indefinite" />
                         </div>
                     </div>
-                )}
-                
-                {/* The hidden container for typesetting sync - always present but invisible */}
-                <div ref={hiddenContainerRef} className="fixed opacity-0 pointer-events-none -z-10 bg-white">
-                    {questionPaperData && renderContentMain()}
                 </div>
+            )}
+            
+            {/* The hidden container for typesetting sync - always present but invisible */}
+            <div ref={hiddenContainerRef} className="fixed opacity-0 pointer-events-none -z-10 bg-white">
+                {questionPaperData && renderContentMain()}
+            </div>
 
-                {/* The actual visible content */}
-                {isTypeset && questionPaperData && renderContentMain()}
-            </MathJaxContext>
+            {/* The actual visible content */}
+            {isTypeset && questionPaperData && renderContentMain()}
         </div>
     );
 }

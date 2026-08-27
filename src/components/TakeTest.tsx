@@ -317,6 +317,7 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
       return (
           <TheoryExamScreen 
             onComplete={() => setTestMode("theory_submission")}
+            onSkipSubmission={() => setTestMode("result-countdown")}
             onExit={() => {
                 setTestMode("setup");
                 setActiveTestConfig(null);

@@ -101,9 +101,40 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
         ]
     });
 
+    const checkTokenAvailability = (): boolean => {
+        const token = Cookies.get("token") || localStorage.getItem("token") || localStorage.getItem("accessToken");
+        if (!token || !token.trim() || token === "undefined" || token === "null") {
+            toast({
+                variant: "destructive",
+                title: "Session Expired",
+                description: "Session expired please login again.",
+            });
+            localStorage.clear();
+            Cookies.remove("token");
+            Cookies.remove("user_id");
+            Cookies.remove("username");
+            localStorage.setItem("currentStep", JSON.stringify("login"));
+            setTimeout(() => {
+                window.location.href = "/";
+            }, 300);
+            return false;
+        }
+        return true;
+    };
+
+    // Check token on mount before exam initializes
+    useEffect(() => {
+        checkTokenAvailability();
+    }, []);
+
     // Direct Question Fetching for STANDARD exams
     useEffect(() => {
         const fetchQuestionsDirectly = async () => {
+            if (!checkTokenAvailability()) {
+                setIsDataFetching(false);
+                setIsLoading(false);
+                return;
+            }
             if (allSections?.assessment_type?.toUpperCase() === "STANDARD" && userAssessmentId) {
                 console.log("STANDARD assessment detected. Fetching questions directly...");
                 setIsDataFetching(true);
@@ -166,6 +197,10 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
     // Initial Data Load (from Prefetched Props)
     useEffect(() => {
         const loadSectionData = () => {
+             if (!checkTokenAvailability()) {
+                 setIsLoading(false);
+                 return;
+             }
              setIsLoading(true);
              try {
                 if (!allSections) {
@@ -837,22 +872,22 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                 {/* Left Hand Section */}
                 <div className="flex flex-1 flex-col overflow-hidden text-sm max-md:overflow-y-auto w-full">
                     {/* Title and Time */}
-                    <div className="shrink-0 flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-white max-md:flex-col max-md:items-start max-md:gap-4 max-md:px-4 max-md:py-3 shadow-sm z-10 w-full">
-                        <div className="flex flex-col gap-1.5 min-w-0">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Exam Name</span>
-                            <span className="text-2xl font-extrabold text-slate-800 m-0 tracking-tight truncate max-w-[800px] max-md:max-w-full"><QuestionMathJax content={(allSections?.assessment_name || sectionName)} /></span>
+                    <div className="shrink-0 flex justify-between items-center px-4 py-2 sm:px-6 sm:py-4 border-b border-slate-200 bg-white shadow-sm z-10 w-full gap-2">
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest pl-0.5">Exam Name</span>
+                            <span className="text-sm sm:text-lg md:text-2xl font-extrabold text-slate-800 m-0 tracking-tight truncate"><QuestionMathJax content={(allSections?.assessment_name || sectionName)} /></span>
                         </div>
-                        <div className="flex flex-col items-end max-md:items-start gap-1.5 shrink-0">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest pr-1 max-md:pr-0">Time Remaining</span>
+                        <div className="flex flex-col items-end gap-0.5 shrink-0">
+                            <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest pr-0.5">Time Remaining</span>
                             <div className={`
-                                flex justify-center items-center px-5 py-2.5 rounded-xl font-mono text-xl font-bold transition-all duration-300
+                                flex justify-center items-center px-2.5 py-1.5 sm:px-5 sm:py-2.5 rounded-lg sm:rounded-xl font-mono text-xs sm:text-base md:text-xl font-bold transition-all duration-300
                                 ${timeLeft <= 60 
-                                    ? 'bg-red-50 text-red-700 border-2 border-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)]' 
+                                    ? 'bg-red-50 text-red-700 border border-red-500 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.3)]' 
                                     : timeLeft <= 300 
-                                        ? 'bg-orange-50 text-orange-600 border-2 border-orange-400' 
-                                        : 'bg-slate-50 text-slate-700 border-2 border-slate-200'}
+                                        ? 'bg-orange-50 text-orange-600 border border-orange-400' 
+                                        : 'bg-slate-50 text-slate-700 border border-slate-200'}
                             `}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2.5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-6 sm:w-6 mr-1.5 sm:mr-2.5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <span className="tracking-wider">{hours < 10 ? `0${hours}` : hours}:{minutes < 10 ? `0${minutes}` : minutes}:{seconds < 10 ? `0${seconds}` : seconds}</span>
@@ -861,10 +896,10 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                     </div>
 
                     {/* Exam Type and Mark */}
-                    <div className="shrink-0 text-base text-[#e07a05] px-4 py-2 border-b border-black flex justify-between items-center gap-4 flex-wrap max-md:flex-col max-md:items-start max-md:gap-2 max-md:px-2">
-                        <div className="flex-1 overflow-hidden max-w-full">
+                    <div className="shrink-0 text-xs sm:text-base text-[#e07a05] px-3 py-1.5 sm:px-4 sm:py-2 border-b border-slate-200 bg-white flex justify-between items-center gap-2 w-full">
+                        <div className="flex-1 overflow-hidden max-w-[65%] sm:max-w-full">
                             {sections.length > 0 && (
-                            <div className="flex overflow-x-auto gap-3 pb-2 pt-1 px-1">
+                            <div className="flex overflow-x-auto gap-2 pb-1 pt-0.5 px-0.5 scrollbar-thin">
                                 {sections.map((section, index) => {
                                     const isActive = index === activeSectionIndex;
                                     return (
@@ -872,9 +907,9 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                                             key={section.id}
                                             onClick={() => handleSectionChange(index)}
                                             className={`
-                                                px-6 py-2 rounded-full cursor-pointer whitespace-nowrap font-semibold transition-all duration-200 border-2
+                                                px-3 py-1 sm:px-6 sm:py-2 rounded-full cursor-pointer whitespace-nowrap text-[10px] sm:text-sm font-semibold transition-all duration-200 border
                                                 ${isActive 
-                                                    ? 'bg-[#0079D1] text-white border-[#0079D1] shadow-md transform -translate-y-0.5' 
+                                                    ? 'bg-[#0079D1] text-white border-[#0079D1] shadow-sm transform -translate-y-0.5' 
                                                     : 'bg-white text-slate-600 border-slate-300 hover:border-[#0079D1] hover:text-[#0079D1] hover:bg-slate-50'
                                                 }
                                             `}
@@ -886,19 +921,42 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                             </div>
                             )}
                         </div>
-                        <div className="shrink-0">
-                            <p className="font-bold m-0 whitespace-nowrap text-right max-md:text-left">
+                        <div className="shrink-0 text-[10px] sm:text-sm text-slate-600 font-semibold bg-slate-50 px-2 py-1 rounded border border-slate-200">
                             Type: {mathsque[currentQuestionIndex]?.type} | Marks: {mathsque[currentQuestionIndex]?.marks}
-                            </p>
+                        </div>
+                    </div>
+
+                    {/* Mobile Navigation Bar */}
+                    <div className="shrink-0 hidden max-md:flex justify-between items-center border-b border-slate-200 p-2 bg-slate-50 w-full gap-2">
+                        <button 
+                            className="cursor-pointer px-2.5 py-2 rounded-lg bg-[#77549A] text-white border-none text-xs font-bold transition-all hover:bg-[#4c3463] hover:scale-[1.02] active:scale-95 flex-1 max-w-[150px]"
+                            onClick={() => {
+                                if (reviewStatus[mathsque[currentQuestionIndex]?.id]) {
+                                    handleRemoveFromReview(mathsque[currentQuestionIndex].id);
+                                } else {
+                                    handleReview(mathsque[currentQuestionIndex].id);
+                                }
+                            }}>
+                            {reviewStatus[mathsque[currentQuestionIndex]?.id] ? "Remove Review" : "Mark Review"}
+                        </button>
+                        <div className="flex items-center gap-2">
+                            {currentQuestionIndex > 0 && (
+                                <button className="cursor-pointer px-4 py-2 rounded-lg bg-[#0079D1] text-white border-none text-xs font-bold transition-all hover:bg-[#034d82] hover:scale-[1.02] active:scale-95 min-w-[70px]" onClick={handlePrev}>Prev</button>
+                            )}
+                            {currentQuestionIndex < totalQuestions - 1 ? (
+                                <button className="cursor-pointer px-4 py-2 rounded-lg bg-[#0079D1] text-white border-none text-xs font-bold transition-all hover:bg-[#034d82] hover:scale-[1.02] active:scale-95 min-w-[70px]" onClick={handleNext}>Next</button>
+                            ) : (
+                                <button className="cursor-pointer px-4 py-2 rounded-lg bg-[#17ab07] text-white border-none text-xs font-bold transition-all hover:bg-[#0f7204] hover:scale-[1.02] active:scale-95 min-w-[80px]" onClick={handleSubmitConfirm}>Submit</button>
+                            )}
                         </div>
                     </div>
 
                     {/* Question Viewer */}
-                    <div className="flex flex-1 flex-col overflow-y-auto text-xl px-4 py-4 max-md:p-2 max-md:overflow-visible">
+                    <div className="flex flex-1 flex-col overflow-y-auto px-4 py-4 sm:p-6 w-full text-base sm:text-xl">
                         <div className="w-full">
                                 {mathsque.length > 0 && currentQuestionIndex < mathsque.length ? (
                                 <div key={mathsque[currentQuestionIndex].id}>
-                                    <div className="text-lg font-bold m-2.5 mb-6 leading-relaxed flex flex-wrap items-start gap-x-2 gap-y-1 relative">
+                                    <div className="text-sm sm:text-lg md:text-xl font-bold m-1 mb-4 sm:m-2.5 sm:mb-6 leading-relaxed flex flex-wrap items-start gap-x-2 gap-y-1 relative">
                                         <span className="mr-2 whitespace-nowrap text-blue-800">Question {currentQuestionIndex + 1}:</span> 
                                         
                                         <div className="flex-1 min-w-[200px] inline-block whitespace-pre-wrap [&_p]:!m-0 [&_p]:whitespace-normal [&_p]:inline [&_mjx-container]:!inline-block [&_mjx-container]:!m-0 [&_span]:!inline [&_br]:hidden">
@@ -917,7 +975,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                                     {mathsque[currentQuestionIndex].options && mathsque[currentQuestionIndex].options.length > 0 ? (
                                     mathsque[currentQuestionIndex].options.map((option, index) => {
                                         const optionImage = mathsque[currentQuestionIndex].options_diag[index];
-                                        return (                                         <div className="py-3 px-2 flex flex-row items-start gap-3 w-full hover:bg-slate-50 rounded-xl transition-colors" key={index}>
+                                        return (                                         <div className="py-2 px-2 sm:py-3 sm:px-3 flex flex-row items-start gap-3 w-full hover:bg-slate-50 rounded-xl transition-colors" key={index}>
                                             <input type="radio"
                                                 id={`option-${index}`}
                                                 className="shrink-0 cursor-pointer w-4 h-4 mt-[6px]"
@@ -926,8 +984,8 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                                                 checked={responses[mathsque[currentQuestionIndex].id] === index}
                                                 onChange={() => handleResponseChange(mathsque[currentQuestionIndex].id, index)} 
                                             />
-                                            <label htmlFor={`option-${index}`} className="cursor-pointer flex-1 flex flex-row items-start gap-1 break-words leading-relaxed text-lg [&_p]:!m-0 [&_p]:inline [&_mjx-container]:!inline-block [&_mjx-container]:!m-0 [&_mjx-container]:!align-middle [&_span]:!inline [&_br]:hidden">
-                                                <span className="font-semibold mr-1 shrink-0 min-w-[1.5rem]">
+                                            <label htmlFor={`option-${index}`} className="cursor-pointer flex-1 flex flex-row items-start gap-1 break-words leading-relaxed text-sm sm:text-lg [&_p]:!m-0 [&_p]:inline [&_mjx-container]:!inline-block [&_mjx-container]:!m-0 [&_mjx-container]:!align-middle [&_span]:!inline [&_br]:hidden">
+                                                <span className="font-semibold mr-1 shrink-0 min-w-[1.25rem] sm:min-w-[1.5rem]">
                                                     {String.fromCharCode(65 + index)}.
                                                 </span>
                                                 <span className="inline-block whitespace-pre-wrap">
@@ -937,7 +995,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                                             {optionImage && 
                                             <img 
                                             src={`${import.meta.env.VITE_API_URL}/api/v1/cil/images/${optionImage}`} 
-                                            alt={`Option ${index + 1}`} className="ml-2 max-h-20 object-contain self-start" />}
+                                            alt={`Option ${index + 1}`} className="ml-2 max-h-12 sm:max-h-20 object-contain self-start" />}
                                         </div>
 
                                         );
@@ -945,7 +1003,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                                     ) : (<p>No options available for this question.</p>)}
                                     {responses[mathsque[currentQuestionIndex].id] !== undefined && (
                                     <button
-                                        className="px-4 py-2 mt-2.5 bg-[#ff1e1e] text-white border-none rounded-[10px] cursor-pointer transition-colors hover:bg-[#870505]"
+                                        className="px-3 py-1.5 sm:px-4 sm:py-2 mt-2.5 bg-[#ff1e1e] text-white border-none rounded-lg sm:rounded-[10px] cursor-pointer text-xs sm:text-sm transition-colors hover:bg-[#870505]"
                                         onClick={() => handleClearResponse(mathsque[currentQuestionIndex].id)}>
                                         Clear Response
                                     </button>
@@ -959,10 +1017,10 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                     </div>
 
                     {/* Navigation Footer */}
-                    <div className="shrink-0 text-xl flex justify-end items-center border-t border-black p-4 max-md:flex-col max-md:justify-center max-md:p-3 max-md:rounded-none">
-                         <div className="flex justify-end items-center w-full max-md:justify-center gap-4 max-md:gap-3">
+                    <div className="shrink-0 flex justify-end items-center border-t border-slate-200 p-3 sm:p-4 bg-slate-50 w-full max-md:hidden">
+                         <div className="flex justify-end items-center w-full gap-2 sm:gap-4">
                             <button 
-                                className="cursor-pointer px-2 py-3 rounded-[10px] bg-[#77549A] text-white border-none text-lg font-bold transition-all hover:bg-[#4c3463] hover:scale-105 active:scale-95 flex-1 max-w-[220px]"
+                                className="cursor-pointer px-2 py-2.5 sm:py-3 rounded-lg sm:rounded-[10px] bg-[#77549A] text-white border-none text-xs sm:text-base md:text-lg font-bold transition-all hover:bg-[#4c3463] hover:scale-[1.02] active:scale-95 flex-1 max-w-[180px] sm:max-w-[220px]"
                                 onClick={() => {
                                     if (reviewStatus[mathsque[currentQuestionIndex]?.id]) {
                                         handleRemoveFromReview(mathsque[currentQuestionIndex].id);
@@ -970,13 +1028,15 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                                         handleReview(mathsque[currentQuestionIndex].id);
                                     }
                                 }}>
-                                {reviewStatus[mathsque[currentQuestionIndex]?.id] ? "Remove from Review" : "Review"}
+                                {reviewStatus[mathsque[currentQuestionIndex]?.id] ? "Remove Review" : "Mark Review"}
                             </button>
                             {currentQuestionIndex > 0 && (
-                                <button className="cursor-pointer px-8 py-3 rounded-[10px] bg-[#0079D1] text-white border-none text-lg font-bold transition-all hover:bg-[#034d82] hover:scale-105 active:scale-95 flex-1 max-w-[150px]" onClick={handlePrev}>Prev</button>
+                                <button className="cursor-pointer px-4 py-2.5 sm:px-8 sm:py-3 rounded-lg sm:rounded-[10px] bg-[#0079D1] text-white border-none text-xs sm:text-base md:text-lg font-bold transition-all hover:bg-[#034d82] hover:scale-[1.02] active:scale-95 flex-1 max-w-[100px] sm:max-w-[150px]" onClick={handlePrev}>Prev</button>
                             )}
-                            {currentQuestionIndex < totalQuestions - 1 && (
-                                <button className="cursor-pointer px-8 py-3 rounded-[10px] bg-[#0079D1] text-white border-none text-lg font-bold transition-all hover:bg-[#034d82] hover:scale-105 active:scale-95 flex-1 max-w-[150px]" onClick={handleNext}>Next</button>
+                            {currentQuestionIndex < totalQuestions - 1 ? (
+                                <button className="cursor-pointer px-4 py-2.5 sm:px-8 sm:py-3 rounded-lg sm:rounded-[10px] bg-[#0079D1] text-white border-none text-xs sm:text-base md:text-lg font-bold transition-all hover:bg-[#034d82] hover:scale-[1.02] active:scale-95 flex-1 max-w-[100px] sm:max-w-[150px]" onClick={handleNext}>Next</button>
+                            ) : (
+                                <button className="cursor-pointer px-4 py-2.5 sm:px-8 sm:py-3 rounded-lg sm:rounded-[10px] bg-[#17ab07] text-white border-none text-xs sm:text-base md:text-lg font-bold transition-all hover:bg-[#0f7204] hover:scale-[1.02] active:scale-95 flex-1 max-w-[120px] sm:max-w-[180px]" onClick={handleSubmitConfirm}>Submit</button>
                             )}
                          </div>
                     </div>
@@ -1042,10 +1102,15 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                                     const textClass = (status === 'answered' || status === 'review' || status === 'review_answered' || status === 'unanswered' || (isVisited && !isCurrent)) ? 'text-white' : 'text-black';
 
                                     return questionNumber <= totalQuestions ? (
-                                        <div className="flex justify-center shrink-0 w-[45px]" key={questionNumber}>
+                                        <div className="flex justify-center shrink-0 w-9 sm:w-[45px]" key={questionNumber}>
                                             <button
-                                              className={`w-[45px] h-[45px] flex items-center justify-center rounded-[8px] font-semibold text-lg hover:opacity-80 transition-opacity border-none cursor-pointer ${bgClass} ${borderClass} ${textClass}`}
-                                              onClick={() => handleQuestionClick(questionId)}
+                                              className={`w-9 h-9 sm:w-[45px] sm:h-[45px] flex items-center justify-center rounded-[8px] font-semibold text-sm sm:text-lg hover:opacity-80 transition-opacity border-none cursor-pointer ${bgClass} ${borderClass} ${textClass}`}
+                                              onClick={() => {
+                                                  handleQuestionClick(questionId);
+                                                  if (window.innerWidth < 768) {
+                                                      setIsMenuOpen(false); // Close menu overlay on mobile
+                                                  }
+                                              }}
                                             >
                                             {questionNumber}
                                             </button>

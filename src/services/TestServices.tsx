@@ -52,12 +52,18 @@ export const TestService = {
 
     submitUserAnswer: async (payload: any): Promise<any> => {
         try {
+            const token = Cookies.get('token') || localStorage.getItem('token') || localStorage.getItem('accessToken');
+            const authHeaders: Record<string, string> = {};
+            if (token) {
+                authHeaders.Authorization = `Bearer ${token}`;
+            }
+
             // Replicating ReviewAnswers.jsx behavior: JSON payload with multipart/form-data header
             if (payload.userAnswerImages === null) {
                 console.log("Service: Submitting as JSON with Multipart header (ReviewAnswers sync):", payload);
                 const response = await axiosClient.post(API_ENDPOINT.AVAILABLE_TESTS.SUBMIT_USER_ANSWER, 
                     payload,
-                    { headers: { 'Content-Type': 'multipart/form-data' } }
+                    { headers: { ...authHeaders, 'Content-Type': 'multipart/form-data' } }
                 );
                 return response.data;
             }

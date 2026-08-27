@@ -18,10 +18,10 @@ axiosClient.interceptors.request.use(
             config.headers['Content-Type'] = 'application/json';
         }
         
-        // const token = Cookies.get('token');
-        // if (token) {
-        //     config.headers.Authorization = `Bearer ${token}`;
-        // }
+        const token = Cookies.get('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
 
         return config;
     },
@@ -46,6 +46,10 @@ axiosClient.interceptors.response.use(
     },
     (error: AxiosError) => {
         if (error.response && error.response.status === 401) {
+             // If on mobile upload route, bypass global redirect so error is displayed on page
+            if (window.location.pathname.includes('theory-mobile-upload')) {
+                return Promise.reject(error);
+            }
             // Unauthorized access: clear all session data
             localStorage.clear();
             

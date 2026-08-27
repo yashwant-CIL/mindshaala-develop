@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import Cookies from "js-cookie";
 import Swal from "sweetalert2";
 import { 
   Clock, 
@@ -11,23 +12,29 @@ import {
   ChevronRight,
   BookOpen,
   Maximize,
-  X
+  X,
+  MousePointerClick,
+  ArrowLeftRight,
+  ArrowRight,
+  Edit3,
+  UploadCloud,
+  HelpCircle
 } from "lucide-react";
 import { useToast } from "../../../../hooks/use-toast";
 import { TestService } from "../../../../services/TestServices";
 import { useCourse } from "../../../../context/CourseContext";
-import QuestionMathJax, { QuestionMathJaxConfig } from "../../../../shared/mathjaxconfig/QuestionMathJax";
+import QuestionMathJax from "../../../../shared/mathjaxconfig/QuestionMathJax";
 import { Badge } from "../../../../components/ui/badge";
 import { Button } from "../../../../components/ui/button";
-import { MathJaxContext } from "better-react-mathjax";
 import { getDeterministicShuffle } from "../../../../shared/utils/ShuffleUtils";
 
 interface TheoryExamScreenProps {
   onComplete: () => void;
+  onSkipSubmission?: () => void;
   onExit?: () => void;
 }
 
-export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) {
+export function TheoryExamScreen({ onComplete, onSkipSubmission, onExit }: TheoryExamScreenProps) {
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -45,9 +52,31 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
   const [seconds, setSeconds] = useState(0);
+  const [isTimerStarted, setIsTimerStarted] = useState(false);
   
   const [startTime, setStartTime] = useState<string | null>(null);
   const [matchShuffles, setMatchShuffles] = useState<Record<string, string[]>>({});
+
+  const checkTokenAvailability = (): boolean => {
+    const token = Cookies.get("token") || localStorage.getItem("token") || localStorage.getItem("accessToken");
+    if (!token || !token.trim() || token === "undefined" || token === "null") {
+      toast({
+        variant: "destructive",
+        title: "Session Expired",
+        description: "Session expired please login again.",
+      });
+      localStorage.clear();
+      Cookies.remove("token");
+      Cookies.remove("user_id");
+      Cookies.remove("username");
+      localStorage.setItem("currentStep", JSON.stringify("login"));
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 300);
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     setStartTime(new Date().toISOString());
@@ -55,6 +84,11 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
 
   // API Call to fetch questions
   const fetchQuestions = async () => {
+    if (!checkTokenAvailability()) {
+      setLoading(false);
+      return;
+    }
+
     if (!effectiveUserAssId) {
       setError("User Assessment ID not found.");
       setLoading(false);
@@ -70,6 +104,7 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
         setHours(Math.floor(totalMinutes / 60));
         setMinutes(totalMinutes % 60);
         setSeconds(0);
+        setIsTimerStarted(true);
       } else {
         setError("No question data received from the server.");
       }
@@ -192,6 +227,8 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
 
   // Timer Logic
   useEffect(() => {
+    if (!isTimerStarted) return;
+
     const timer = setInterval(() => {
       if (seconds > 0) {
         setSeconds(s => s - 1);
@@ -209,15 +246,15 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [hours, minutes, seconds]);
+  }, [hours, minutes, seconds, isTimerStarted]);
 
   // Alert at 5 and 1 minute
   useEffect(() => {
-    if (hours === 0 && seconds === 0) {
+    if (isTimerStarted && hours === 0 && seconds === 0) {
       if (minutes === 5) toast({ title: "Time Warning", description: "5 minutes remaining!" });
       if (minutes === 1) toast({ title: "Time Warning", description: "1 minute remaining!", variant: "destructive" });
     }
-  }, [minutes, hours, seconds]);
+  }, [minutes, hours, seconds, isTimerStarted]);
 
   const handleExit = () => {
     if (document.fullscreenElement) {
@@ -252,11 +289,13 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  const handleFinalSubmit = async (uploadType: "MANUAL" | "AUTO") => {
-    console.log(`TheoryExam: handleFinalSubmit started (${uploadType}). effectiveUserAssId:`, effectiveUserAssId);
+  const handleFinalSubmit = async (uploadType: "MANUAL" | "AUTO", isSelfCheck: boolean = false) => {
+    console.log(`TheoryExam: handleFinalSubmit started (${uploadType}, selfCheck: ${isSelfCheck}). effectiveUserAssId:`, effectiveUserAssId);
     
     if (!effectiveUserAssId) {
         console.error("TheoryExam: Cannot submit - effectiveUserAssId is missing!");
+        if (isSelfCheck && onSkipSubmission) onSkipSubmission();
+        else onComplete();
         return;
     }
     
@@ -268,7 +307,7 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
         user_ass_id: effectiveUserAssId.toString(),
         assessment_id: (questionPaperData?.assessment_id || "").toString(),
         ass_start_time: startTime || "",
-        assessment_status: "COMPLETED",
+        assessment_status: "SUBMITTED",
         time_taken: formattedTimeTaken,
         ass_end_time: ass_end_time
     };
@@ -279,55 +318,92 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
       console.log("Submission Response:", response);
       if (response) {
         Swal.fire({
-          title: "Exam Completed",
-          text: uploadType === "MANUAL" ? "Your theoretical attempt has been recorded." : "Time's up! Your attempt has been auto-submitted.",
+          title: "Exam Submitted",
+          text: "Your exam has been submitted directly. You can now self-evaluate your performance.",
           icon: "success",
           confirmButtonColor: "#4f46e5"
         }).then(() => {
-          onComplete();
+          if (onSkipSubmission) {
+            onSkipSubmission();
+          } else {
+            onComplete();
+          }
         });
       }
     } catch (err) {
       console.error("Submission failed:", err);
-      Swal.fire("Error", "Submission failed. Please check your internet connection.", "error");
+      if (onSkipSubmission) {
+        onSkipSubmission();
+      } else {
+        onComplete();
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const confirmSubmit = () => {
-    // DIAGNOSTIC ALERT: If this pops up, the click is working.
-    // window.alert("confirmSubmit function reached!"); 
     console.log("TheoryExam: confirmSubmit click detected.");
     
+    if (effectiveUserAssId) {
+      localStorage.setItem("userAssId", effectiveUserAssId.toString());
+    }
+
+    if (typeof Swal === 'undefined') {
+        console.error("TheoryExam: Swal is not defined! Navigating to submission portal directly.");
+        if (effectiveUserAssId) localStorage.setItem("userAssId", effectiveUserAssId.toString());
+        onComplete();
+        return;
+    }
+
+    Swal.fire({
+      title: "Proceed to Submission Portal?",
+      text: "You will be redirected to upload your answer sheets or enter your matching/subjective responses.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Yes, Proceed",
+      cancelButtonText: "Back to Question Paper",
+      confirmButtonColor: "#4f46e5",
+      cancelButtonColor: "#64748b",
+      returnFocus: true,
+    }).then((result: any) => {
+      if (result === true || (result && result.isConfirmed)) {
+        console.log("TheoryExam: Confirmation received. Navigating to submission portal...");
+        if (effectiveUserAssId) localStorage.setItem("userAssId", effectiveUserAssId.toString());
+        onComplete();
+      }
+    });
+  };
+
+  const confirmSelfCheckSubmit = () => {
+    console.log("TheoryExam: confirmSelfCheckSubmit click detected.");
+
     if (typeof Swal === 'undefined') {
         console.error("TheoryExam: Swal is not defined! Check imports.");
         return;
     }
 
     Swal.fire({
-      title: "Submit Exam?",
-      text: "Are you sure you want to finish the theory part? Ensure you have read all questions.",
+      title: "Submit Directly for Self Check?",
+      text: "Are you sure you want to finish the exam without submitting answers? You will proceed directly to self-evaluate your responses.",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonText: "Yes, Finish",
-      cancelButtonText: "Continue Exam",
-      confirmButtonColor: "#4f46e5",
-      cancelButtonColor: "#d33",
-      returnFocus: true, // Re-enable for testing if this fixes the z-index/focus conflict
+      confirmButtonText: "Yes, Submit Directly",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#059669",
+      cancelButtonColor: "#64748b",
+      returnFocus: true,
     }).then((result: any) => {
-      console.log("TheoryExam: Modal closed. Full result object:", result);
-      // Robust check for both modern Swal2 (result.isConfirmed) and legacy (result === true)
       if (result === true || (result && result.isConfirmed)) {
-        console.log("TheoryExam: Confirmation received. Proceeding to submit...");
-        handleFinalSubmit("MANUAL");
+        console.log("TheoryExam: Self check confirmation received. Submitting directly...");
+        handleFinalSubmit("MANUAL", true);
       }
     });
   };
 
   const autoSubmit = () => {
-    console.log("TheoryExam: autoSubmit triggered (Time Up).");
-    handleFinalSubmit("AUTO");
+    console.log("TheoryExam: autoSubmit triggered (Time Up). Navigating to submission portal.");
+    onComplete();
   };
 
   // Rendering Helpers
@@ -518,7 +594,26 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
     );
   };
 
-  const renderContent = () => (
+  const renderContent = () => {
+    const rawApiInstructions = 
+      questionPaperData?.instructions || 
+      questionPaperData?.instruction_data || 
+      questionPaperData?.instructions_data || 
+      questionPaperData?.exam_details?.instructions || 
+      [];
+
+    const defaultGeneralInstructions = [
+      "All questions are mandatory.",
+      "Review all questions before submitting.",
+      "Keep your handwritten answers ready for upload.",
+      "Avoid switching tabs or closing the window."
+    ];
+
+    const generalInstructionsList = Array.isArray(rawApiInstructions) && rawApiInstructions.length > 0
+      ? rawApiInstructions.map((inst: any) => typeof inst === 'string' ? inst : (inst.instruction_name || inst.instruction_text || inst.description || JSON.stringify(inst)))
+      : defaultGeneralInstructions;
+
+    return (
     <div className="fixed inset-0 z-[50] bg-slate-50 font-outfit overflow-y-auto">
         {/* Navbar */}
         <nav className="fixed top-0 w-full z-[100] h-20 flex items-center justify-between px-8 text-white backdrop-blur-xl bg-slate-900/90 border-b border-white/10 shadow-2xl">
@@ -589,7 +684,8 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
             </div>
 
             <div className="p-6 md:p-12">
-              {/* Instructions */}
+              {/* PREVIOUS ORIGINAL INSTRUCTIONS UI (COMMENTED OUT AS REQUESTED) */}
+              {/* 
               <div className="mb-12 bg-blue-50/50 border border-blue-100/50 p-6 md:p-8 rounded-[2rem] relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
                    <AlertCircle className="w-24 h-24" />
@@ -610,6 +706,90 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
                     </li>
                   ))}
                 </ul>
+              </div>
+              */}
+
+              {/* System Instructions / How to Attempt & General Rules */}
+              <div className="mb-12 bg-gradient-to-br from-indigo-50/80 via-blue-50/50 to-slate-50 border border-indigo-100/80 p-6 md:p-8 rounded-[2rem] shadow-sm relative overflow-hidden space-y-6">
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                  <HelpCircle className="w-32 h-32 text-indigo-900" />
+                </div>
+                
+                <h3 className="font-extrabold text-indigo-950 flex items-center gap-2.5 text-lg">
+                  <PlayCircle className="w-6 h-6 text-indigo-600" />
+                  <span>Exam Instructions & Guidelines</span>
+                </h3>
+
+                {/* 1. How to Attempt Questions */}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider text-indigo-900/70 mb-3">How to Attempt Questions</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Guideline 1: Choice / MCQ / T&F */}
+                    <div className="bg-white/90 backdrop-blur-sm p-4 md:p-5 rounded-2xl border border-indigo-100/80 shadow-sm flex items-start gap-3.5">
+                      <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0 mt-0.5">
+                        <MousePointerClick className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 text-sm mb-1">MCQ, True/False & Choice</h5>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Select the correct option directly on the <span className="font-semibold text-amber-700">Submission Portal</span>.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Guideline 2: Match the Following */}
+                    <div className="bg-white/90 backdrop-blur-sm p-4 md:p-5 rounded-2xl border border-indigo-100/80 shadow-sm flex items-start gap-3.5">
+                      <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl shrink-0 mt-0.5">
+                        <ArrowLeftRight className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 text-sm mb-1">Match the Following</h5>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Write the correct matching answer in the input box provided on the <span className="font-semibold text-amber-700">Submission Portal</span>.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Guideline 3: Fill in the blanks */}
+                    <div className="bg-white/90 backdrop-blur-sm p-4 md:p-5 rounded-2xl border border-indigo-100/80 shadow-sm flex items-start gap-3.5">
+                      <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl shrink-0 mt-0.5">
+                        <Edit3 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 text-sm mb-1">Fill in the Blanks</h5>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Write your answer with the complete sentence.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Guideline 4: Theory & Subjective */}
+                    <div className="bg-white/90 backdrop-blur-sm p-4 md:p-5 rounded-2xl border border-indigo-100/80 shadow-sm flex items-start gap-3.5">
+                      <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl shrink-0 mt-0.5">
+                        <UploadCloud className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-900 text-sm mb-1">Theory Questions</h5>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Write your answer on paper and submit a photo of the answer sheet on the <span className="font-semibold text-amber-700">Submission Portal</span>.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. General Exam Rules / API Instructions */}
+                <div className="pt-5 border-t border-indigo-100/80">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-indigo-900/70 mb-3">General Examination Rules</h4>
+                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                    {generalInstructionsList.map((instText: string, i: number) => (
+                      <li key={i} className="flex items-start gap-3 text-xs text-indigo-950 font-medium">
+                        <ChevronRight className="w-4 h-4 mt-0.5 shrink-0 text-indigo-500" />
+                        <span>{instText}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
 
               {/* Questions Area */}
@@ -655,25 +835,28 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  <CheckCircle2 className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform" />
-                  <span>Finish & Submit Exam</span>
+                  <ArrowRight className="w-5 h-5 mr-3 group-hover:translate-x-1 transition-transform" />
+                  <span>Proceed to Submission Portal</span>
                 </>
               )}
             </Button>
             <Button
               variant="outline"
-              onClick={handleExit}
-              className="h-14 border-2 border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl px-10 font-bold transition-all"
+              onClick={confirmSelfCheckSubmit}
+              disabled={submitting}
+              className="h-14 border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 rounded-2xl px-10 font-bold transition-all flex items-center justify-center gap-2"
             >
-              Cancel & Exit
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <span>Submit Directly</span>
             </Button>
           </div>
         </div>
       </div>
   );
+};
 
   return (
-    <MathJaxContext config={QuestionMathJaxConfig}>
+    <>
       {/* Loading Overlay - Overlays the entire screen */}
       {(loading || !isTypeset) && (
         <div className="fixed inset-0 z-[9999] bg-slate-50 flex items-center justify-center">
@@ -703,12 +886,12 @@ export function TheoryExamScreen({ onComplete, onExit }: TheoryExamScreenProps) 
       <div 
         ref={hiddenContainerRef} 
         aria-hidden={!isTypeset}
-        // @ts-ignore - inert is a valid HTML attribute but may need @ts-ignore in some TS versions
+        /* @ts-ignore - inert is a valid HTML attribute but may need @ts-ignore in some TS versions */
         inert={!isTypeset ? "true" : undefined}
         className={`transition-opacity duration-300 ${(!loading && isTypeset && !error) ? 'opacity-100' : 'opacity-0 pointer-events-none fixed'}`}
       >
         {questionPaperData && renderContent()}
       </div>
-    </MathJaxContext>
+    </>
   );
 }
