@@ -247,6 +247,32 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                 const newShuffles: Record<string, string[]> = {};
                 const newMatchMappings: Record<string, string> = {};
 
+                // Collect questions with user_answer_id to check status via TestService.getUserAnswer
+                const allQuestionsWithId: any[] = [];
+                for (const section of data.section_data) {
+                    if (section.question_data) {
+                        for (const q of section.question_data) {
+                            if (q.user_answer_id) {
+                                allQuestionsWithId.push(q);
+                            }
+                        }
+                    }
+                }
+
+                const userAnswerResults: Record<string, any> = {};
+                await Promise.all(
+                    allQuestionsWithId.map(async (q) => {
+                        try {
+                            const res = await TestService.getUserAnswer(q.user_answer_id);
+                            if (res) {
+                                userAnswerResults[q.question_id] = res;
+                            }
+                        } catch (err) {
+                            console.warn(`getUserAnswer failed for user_answer_id ${q.user_answer_id}:`, err);
+                        }
+                    })
+                );
+
                 for (const section of data.section_data) {
                     if (!section.question_data) continue;
                     const questions = section.question_data;
@@ -255,36 +281,42 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                         const q = questions[i];
                         const qType = q.question_type_name?.toLowerCase().trim() || "";
                         
-                        // Extract answer directly from question data if it exists
                         if (q.user_answer_id) {
-                            const hasUserAnswer = q.user_answer !== null && q.user_answer !== undefined && q.user_answer !== "";
-                            const hasUserImage = q.user_answer_image !== null && q.user_answer_image !== undefined && q.user_answer_image !== "";
-                            const hasAnyContent = hasUserAnswer || hasUserImage;
+                            const fetchedAnswerObj = userAnswerResults[q.question_id];
+                            
+                            const userAnswerVal = fetchedAnswerObj?.user_answer ?? q.user_answer;
+                            const userAnswerImg = fetchedAnswerObj?.user_answer_image ?? fetchedAnswerObj?.user_answer_images ?? q.user_answer_image;
+                            const attemptStatus = fetchedAnswerObj?.attempt_status ?? q.attempt_status;
+
+                            // Rule: Base submitted state ONLY on attempt_status === "ANSWERED"
+                            const isAlreadySubmitted = attemptStatus === "ANSWERED";
 
                             const latest = {
                                 user_answer_id: q.user_answer_id,
-                                user_answer: q.user_answer,
-                                user_answer_image: q.user_answer_image,
-                                answer_submission_time: q.answer_submission_time
+                                user_answer: userAnswerVal,
+                                user_answer_image: userAnswerImg,
+                                user_answer_images: userAnswerImg,
+                                attempt_status: attemptStatus,
+                                answer_submission_time: fetchedAnswerObj?.answer_submission_time || q.answer_submission_time
                             };
                             newAnswers[q.question_id] = latest;
+
+                            if (isAlreadySubmitted) {
+                                newSaved[q.question_id] = true;
+                            } else {
+                                newSaved[q.question_id] = false;
+                            }
 
                             if (qType === "match the following") {
                                 // Match logic handled group-wise below
                             } else if (qType === "theory mcq 1 marks" || qType === "assertion&reasoning") {
                                 const alpha = latest.user_answer;
-                                if (alpha && alpha.length === 1 && hasAnyContent) {
+                                if (alpha && alpha.length === 1) {
                                     newMcq[q.question_id] = alpha.toUpperCase().charCodeAt(0) - 65;
-                                    newSaved[q.question_id] = true;
                                 }
                             } else if (qType === "name the following" || qType === "fill in the blanks") {
-                                if (hasAnyContent) {
-                                    newText[q.question_id] = latest.user_answer || "";
-                                    newSaved[q.question_id] = true;
-                                }
-                            } else if (qType === "image question") {
-                                if (hasAnyContent) {
-                                    newSaved[q.question_id] = true;
+                                if (latest.user_answer) {
+                                    newText[q.question_id] = latest.user_answer;
                                 }
                             }
                         }
@@ -303,12 +335,21 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                             newShuffles[groupId] = shuffled;
 
                             for (const mq of group) {
-                                if (mq.user_answer && mq.user_answer.trim() !== "") {
-                                    const letterIdx = shuffled.indexOf(mq.user_answer);
+                                const fetchedAnswerObj = userAnswerResults[mq.question_id];
+                                const userAnswerVal = fetchedAnswerObj?.user_answer ?? mq.user_answer;
+                                const attemptStatus = fetchedAnswerObj?.attempt_status ?? mq.attempt_status;
+                                const isSubmitted = attemptStatus === "ANSWERED";
+
+                                if (userAnswerVal && userAnswerVal.trim() !== "") {
+                                    const letterIdx = shuffled.indexOf(userAnswerVal);
                                     if (letterIdx !== -1) {
                                         newMatchMappings[mq.question_id] = String.fromCharCode(65 + letterIdx);
-                                        newSaved[mq.question_id] = true;
                                     }
+                                }
+                                if (isSubmitted) {
+                                    newSaved[mq.question_id] = true;
+                                } else {
+                                    newSaved[mq.question_id] = false;
                                 }
                             }
                             i = j;
@@ -323,7 +364,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                 setSavedMcq(newSaved);
                 setMatchShuffles(newShuffles);
                 setMatchMappings(newMatchMappings);
-                console.log("TheorySubmissionPage: fetchData SUCCESS - Initial states updated");
+                console.log("TheorySubmissionPage: fetchData SUCCESS - Initial states updated with TestService.getUserAnswer status check");
             } else {
                 console.warn("TheorySubmissionPage: fetchData - No section data found in response");
                 setError("No assessment content found.");
@@ -873,9 +914,9 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                                         </Button>
                                     )}
                                     {savedMcq[q.question_id] && (
-                                        <Button variant="ghost" size="icon" className="w-10 h-10 text-emerald-600 hover:bg-emerald-100 rounded-xl" onClick={() => setSavedMcq(prev => ({ ...prev, [q.question_id]: false }))}>
-                                            <RefreshCw className="w-4 h-4" />
-                                        </Button>
+                                        <div className="w-10 h-10 text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-center shadow-sm">
+                                            <Check className="w-5 h-5 text-emerald-600" />
+                                        </div>
                                     )}
                                 </div>
                             </div>
