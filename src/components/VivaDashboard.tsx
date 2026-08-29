@@ -92,7 +92,7 @@ export function VivaDashboard({ onNavigate }: VivaDashboardProps) {
         const [cardsRes, subjectRes, historyRes] = await Promise.all([
           VivaService.getVivaDashboardCards(userId, subscriptionId),
           VivaService.getVivaDashboardSubjectwisePerformance(userId, subscriptionId),
-          VivaService.getVivaHistory(userId),
+          VivaService.getVivaHistory(userId,subscriptionId),
         ]);
 
         setCardsData(cardsRes?.data || cardsRes || null);

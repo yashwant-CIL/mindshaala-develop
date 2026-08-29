@@ -210,7 +210,8 @@ export default function GKResult() {
   const handleExamSelect = async (id: string) => {
     setSelectedExamId(id); setSelectedExamDetails(null); setIsLoadingDetails(true); setShowSolution(false);
     try {
-      const res = await GKService.getResultGKAssessment(id);
+      const userId = localStorage.getItem('user_id') || Cookies.get('user_id') || '';
+      const res = await GKService.getResultGKAssessment(userId, id);
       setSelectedExamDetails(parseBackendResult(res));
     } catch (err) {
       console.error("Failed to load GK assessment details:", err);

@@ -58,6 +58,11 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const questionStartTimeRef = useRef<string | null>(new Date().toISOString());
+
+  useEffect(() => {
+    questionStartTimeRef.current = new Date().toISOString();
+  }, [currentQuestion?.question_no]);
 
   // Session initialization is now handled pre-navigation in App.tsx
 
@@ -133,19 +138,21 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
         return;
       }
 
-      const formData = new FormData();
-      formData.append('user_id', String(initialParams.user_id));
-      formData.append('subject_id', String(initialParams.subject_id));
-      formData.append('chapter_id', String(initialParams.chapter_id));
-      formData.append('topic_id', String(initialParams.topic_id));
-      formData.append('course_id', String(initialParams.course_id));
+      const payload: any = {
+        user_id: Number(initialParams.user_id),
+        subject_id: Number(initialParams.subject_id),
+        course_id: Number(initialParams.course_id),
+        chapter_id: String(initialParams.chapter_id),
+        topic_id: String(initialParams.topic_id),
+        module_type: "TAM"
+      };
       if (initialParams.viva_type) {
-        formData.append('viva_type', String(initialParams.viva_type));
+        payload.viva_type = String(initialParams.viva_type);
       }
 
-      console.log("ConceptualVivaSession start payload (FormData entries):", Array.from(formData.entries()));
+      console.log("ConceptualVivaSession start payload:", payload);
       
-      const response = await ConceptualVivaService.startConceptualVivaSession(formData);
+      const response = await ConceptualVivaService.startConceptualVivaSession(payload);
       console.log("ConceptualVivaSession initialization response:", response);
 
       if (response) {
@@ -350,23 +357,32 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
 
     setIsSubmitting(true);
     try {
-      // Create FormData with required parameters: question_no, audio_file, time_taken
+      const startTimeStr = questionStartTimeRef.current;
+      const endTimeStr = new Date().toISOString();
+
+      // Create FormData with required parameters: question_no, audio_file, time_taken, start_time, end_time
       const formData = new FormData();
-      formData.append('question_no', String(Math.floor(Number(currentQuestion?.question_no || 0))));
-      formData.append('user_id', String(Math.floor(Number(initialParams?.user_id || localStorage.getItem('user_id')))));
-      formData.append('session_id', String(Math.floor(Number(sessionId))));
+      formData.append('module_type',"TAM");
+      formData.append('question_id', Math.floor(Number(currentQuestion?.question_no || 0)) as any);
+      formData.append('user_id', Math.floor(Number(initialParams?.user_id || localStorage.getItem('user_id'))) as any);
+      formData.append('session_id', Math.floor(Number(sessionId)) as any);
       if (blobToSubmit) {
         formData.append('audio_file', blobToSubmit, `viva_${sessionId}_q${currentQuestion?.question_no}.wav`);
       } else {
         formData.append('audio_file', 'null');
       }
       formData.append('time_taken', String(timer));
+      formData.append('start_time', startTimeStr || '');
+      formData.append('end_time', endTimeStr);
       
       console.log("Submitting Payload:", {
-        question_no: Math.floor(Number(currentQuestion?.question_no || 0)),
+        module_type:"TAM",
+        question_id: Math.floor(Number(currentQuestion?.question_no || 0)),
         user_id: Math.floor(Number(initialParams?.user_id || localStorage.getItem('user_id'))),
         session_id: Math.floor(Number(sessionId)),
         time_taken: String(timer),
+        start_time: startTimeStr,
+        end_time: endTimeStr,
         audio_file: blobToSubmit ? `viva_${sessionId}_q${currentQuestion?.question_no}.wav` : null
       });
       
@@ -386,7 +402,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
           // Small delay for the loader/message then finish
           setTimeout(async () => {
              try {
-                await ConceptualVivaService.endConceptualViva({ session_id: sessionId });
+                await ConceptualVivaService.endConceptualViva({ session_id: sessionId, module_type: "TAM" });
                 onFinish(sessionId);
              } catch (error) {
                 console.error("Error ending viva:", error);
@@ -414,7 +430,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
              });
              
              try {
-                await ConceptualVivaService.endConceptualViva({ session_id: sessionId });
+                await ConceptualVivaService.endConceptualViva({ session_id: sessionId, module_type: "TAM" });
              } catch (error) {
                 console.error("Error ending viva after null question:", error);
              }
@@ -452,7 +468,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
       stopSpeech();
       setIsFinishing(true);
       try {
-        await ConceptualVivaService.endConceptualViva({ session_id: sessionId });
+        await ConceptualVivaService.endConceptualViva({ session_id: sessionId, module_type: "TAM" });
         await exitFullscreen();
         onFinish(sessionId);
       } catch (error) {

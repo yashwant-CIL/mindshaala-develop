@@ -53,7 +53,7 @@ interface VivaResultDetail {
 }
 
 export default function VivaResult() {
-  const { } = useCourse(); // Removed user since it might not exist on context
+  const { subscriptionId } = useCourse();
   const [view, setView] = useState<'list' | 'detail'>('list');
   const [history, setHistory] = useState<VivaHistoryItem[]>([]);
   const [selectedResult, setSelectedResult] = useState<VivaResultDetail | null>(null);
@@ -63,17 +63,19 @@ export default function VivaResult() {
   // Fetch History on Mount
   useEffect(() => {
     fetchHistory();
-  }, []);
+  }, [subscriptionId]);
 
   const fetchHistory = async () => {
     setLoading(true);
     const userId = localStorage.getItem('user_id') || Cookies.get('user_id'); 
+    const subId = subscriptionId || localStorage.getItem('subscription_id') || Cookies.get('subscription_id');
     try {
-      // Use actual user ID when available
-      const data = await VivaService.getVivaHistory(userId);
+      // Use actual user ID and subscription ID when available
+      const data = await VivaService.getVivaHistory(userId, subId);
       if (data) {
         console.log("Viva History:", data);
-        setHistory(data);
+        const historyList = data?.assessments || data?.user_sessions || data?.sessions || data?.data?.assessments || (Array.isArray(data) ? data : (data?.data || []));
+        setHistory(historyList);
       }
     } catch (error) {
       console.error("Failed to fetch history", error);
@@ -84,8 +86,9 @@ export default function VivaResult() {
 
   const handleViewResult = async (sessionId: string) => {
     setLoading(true);
+    const userId = localStorage.getItem('user_id') || Cookies.get('user_id');
     try {
-      const data = await VivaService.getVivaResult(sessionId);
+      const data = await VivaService.getVivaResult(sessionId, userId);
       if (data) {
         console.log("Viva Result Detail:", data);
         
@@ -126,12 +129,25 @@ export default function VivaResult() {
     setSelectedResult(null);
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
     const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
     return `${day}-${month}-${year}`;
+  };
+
+  const formatStartTime = (dateString?: string) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   const getScoreColor = (percentage: number) => {
@@ -190,44 +206,56 @@ export default function VivaResult() {
 
         {/* Grid List */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredHistory.map((item) => (
-            <div 
-              key={item.session_id}
-              className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-blue-200 transition-all duration-300 group cursor-pointer"
-              onClick={() => handleViewResult(item.session_id)}
-            >
-              <div className="p-6 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
-                    <Award className="w-6 h-6" />
-                  </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getScoreColor(item.percentage)}`}>
-                    {item.percentage}% 
-                  </span>
-                </div>
+          {filteredHistory.map((item: any) => {
+            const dateStr = item.started_at || item.start_time || item.created_at || item.date;
+            const vivaType = item.viva_type || item.assessment_type || item.viva_type_name || item.module_type;
+            const formattedDate = formatDate(dateStr);
+            const formattedTime = formatStartTime(dateStr);
 
-                <div>
-                  <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
-                    {item.assessment_name}
-                  </h3>
-                  <div className="flex items-center gap-2 text-slate-500 text-sm mt-2">
-                    <Calendar className="w-4 h-4" />
-                    {formatDate(item.started_at)}
+            return (
+              <div 
+                key={item.session_id || item.id || Math.random()}
+                className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-blue-200 transition-all duration-300 group cursor-pointer"
+                onClick={() => handleViewResult(item.session_id || item.id)}
+              >
+                <div className="p-6 space-y-4">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 shrink-0">
+                      <Award className="w-6 h-6" />
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {vivaType && (
+                        <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 uppercase tracking-wider">
+                          {vivaType}
+                        </span>
+                      )}
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getScoreColor(item.percentage)}`}>
+                        {item.percentage}% 
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-bold text-lg text-slate-900 group-hover:text-blue-600 transition-colors">
+                      {item.assessment_name || item.exam_name || "Viva Assessment"}
+                    </h3>
+                    <div className="flex items-center gap-4 text-slate-500 text-sm mt-2 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        <span>{formattedDate}</span>
+                      </div>
+                      {formattedTime && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4 text-slate-400" />
+                          <span>{formattedTime}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {/* <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                   <div className="flex flex-col">
-                      <span className="text-xs text-slate-400 uppercase font-semibold">Marks</span>
-                      <span className="font-bold text-slate-700">{item.total_score} <span className="text-slate-400">/ {item.total_marks}</span></span>
-                   </div>
-                   <button className="text-blue-600 text-sm font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                      View Details <ChevronRight className="w-4 h-4" />
-                   </button>
-                </div> */}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );

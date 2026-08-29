@@ -477,6 +477,7 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
     setLoading(true);
     try {
       const payload: any = {
+        module_type: 'VIVA',
         user_id: localStorage.getItem('user_id'),
         course_id: courseId,
         subject_id: Number(selectedSubject) || 0,
@@ -628,24 +629,31 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
       const formData = new FormData();
       const sessionId = vivaData?.session?.session_id;
 
-      if (sessionId) formData.append('session_id', sessionId);
-      formData.append('question_id', qId);
-      formData.append('start_time', String(startTimeValue));
-      formData.append('end_time', String(endTime));
-      formData.append('total_time_taken', String(totalTimeTaken));
-
+      formData.append('module_type', 'VIVA');
+      if (sessionId) formData.append('session_id', Math.floor(Number(sessionId)) as any);
+      formData.append('question_id', Math.floor(Number(qId)) as any);
+      
       const blobToSubmit = autoBlob || audioBlob;
       if (blobToSubmit) {
         // Ensure .wav extension is used as requested
         formData.append('audio_file', blobToSubmit, `question_${currentQuestionIndex}.wav`);
-      } else if (isEndSession) {
-        // If skipping/ending without audio, maybe send a flag or just empty file if backend requires it?
-        // For now assuming backend handles missing audio as "skipped" or "no answer"
-        // Using a dummy empty blob if backend strictly requires a file, but let's try without first or append empty if needed.
-        // formData.append('audio_file', new Blob([], { type: 'audio/wav' }), 'skipped.wav');
+      } else {
+        formData.append('audio_file', 'null');
       }
 
-      console.log("Submitting Answer...", { qId, sessionId, hasAudio: !!audioBlob });
+      formData.append('start_time', String(startTimeValue));
+      formData.append('end_time', String(endTime));
+      formData.append('total_time_taken', String(totalTimeTaken));
+
+      console.log("Submitting Answer...", {
+        module_type: 'VIVA',
+        session_id: Math.floor(Number(sessionId)),
+        question_id: Math.floor(Number(qId)),
+        start_time: String(startTimeValue),
+        end_time: String(endTime),
+        total_time_taken: String(totalTimeTaken),
+        hasAudio: !!blobToSubmit
+      });
 
       const response = await VivaService.submitAnswer(formData);
 
@@ -707,7 +715,7 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
       }
       const sessionId = vivaData?.session?.session_id;
       if (sessionId) {
-        await VivaService.endViva(sessionId);
+        await VivaService.endViva(sessionId, 'VIVA');
       }
       toast.success("Session Completed Successfully!");
       // Reset State completely

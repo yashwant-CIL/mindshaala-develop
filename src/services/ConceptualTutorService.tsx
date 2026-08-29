@@ -69,7 +69,7 @@ export const ConceptualVivaService = {
         }
     },
 
-    endConceptualViva: async (payload: { session_id: string | number }) => {
+    endConceptualViva: async (payload: { session_id: string | number; module_type?: string }) => {
         console.log("Conceptual Viva End Payload", payload);
         try {
             const response = await axiosVoiceClient.post(API_ENDPOINT.CONCEPTUAL_VIVA.END_CONCEPTUAL_VIVA, payload, {
@@ -125,7 +125,7 @@ export const ConceptualVivaService = {
             console.log("Conceptual Viva Session Start Payload:", payload);
         }
         try {
-            const response = await axiosVoiceClient.post(API_ENDPOINT.CONCEPTUAL_VIVA.START_CONCEPTUAL_VIVA_SESSION, payload);
+            const response = await axiosVoiceClient.post(API_ENDPOINT.CONCEPTUAL_VIVA.START_CONCEPTUAL_VIVA, payload);
             console.log("Conceptual Viva Session Started", response.data);
             return response.data;
         } catch (error) {

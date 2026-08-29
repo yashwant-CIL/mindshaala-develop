@@ -71,11 +71,8 @@ export default function GKExamRunner({
   // Candidate Info
   const candidateName = Cookies.get('username') || localStorage.getItem('username') || 'Student';
 
-  console.log("GKExamRunner Props:", { category, subcategory, initialQuestions, assessmentId, totalMarks, totalTimeSeconds });
-
   // Load questions
   const [questions, setQuestions] = useState<Question[]>([]);
-  console.log("GKExamRunner Questions State:", questions);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, UserAnswer>>({});
   const [examSubmitted, setExamSubmitted] = useState(false);
@@ -86,6 +83,7 @@ export default function GKExamRunner({
   const [timeRemaining, setTimeRemaining] = useState(totalTimeSeconds);
   const [timeSpent, setTimeSpent] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const prevQuestionsRef = useRef<Question[] | undefined>(undefined);
   
   // Question tracking timer for speed analysis
   const questionStartTimes = useRef<Record<string, number>>({});
@@ -97,36 +95,41 @@ export default function GKExamRunner({
   const [warningReason, setWarningReason] = useState('');
   const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(new Set([0]));
 
-  // Setup dynamic question bank or backend questions
+  const handleSubmitRef = useRef<(force?: boolean) => void>(() => {});
+
+  // Setup dynamic question bank or backend questions (runs only when initialQuestions actually change)
   useEffect(() => {
-    const qList = (initialQuestions && initialQuestions.length > 0)
-      ? initialQuestions
-      : [];
-    setQuestions(qList);
+    if (initialQuestions && initialQuestions.length > 0 && prevQuestionsRef.current !== initialQuestions) {
+      prevQuestionsRef.current = initialQuestions;
+      setQuestions(initialQuestions);
+      console.log("GKExamRunner Questions Initialized:", initialQuestions.length);
 
-    const initialAnswers: Record<string, UserAnswer> = {};
-    qList.forEach(q => {
-      initialAnswers[q.id] = {
-        questionId: q.id,
-        selectedOption: null,
-        isCorrect: false,
-        timeTaken: 0,
-        markedForReview: false
-      };
-    });
-    setAnswers(initialAnswers);
-    
-    if (qList.length > 0) {
-      questionStartTimes.current = { [qList[0].id]: Date.now() };
+      const initialAnswers: Record<string, UserAnswer> = {};
+      initialQuestions.forEach(q => {
+        initialAnswers[q.id] = {
+          questionId: q.id,
+          selectedOption: null,
+          isCorrect: false,
+          timeTaken: 0,
+          markedForReview: false
+        };
+      });
+      setAnswers(initialAnswers);
+      
+      questionStartTimes.current = { [initialQuestions[0].id]: Date.now() };
+      setTimeRemaining(totalTimeSeconds);
     }
+  }, [initialQuestions, totalTimeSeconds]);
 
-    setTimeRemaining(totalTimeSeconds);
+  // Separate 1-second timer effect so timer ticks do NOT re-initialize questions or wipe answers
+  useEffect(() => {
+    if (examSubmitted) return;
 
     timerRef.current = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current!);
-          handleSubmit(true);
+          if (handleSubmitRef.current) handleSubmitRef.current(true);
           return 0;
         }
         return prev - 1;
@@ -137,7 +140,7 @@ export default function GKExamRunner({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [category, subcategory, initialQuestions, totalTimeSeconds]);
+  }, [examSubmitted]);
 
   // Keep track of visited questions
   useEffect(() => {
@@ -391,7 +394,7 @@ export default function GKExamRunner({
     }
   };
 
-  const handleSubmit = (force = false) => {
+  const handleSubmit = async (force = false) => {
     if (examSubmitted) return;
     
     const currentQ = questions[currentIdx];
@@ -497,29 +500,43 @@ export default function GKExamRunner({
     }
 
     if (assessmentId) {
-      // Format answers as requested: { answers: [ { gk_question_id, user_answer, time_taken_seconds } ] }
-      const answersPayload = {
-        answers: questions.map(q => {
+      const submitPayload = {
+        module_type: "GK",
+        session_id: Math.floor(Number(assessmentId)),
+        gk_answers: questions.map(q => {
           const ans = answers[q.id];
           const selectedOptionIdx = ans?.selectedOption ?? null;
           const userLetter = selectedOptionIdx !== null ? String.fromCharCode(65 + selectedOptionIdx) : "";
           
           return {
-            gk_question_id: Number(q.id) || 0,
+            gk_question_id: Math.floor(Number(q.id)) || 0,
             user_answer: userLetter,
             time_taken_seconds: ans?.timeTaken || 0
           };
         })
       };
 
-      GKService.endGKAssessment(assessmentId, answersPayload).catch(err => {
+      try {
+        await GKService.endGKAssessment(submitPayload);
+        toast.success("Assessment submitted successfully!");
+      } catch (err: any) {
         console.error("Failed to end GK assessment on server:", err);
-      });
+        toast.error(err?.response?.data?.message || err?.message || "Failed to submit assessment. Please try again.");
+        return; // Stop submission and stay on current exam screen
+      }
+    }
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(err => console.error("Error exiting fullscreen:", err));
     }
 
     setExamSubmitted(true);
     setShowSubmitModal(false);
   };
+
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  });
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);

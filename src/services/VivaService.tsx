@@ -1,8 +1,8 @@
 
-import axiosClient from '../core/api/AxiosClient';
+import axiosClient, { axiosMindShaalaClient } from '../core/api/AxiosClient';
 import { API_ENDPOINT } from '../core/api/ApiEndpoint';
-import axios from 'axios';
-import toast from 'react-hot-toast';
+// import axios from 'axios';
+// import toast from 'react-hot-toast';
 
 export const VivaService = {
 
@@ -46,8 +46,8 @@ export const VivaService = {
             // Using generic endpoint as per ApiEndpoint definition
             // Note: ApiEndpoint.VIVA.START_VIVA should be defined as '/api/v1/cil/viva/start' or similar relative path
             // The AxiosClient base URL will handle the domain.
-            // const response = await axiosClient.post(API_ENDPOINT.VIVA.START_VIVA, payload);
-            const response  = await axios.post("http://187.127.141.24:8001/api/v1/viva/start-viva", payload);
+            const response = await axiosMindShaalaClient.post(API_ENDPOINT.VIVA.START_VIVA, payload);
+            // const response  = await axios.post("http://187.127.141.24:8001/api/v1/viva/start-viva", payload);
             return response;
         } catch (error:any) {
             console.error("Error starting Viva session:", error);
@@ -65,11 +65,12 @@ export const VivaService = {
         console.log("Viva's Form Data:", Array.from(formData.entries()));
         try {
             // Using hardcoded URL as requested/planned for consistency
-            const response = await axios.post("http://187.127.141.24:8001/api/v1/viva/submit_answer", formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            const response = await axiosMindShaalaClient.post(API_ENDPOINT.VIVA.SUBMIT_ANSWER,formData,{headers:{'Content-Type': 'multipart/form-data'}})
+            // const response = await axios.post("http://187.127.141.24:8001/api/v1/viva/submit_answer", formData, {
+            //     headers: {
+            //         'Content-Type': 'multipart/form-data'
+            //     }
+            // });
             console.log("Viva's Submit Answer Response:", response.data);
             return response;
         } catch (error) {
@@ -84,11 +85,14 @@ export const VivaService = {
      * @param {Object} payload { session_id }
      * @returns 
      */
-    endViva: async (session_id: any) => {
-        console.log("Viva's End Payload", session_id);
+    endViva: async (session_id: any, module_type: string = 'VIVA') => {
+        console.log("Viva's End Payload", { module_type: module_type || 'VIVA', session_id });
         try {
-            // Using hardcoded URL as requested/planned for consistency
-            const response = await axios.post(`http://187.127.141.24:8001/api/v1/viva/end?session_id=${session_id}`);
+            const formattedSessionId = Math.floor(Number(session_id));
+            const response = await axiosMindShaalaClient.post(API_ENDPOINT.VIVA.END_VIVA, {
+                module_type: module_type || 'VIVA',
+                session_id: formattedSessionId
+            });
             return response;
         } catch (error) {
             console.error("Error ending Viva session:", error);
@@ -101,12 +105,13 @@ export const VivaService = {
      * @param {string|number} userId 
      * @returns 
      */
-    getVivaHistory: async (userId: string | number| undefined) => {
+    getVivaHistory: async (userId: string | number| undefined,subscription_id: string | number | undefined) => {
         console.log("Viva's User ID", userId);
         try {
             // Placeholder endpoint - replace with actual when available
-            const response = await axiosClient.get(`http://187.127.141.24:8001/api/v1/viva/viva-results?user_id=${userId}`);
             // const response = await axiosClient.get(`http://187.127.141.24:8001/api/v1/viva/viva-results?user_id=${userId}`);
+            // const response = await axiosClient.get(`http://187.127.141.24:8001/api/v1/viva/viva-results?user_id=${userId}`);
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.VIVA.GET_VIVA_HISTORY(userId, subscription_id));
             console.log("Viva's History Response:", response.data);
             return response.data;
             
@@ -151,11 +156,12 @@ export const VivaService = {
      * @param {string} sessionId 
      * @returns 
      */
-    getVivaResult: async (sessionId: string) => {
+    getVivaResult: async (sessionId: string,user_id: string | number | undefined) => {
         console.log("Viva's Session ID", sessionId);
         try {
             // Placeholder endpoint - replace with actual when available
-            const response = await axiosClient.get(`http://187.127.141.24:8001/api/v1/viva/result?session_id=${sessionId}`);
+            // const response = await axiosClient.get(`http://187.127.141.24:8001/api/v1/viva/result?session_id=${sessionId}`);
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.VIVA.GET_VIVA_RESULT(sessionId, user_id));
             return response.data;
 
              // Mock Data for UI Development
@@ -210,7 +216,8 @@ export const VivaService = {
     /**Dashboard Service */
     getVivaDashboardCards : async (userId: string | number, subscriptionId: number | string) => {
         try{
-            const response = await axiosClient.get(`http://187.127.141.24:8001${API_ENDPOINT.VIVA.VIVA_DASHBOARD_CARDS(userId,subscriptionId)}`);
+            // const response = await axiosClient.get(`http://187.127.141.24:8001${API_ENDPOINT.VIVA.VIVA_DASHBOARD_CARDS(userId,subscriptionId)}`);
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.VIVA.VIVA_DASHBOARD_CARDS(userId,subscriptionId));
             console.log("Viva Cards", response.data);
             return response.data
 
@@ -220,9 +227,11 @@ export const VivaService = {
         }
     },
 
+    //WEAK_AREAS (NEW MINDHSAALA APIS)
     getVivaDashboardSubjectwisePerformance: async (userId: string | number, subscriptionId: string | number) => {
         try{
-            const response = await axiosClient.get(`http://187.127.141.24:8001${API_ENDPOINT.VIVA.VIVA_DASHBOARD_SUBJECTWISE_PERFORMANCE(userId,subscriptionId)}`);
+            // const response = await axiosClient.get(`http://187.127.141.24:8001${API_ENDPOINT.VIVA.VIVA_DASHBOARD_SUBJECTWISE_PERFORMANCE(userId,subscriptionId)}`);
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.VIVA.VIVA_DASHBOARD_SUBJECTWISE_PERFORMANCE(userId,subscriptionId));
             console.log("Subjectwise Performance", response.data);
             return response.data;
         }catch(error){

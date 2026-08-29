@@ -237,9 +237,10 @@ export default function GKExams({ onStartExam }: GKExamsProps) {
     try {
       setSubmitting(true);
       const payload = {
+        module_type: "GK",
         user_id: userId,
-        assessment_type: assessmentType,
-        creation_mode: creationMode,
+        gk_assessment_type: assessmentType,
+        gk_creation_mode: creationMode,
         category_ids: finalCategoryIds.map(id => Number(id))
       };
       

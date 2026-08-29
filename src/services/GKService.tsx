@@ -83,12 +83,13 @@ export const GKService = {
         }
     },
 
-    endGKAssessment: async (user_ass_id: number | string | undefined, payload: any) => {
-        console.log("GK end assessment payload ", payload);
+    endGKAssessment: async (payloadOrAssId: any, payloadObj?: any) => {
         try {
+            const body = payloadObj ? payloadObj : payloadOrAssId;
+            console.log("GK end assessment payload ", body);
             const response = await axiosMindShaalaClient.post(
-                `${API_ENDPOINT.GENERAL_KNOWLEDGE.END_GK_ASSESSMENT}?gk_user_ass_id=${user_ass_id}`, 
-                payload
+                API_ENDPOINT.GENERAL_KNOWLEDGE.END_GK_ASSESSMENT, 
+                body
             );
             console.log("GK Assessment Ended", response.data);
             return response.data;
@@ -115,11 +116,12 @@ export const GKService = {
 
     /**
      * Get Result of a GK Assessment
+     * @param user_id
      * @param gk_user_ass_id 
      */
-    getResultGKAssessment: async (gk_user_ass_id: number | string | undefined) => {
+    getResultGKAssessment: async (user_id: number | string | undefined , gk_user_ass_id: number | string | undefined) => {
         try {
-            const response = await axiosMindShaalaClient.get(API_ENDPOINT.GENERAL_KNOWLEDGE.GET_RESULT_GK_ASSESSMENT(gk_user_ass_id));
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.GENERAL_KNOWLEDGE.GET_RESULT_GK_ASSESSMENT(user_id, gk_user_ass_id));
             console.log("Result of GK Assessment", response.data);
             return response.data;
         } catch (error) {

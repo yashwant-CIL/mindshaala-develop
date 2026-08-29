@@ -70,53 +70,113 @@ export const API_ENDPOINT = {
 
 
     VIVA: {
-        VIVA_DASHBOARD_CARDS: (user_id: string | number,subscription_id: number | string) => `/api/v1/viva/performance-indicators?user_id=${user_id}&subscription_id=${subscription_id}`,
-        VIVA_DASHBOARD_SUBJECTWISE_PERFORMANCE: (user_id: string | number,subscription_id: number | string) => `/api/v1/viva/subject-wise-performance-indicators?user_id=${user_id}&subscription_id=${subscription_id}`, 
+        // VIVA_DASHBOARD_CARDS: (user_id: string | number,subscription_id: number | string) => `/api/v1/viva/performance-indicators?user_id=${user_id}&subscription_id=${subscription_id}`,
+        // VIVA_DASHBOARD_SUBJECTWISE_PERFORMANCE: (user_id: string | number,subscription_id: number | string) => `/api/v1/viva/subject-wise-performance-indicators?user_id=${user_id}&subscription_id=${subscription_id}`, 
+        // GET_ALL_SUBJECTS: (subscription_id: number | string) => `/api/v1/cil/subscription_subject/get/all/by?subscription_id=${subscription_id}`,
+        // GET_ALL_CHAPTERS: (subject_id: number | string) => `/api/v1/cil/chapter/get/all/by/subject_id?subject_id=${subject_id}`,
+        // START_VIVA: '/api/v1/viva/start-viva',
+        // SUBMIT_ANSWER: 'api/v1/viva/submit-answer',
+        // END_VIVA: 'api/v1/viva/end',
+       
+       //NEW MINDSHAALA APIS
+        VIVA_DASHBOARD_CARDS: (user_id: string | number,subscription_id: number | string) => `/api/v3/mindshaala/dashboard/cards?module_type=VIVA&user_id=${user_id}&subscription_id=${subscription_id}`,
+        VIVA_DASHBOARD_SUBJECTWISE_PERFORMANCE: (user_id: string | number,subscription_id: number | string) => `/api/v3/mindshaala/dashboard/weak-areas?module_type=VIVA&user_id=${user_id}&subscription_id=${subscription_id}`, 
+        
         GET_ALL_SUBJECTS: (subscription_id: number | string) => `/api/v1/cil/subscription_subject/get/all/by?subscription_id=${subscription_id}`,
         GET_ALL_CHAPTERS: (subject_id: number | string) => `/api/v1/cil/chapter/get/all/by/subject_id?subject_id=${subject_id}`,
-        START_VIVA: '/api/v1/viva/start-viva',
-        SUBMIT_ANSWER: 'api/v1/viva/submit-answer',
-        END_VIVA: 'api/v1/viva/end',
+       
+        START_VIVA: '/api/v3/mindshaala/start-assessment',
+        SUBMIT_ANSWER: 'api/v3/mindshaala/submit-answer',
+        END_VIVA: 'api/v3/mindshaala/end-assessment',
+
+        GET_VIVA_HISTORY: (user_id: number | string | undefined, subscription_id: string | number | undefined) => `/api/v3/mindshaala/user-sessions?module_type=VIVA&user_id=${user_id}&subscription_id=${subscription_id}`,
+        GET_VIVA_RESULT:(session_id: number | string, user_id: number | string | undefined) => `/api/v3/mindshaala/session?module_type=VIVA&session_id=${session_id}&user_id=${user_id}`,
     },
 
     CONCEPTUAL_VIVA: {
-        CONCEPTUAL_DASHBOARD_CARDS: (user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/cards?user_id=${user_id}&subscription_id=${subscription_id}`,
-        CONCEPTUAL_DASHBOARD_WEAK_CHAPTERS:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/weak-chapters?user_id=${user_id}&subscription_id=${subscription_id}`,
-        CONCEPTUAL_DASHBOARD_WEAK_TOPICS:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/weak-topics?user_id=${user_id}&subscription_id=${subscription_id}`,
-        CONCEPTUAL_DASHBOARD_SUBJECT_RADAR:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/subject-radar?user_id=${user_id}&subscription_id=${subscription_id}`,
+        //OLD APIS
+
+        // CONCEPTUAL_DASHBOARD_CARDS: (user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/cards?user_id=${user_id}&subscription_id=${subscription_id}`,
+        // CONCEPTUAL_DASHBOARD_WEAK_CHAPTERS:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/weak-chapters?user_id=${user_id}&subscription_id=${subscription_id}`,
+        // CONCEPTUAL_DASHBOARD_WEAK_TOPICS:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/weak-topics?user_id=${user_id}&subscription_id=${subscription_id}`,
+        // CONCEPTUAL_DASHBOARD_SUBJECT_RADAR:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/subject-radar?user_id=${user_id}&subscription_id=${subscription_id}`,
+        // GET_ALL_SUBJECTS: (subscription_id: number | string) => `/api/v1/cil/subscription_subject/get/all/by?subscription_id=${subscription_id}`,
+        // GET_ALL_CHAPTERS: (subject_id: number | string) => `/api/v1/cil/chapter/get/all/by/subject_id?subject_id=${subject_id}`,
+        // GET_ALL_TOPICS: (chapter_id: number | string) => `/api/v1/cil/topics/get/by/chapter_id?chapter_id=${chapter_id}`,
+        // START_CONCEPTUAL_VIVA: '/api/v2/topic-assessment/start',
+        // SUBMIT_CONCEPTUAL_ANSWER: 'api/v2/topic-assessment/submit-answer',
+        // END_CONCEPTUAL_VIVA: 'api/v2/topic-assessment/end',
+        // GET_CONCEPTUAL_VIVA_HISTORY: (user_id: number | string | undefined, subscription_id: string | number | undefined) => `/api/v2/topic-assessment/user-sessions?user_id=${user_id}&subscription_id=${subscription_id}`,
+        // GET_CONCEPTUAL_VIVA_RESULT: (session_id: number | string, user_id: number | string | undefined) => `/api/v2/topic-assessment/report?session_id=${session_id}&user_id=${user_id}`,
+        // GET_CONCEPTUAL_VIVA_SOLUTION: (userId: number | string | undefined) => `/api/v2/topic-assessment/user-question-history?user_id=${userId}`,
+        // START_CONCEPTUAL_VIVA_SESSION: '/api/v2/topic-assessment/start-viva-session',
+
+        // NEW MINDSHAALA APIS
+        CONCEPTUAL_DASHBOARD_CARDS: (user_id: number | string,subscription_id: number | string) => `/api/v3/mindshaala/dashboard/cards?module_type=TAM&user_id=${user_id}&subscription_id=${subscription_id}`,
+        CONCEPTUAL_DASHBOARD_WEAK_CHAPTERS:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/weak-chapters?module_type=TAM&user_id=${user_id}&subscription_id=${subscription_id}`,
+        CONCEPTUAL_DASHBOARD_WEAK_TOPICS:(user_id: number | string,subscription_id: number | string) => `/api/v2/topic-assessment/dashboard/weak-topics?module_type=TAM&user_id=${user_id}&subscription_id=${subscription_id}`,
+        CONCEPTUAL_DASHBOARD_SUBJECT_RADAR:(user_id: number | string,subscription_id: number | string) => `/api/v3/mindshaala/dashboard/radar?module_type=TAM&user_id=${user_id}&subscription_id=${subscription_id}`,
+        CONCEPTUAL_DASHBOARD_WEAK_AREAS: (user_id: number | string, subscription_id: number | string) => `/api/v3/mindshaala/dashboard/weak-areas?module_type=TAM&user_id=${user_id}&subscription_id=${subscription_id}`,
+        
         GET_ALL_SUBJECTS: (subscription_id: number | string) => `/api/v1/cil/subscription_subject/get/all/by?subscription_id=${subscription_id}`,
         GET_ALL_CHAPTERS: (subject_id: number | string) => `/api/v1/cil/chapter/get/all/by/subject_id?subject_id=${subject_id}`,
         GET_ALL_TOPICS: (chapter_id: number | string) => `/api/v1/cil/topics/get/by/chapter_id?chapter_id=${chapter_id}`,
-        START_CONCEPTUAL_VIVA: '/api/v2/topic-assessment/start',
-        SUBMIT_CONCEPTUAL_ANSWER: 'api/v2/topic-assessment/submit-answer',
-        END_CONCEPTUAL_VIVA: 'api/v2/topic-assessment/end',
-        GET_CONCEPTUAL_VIVA_HISTORY: (user_id: number | string | undefined, subscription_id: string | number | undefined) => `/api/v2/topic-assessment/user-sessions?user_id=${user_id}&subscription_id=${subscription_id}`,
-        GET_CONCEPTUAL_VIVA_RESULT: (session_id: number | string, user_id: number | string | undefined) => `/api/v2/topic-assessment/report?session_id=${session_id}&user_id=${user_id}`,
-        GET_CONCEPTUAL_VIVA_SOLUTION: (userId: number | string | undefined) => `/api/v2/topic-assessment/user-question-history?user_id=${userId}`,
-        START_CONCEPTUAL_VIVA_SESSION: '/api/v2/topic-assessment/start-viva-session',
+        
+        START_CONCEPTUAL_VIVA: '/api/v3/mindshaala/start-assessment',
+        SUBMIT_CONCEPTUAL_ANSWER: 'api/v3/mindshaala/submit-answer',
+        END_CONCEPTUAL_VIVA: 'api/v3/mindshaala/end-assessment',
+
+        GET_CONCEPTUAL_VIVA_HISTORY: (user_id: number | string | undefined, subscription_id: string | number | undefined) => `/api/v3/mindshaala/user-sessions?module_type=TAM&user_id=${user_id}&subscription_id=${subscription_id}`,
+        GET_CONCEPTUAL_VIVA_RESULT: (session_id: number | string, user_id: number | string | undefined) => `/api/v3/mindshaala/session?module_type=TAM&session_id=${session_id}&user_id=${user_id}`,
+        
+        GET_CONCEPTUAL_VIVA_SOLUTION: (userId: number | string | undefined) => `/api/v3/mindshaala/user-question-history?user_id=${userId}`,
+        START_CONCEPTUAL_VIVA_SESSION: '/api/v3/mindshaala/start-viva-session',
+
     },
 
      GENERAL_KNOWLEDGE: {
 
         //GK Dashboard ENDPOINTS
-        GK_DASHBOARD_CARDS: `/api/v1/gk/dashboard/cards`,
-        GK_DASHBOARD_SUBJECTWISE_PERFORMANCE: `/api/v1/gk/dashboard/subject-wise-performance-indicators`,
-        GK_DASHBOARD_WEAK_CHAPTERS: `/api/v1/gk/dashboard/weak-chapters`,
-        GK_DASHBOARD_WEAK_TOPICS: `/api/v1/gk/dashboard/weak-topics`,
-        GK_DASHBOARD_SUBJECT_RADAR: `/api/v1/gk/dashboard/subject-radar`,
+        // GK_DASHBOARD_CARDS: `/api/v3/mindshaala/dashboard/cards`,
+        // GK_DASHBOARD_SUBJECTWISE_PERFORMANCE: `/api/v3/mindshaala/dashboard/subject-wise-performance-indicators`,
+        // GK_DASHBOARD_WEAK_CHAPTERS: `/api/v3/mindshaala/dashboard/weak-chapters`,
+        // GK_DASHBOARD_WEAK_TOPICS: `/api/v3/mindshaala/dashboard/weak-topics`,
+        // GK_DASHBOARD_SUBJECT_RADAR: `/api/v3/mindshaala/dashboard/subject-radar`,
 
+        
+        
         //GK Categories ENDPOINTS
-        GK_CATEGORIES: `/api/gk/categories`,
-
+        // GK_CATEGORIES: `/api/gk/categories`,
+        
         // GK Profile ENDPOINTS
-        FETCH_GK_PROFILE: (user_id: number | string | undefined) => `/api/gk/profiles?user_id=${user_id}`,
-        UPDATE_GK_PROFILE: (user_id: number | string| undefined) => `/api/gk/profiles?user_id=${user_id}`,
-
+        // FETCH_GK_PROFILE: (user_id: number | string | undefined) => `/api/gk/profiles?user_id=${user_id}`,
+        // UPDATE_GK_PROFILE: (user_id: number | string| undefined) => `/api/gk/profiles?user_id=${user_id}`,
+        
         //Assessment ENDPOINTS
-        START_GK_ASSESSMENT: `/api/gk/assessments/start`,
-        END_GK_ASSESSMENT: `/api/gk/assessments/end`,
-        GET_LIST_GK_ASSESSMENT : (user_id: number | string | undefined) => `/api/gk/assessments/user?user_id=${user_id}`,
-        GET_RESULT_GK_ASSESSMENT: (gk_user_ass_id: number | string | undefined) => `/api/gk/assessments/results?gk_user_ass_id=${gk_user_ass_id}`
+        // START_GK_ASSESSMENT: `/api/gk/assessments/start`,
+        // END_GK_ASSESSMENT: `/api/gk/assessments/end`,
+        
+        
+        //NEW MINDSHAALA APIS
+
+        GK_DASHBOARD_CARDS:(user_id: number | string | undefined , module_type : string) => `/api/v3/mindshaala/dashboard/cards?user_id=${user_id}&module_type=${module_type}`,
+        GK_DASHBOARD_SUBJECTWISE_PERFORMANCE: (user_id: number | string | undefined , module_type : string) => `/api/v3/mindshaala/dashboard/subject-wise-performance-indicators?user_id=${user_id}&module_type=${module_type}`,
+        // GK_DASHBOARD_WEAK_CHAPTERS: (user_id: number | string | undefined , module_type : string) => `/api/v3/mindshaala/dashboard/weak-chapters?user_id=${user_id}&module_type=${module_type}`,
+        // GK_DASHBOARD_WEAK_TOPICS: (user_id: number | string | undefined , module_type : string) => `/api/v3/mindshaala/dashboard/weak-topics?user_id=${user_id}&module_type=${module_type}`,
+        GK_DASHBOARD_SUBJECT_RADAR: (user_id: number | string | undefined , module_type : string) => `/api/v3/mindshaala/dashboard/subject-radar?user_id=${user_id}&module_type=${module_type}`,
+        
+         //GK Categories ENDPOINTS
+        GK_CATEGORIES: `/api/v3/mindshaala/categories?module_type=GK`,
+        
+        // GK Profile ENDPOINTS
+        FETCH_GK_PROFILE: (user_id: number | string | undefined) => `/api/v3/mindshaala/profiles?user_id=${user_id}&module_type=GK`,
+        UPDATE_GK_PROFILE: (user_id: number | string| undefined) => `/api/v3/mindshaala/profiles?user_id=${user_id}`,
+        
+        
+        START_GK_ASSESSMENT: `/api/v3/mindshaala/start-assessment`,
+        END_GK_ASSESSMENT: `/api/v3/mindshaala/end-assessment`,
+        GET_LIST_GK_ASSESSMENT : (user_id: number | string | undefined) => `/api/v3/mindshaala/user-sessions?user_id=${user_id}&module_type=GK`,
+        GET_RESULT_GK_ASSESSMENT: (user_id: number | string | undefined , gk_user_ass_id: number | string | undefined) => `/api/v3/mindshaala/session?module_type=GK&user_id=${user_id}&gk_user_ass_id=${gk_user_ass_id}`,
 
     },
 

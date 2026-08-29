@@ -216,10 +216,14 @@ export default function GKProfile() {
     }
 
     const payload = {
+      // user_id: userId,
+      module_type: "GK",
+      gk_profile: {
       area_of_focus: selectedCategories.map(c => ({
         category_id: parseInt(c.id),
         percentage: c.percentage
       }))
+    }
     };
     console.log("payload to update the GK Profie", payload);
     
