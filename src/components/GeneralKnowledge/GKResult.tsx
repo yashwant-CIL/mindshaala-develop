@@ -228,29 +228,29 @@ export default function GKResult() {
     : { badge: 'bg-rose-50 text-rose-700 border-rose-100', circle: 'from-rose-500 to-pink-600 shadow-rose-100' };
 
   return (
-    <div className="flex-1 bg-slate-50 min-h-screen pb-20 select-none" style={{ fontFamily: "'Inter', 'Plus Jakarta Sans', sans-serif" }}>
+    <div className="flex-1 bg-slate-50 min-h-screen pb-12 sm:pb-20 select-none w-full" style={{ fontFamily: "'Inter', 'Plus Jakarta Sans', sans-serif" }}>
       {!selectedExamId ? (
         /* ── LIST VIEW ── */
         <>
           {/* Header */}
-          <div className="bg-white border-b border-slate-200 px-6 md:px-10 py-5 relative overflow-hidden">
+          <div className="bg-white border-b border-slate-200 px-3 sm:px-6 md:px-10 py-4 sm:py-5 relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-50/40 via-white to-blue-50/30 pointer-events-none" />
-            <div className="relative z-10 flex items-center gap-4">
-              <div className="w-13 h-13 w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 shrink-0">
-                <Trophy className="w-6 h-6" />
+            <div className="relative z-10 flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 shrink-0">
+                <Trophy className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">GK Results</h1>
-                <p className="text-slate-500 text-sm font-medium">Review your exam attempts, detailed metrics, and solutions.</p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight leading-tight truncate">GK Results</h1>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium truncate">Review your exam attempts, detailed metrics, and solutions.</p>
               </div>
             </div>
           </div>
 
-          <div className="max-w-7xl mx-auto px-6 md:px-10 mt-8 space-y-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-black text-slate-700 uppercase tracking-widest">Attempted Exams</h2>
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-10 mt-5 sm:mt-8 space-y-4 sm:space-y-5 w-full">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs sm:text-base font-black text-slate-700 uppercase tracking-widest">Attempted Exams</h2>
               {!isLoading && history.length > 0 && (
-                <span className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full text-xs font-black">{history.length} attempts</span>
+                <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full text-[10px] sm:text-xs font-black">{history.length} attempts</span>
               )}
             </div>
 
@@ -267,26 +267,26 @@ export default function GKResult() {
                     <div
                       key={exam.id}
                       onClick={() => handleExamSelect(exam.id)}
-                      className="bg-white p-5 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all duration-300 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm group"
+                      className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-100 hover:border-indigo-200 hover:shadow-md transition-all duration-300 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 shadow-sm group w-full"
                     >
-                      <div className="space-y-1.5 min-w-0">
-                        <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest block">{exam.category}</span>
-                        <h3 className="font-bold text-slate-800 text-base leading-snug group-hover:text-indigo-600 transition-colors truncate">{exam.category}</h3>
-                        <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold">
-                          <Calendar className="w-3.5 h-3.5" />
+                      <div className="space-y-1 sm:space-y-1.5 min-w-0 flex-1">
+                        <span className="text-[9px] sm:text-[10px] font-black text-indigo-600 uppercase tracking-widest block">{exam.category}</span>
+                        <h3 className="font-bold text-slate-800 text-sm sm:text-base leading-snug group-hover:text-indigo-600 transition-colors truncate">{exam.category}</h3>
+                        <div className="flex items-center gap-1.5 text-slate-400 text-[11px] sm:text-xs font-semibold">
+                          <Calendar className="w-3.5 h-3.5 shrink-0" />
                           <span>{exam.date}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-right">
-                          <span className={`inline-block px-4 py-1.5 text-sm font-black rounded-xl border ${style.badge}`}>
+                      <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 w-full sm:w-auto">
+                        <div className="text-left sm:text-right">
+                          <span className={`inline-block px-3 sm:px-4 py-1 sm:py-1.5 text-xs sm:text-sm font-black rounded-xl border ${style.badge}`}>
                             {exam.percentage}% Score
                           </span>
-                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">
+                          <div className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
                             {exam.score} / {exam.totalQuestions} Correct
                           </div>
                         </div>
-                        <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${style.circle} flex items-center justify-center text-white shadow-lg`}>
+                        <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br ${style.circle} flex items-center justify-center text-white shadow-lg shrink-0`}>
                           <TrendingUp className="w-4 h-4" />
                         </div>
                       </div>
@@ -295,10 +295,10 @@ export default function GKResult() {
                 })}
               </div>
             ) : (
-              <div className="text-center py-20 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                <p className="text-slate-600 font-bold text-lg">No exam attempts logged yet</p>
-                <p className="text-slate-400 text-sm mt-1">Take a GK exam to view your scorecard here.</p>
+              <div className="text-center py-16 sm:py-20 bg-white rounded-2xl border border-slate-100 shadow-sm px-4">
+                <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-slate-200 mx-auto mb-3 sm:mb-4" />
+                <p className="text-slate-600 font-bold text-base sm:text-lg">No exam attempts logged yet</p>
+                <p className="text-slate-400 text-xs sm:text-sm mt-1">Take a GK exam to view your scorecard here.</p>
               </div>
             )}
           </div>
@@ -327,26 +327,26 @@ export default function GKResult() {
           };
 
           return (
-            <div className="animate-fadeIn">
+            <div className="animate-fadeIn w-full">
               {/* Detail Header */}
-              <div className="bg-white border-b border-slate-200 px-6 md:px-10 py-5 relative overflow-hidden">
+              <div className="bg-white border-b border-slate-200 px-3 sm:px-6 md:px-10 py-3.5 sm:py-5 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-indigo-50/30 via-white to-blue-50/20 pointer-events-none" />
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <button onClick={handleBackToList} className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center hover:bg-slate-200 transition-colors shadow-sm cursor-pointer shrink-0">
-                      <ArrowLeft className="w-5 h-5" />
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                    <button onClick={handleBackToList} className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center hover:bg-slate-200 transition-colors shadow-sm cursor-pointer shrink-0">
+                      <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
-                    <div>
-                      <h1 className="text-xl font-black text-slate-900 tracking-tight">{exam.category}</h1>
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold mt-1">
-                        <Calendar className="w-3.5 h-3.5" />
+                    <div className="min-w-0">
+                      <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-tight truncate">{exam.category}</h1>
+                      <div className="flex items-center gap-1.5 text-slate-400 text-[11px] sm:text-xs font-semibold mt-0.5 truncate">
+                        <Calendar className="w-3.5 h-3.5 shrink-0" />
                         <span>Attempted on {exam.date}</span>
                       </div>
                     </div>
                   </div>
                   <button
                     onClick={() => setShowSolution(!showSolution)}
-                    className={`shrink-0 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all border cursor-pointer ${
+                    className={`w-full sm:w-auto justify-center shrink-0 px-4 sm:px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all border cursor-pointer ${
                       showSolution ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-indigo-600 text-white border-transparent hover:bg-indigo-700 shadow-md shadow-indigo-100'
                     }`}
                   >
@@ -355,21 +355,21 @@ export default function GKResult() {
                 </div>
               </div>
 
-              <div className="max-w-7xl mx-auto px-6 md:px-10 mt-8 space-y-6">
+              <div className="max-w-7xl mx-auto px-3 sm:px-6 md:px-10 mt-5 sm:mt-8 space-y-4 sm:space-y-6 w-full">
 
                 {/* Score Summary Card */}
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-7 flex flex-col md:flex-row items-center gap-7 justify-between relative overflow-hidden">
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-7 flex flex-col sm:flex-row items-center gap-4 sm:gap-7 justify-between relative overflow-hidden text-center sm:text-left">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/30 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-                  <div className="flex items-center gap-6 z-10">
-                    <div className={`w-24 h-24 rounded-full bg-gradient-to-br ${style.circle} text-white flex flex-col items-center justify-center shadow-xl shrink-0`}>
-                      <span className="text-2xl font-black">{exam.percentage}%</span>
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/80 -mt-1">Accuracy</span>
+                  <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 z-10">
+                    <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br ${style.circle} text-white flex flex-col items-center justify-center shadow-xl shrink-0`}>
+                      <span className="text-xl sm:text-2xl font-black">{exam.percentage}%</span>
+                      <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-white/80 -mt-0.5 sm:-mt-1">Accuracy</span>
                     </div>
                     <div className="space-y-1">
-                      <h3 className="font-black text-slate-800 text-xl">
+                      <h3 className="font-black text-slate-800 text-lg sm:text-xl">
                         {exam.percentage >= 80 ? 'Mastery Achieved! 🎉' : exam.percentage >= 60 ? 'Passing Standard Met!' : 'Focus Required!'}
                       </h3>
-                      <p className="text-slate-500 text-sm font-semibold max-w-sm leading-relaxed">
+                      <p className="text-slate-500 text-xs sm:text-sm font-semibold max-w-sm leading-relaxed">
                         Scored <strong className="text-slate-800">{exam.score} of {exam.totalQuestions}</strong> correct.
                       </p>
                     </div>
@@ -377,63 +377,36 @@ export default function GKResult() {
                 </div>
 
                 {/* KPI Metrics */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   {[
                     { label: 'Correct', value: `${exam.correctCount} / ${exam.totalQuestions}`, icon: CheckCircle2, bg: 'bg-emerald-50', color: 'text-emerald-600', border: 'border-l-emerald-500' },
                     { label: 'Duration', value: `${Math.floor(exam.timeSpent / 60)}m ${exam.timeSpent % 60}s`, icon: Clock, bg: 'bg-amber-50', color: 'text-amber-600', border: 'border-l-amber-500' },
                     { label: 'Avg Pace', value: `${exam.averageTime}s / Q`, icon: Zap, bg: 'bg-purple-50', color: 'text-purple-600', border: 'border-l-purple-500' },
                     { label: 'Max Streak', value: `${exam.streak} Qs`, icon: Activity, bg: 'bg-rose-50', color: 'text-rose-600', border: 'border-l-rose-500' },
                   ].map(({ label, value, icon: Icon, bg, color, border }) => (
-                    <div key={label} className={`bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 border-l-4 ${border}`}>
-                      <div className={`w-10 h-10 rounded-xl ${bg} ${color} flex items-center justify-center shrink-0`}>
-                        <Icon className="w-5 h-5" />
+                    <div key={label} className={`bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-4 border-l-4 ${border}`}>
+                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${bg} ${color} flex items-center justify-center shrink-0`}>
+                        <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
                       <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">{label}</span>
-                        <span className="text-base font-black text-slate-800">{value}</span>
+                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest block">{label}</span>
+                        <span className="text-xs sm:text-base font-black text-slate-800 leading-tight">{value}</span>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                {/* Difficulty breakdown */}
-                {/* <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-                  <div className="flex items-center gap-2 mb-5">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                      <BarChart2 className="w-4 h-4" />
-                    </div>
-                    <span className="font-black text-slate-800 text-sm uppercase tracking-wide">Accuracy by Difficulty</span>
-                  </div>
-                  <div className="space-y-4">
-                    {[
-                      { label: 'Easy', value: exam.accuracyByDifficulty.Easy, color: 'bg-emerald-500' },
-                      { label: 'Medium', value: exam.accuracyByDifficulty.Medium, color: 'bg-amber-400' },
-                      { label: 'Hard', value: exam.accuracyByDifficulty.Hard, color: 'bg-rose-500' },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} className="space-y-1.5">
-                        <div className="flex justify-between text-xs font-bold text-slate-500">
-                          <span>{label} Modules</span>
-                          <span className="text-slate-700">{value}%</span>
-                        </div>
-                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                          <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${value}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div> */}
-
                 {/* Solution Panel */}
                 {showSolution && questions.length > 0 && (
                   <div className="space-y-4 pt-2 animate-fadeIn">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-black text-slate-800 text-base uppercase tracking-widest">Question Explanations</h4>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <h4 className="font-black text-slate-800 text-sm sm:text-base uppercase tracking-widest">Question Explanations</h4>
                       <button
                         onClick={() => { setShowSolution(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-all cursor-pointer border border-slate-200"
+                        className="flex items-center justify-center gap-2 w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-all cursor-pointer border border-slate-200"
                       >
                         <ArrowLeft className="w-4 h-4" />
-                        Back to Summary
+                        <span>Back to Summary</span>
                       </button>
                     </div>
 
@@ -446,19 +419,19 @@ export default function GKResult() {
 
                       return (
                         <div key={q.id} className={`bg-white rounded-2xl border border-slate-100 shadow-sm border-l-4 ${cardBorder} overflow-hidden`}>
-                          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-slate-100">
-                            <div className="flex items-start gap-3 flex-1">
-                              <span className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-700 text-sm shrink-0">{idx + 1}</span>
-                              <div>
+                          <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-slate-100">
+                            <div className="flex items-start gap-2.5 sm:gap-3 flex-1 min-w-0">
+                              <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-700 text-xs sm:text-sm shrink-0 mt-0.5">{idx + 1}</span>
+                              <div className="flex-1 min-w-0">
                                 {q.difficulty && (
-                                  <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border mb-2 ${DIFF_STYLE[q.difficulty] || DIFF_STYLE.Medium}`}>{q.difficulty}</span>
+                                  <span className={`inline-flex px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border mb-2 ${DIFF_STYLE[q.difficulty] || DIFF_STYLE.Medium}`}>{q.difficulty}</span>
                                 )}
-                                <div className="font-bold text-slate-800 text-sm leading-relaxed">
+                                <div className="font-bold text-slate-800 text-xs sm:text-sm leading-relaxed break-words">
                                   <QuestionMathJax content={q.question} />
                                 </div>
                               </div>
                             </div>
-                            <div className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black ${
+                            <div className={`self-start sm:self-auto shrink-0 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-[10px] sm:text-xs font-black ${
                               isSkipped ? 'bg-amber-50 border-amber-200 text-amber-700' : isCorrect ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'
                             }`}>
                               {isSkipped ? <Info className="w-3.5 h-3.5" /> : isCorrect ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
@@ -466,7 +439,7 @@ export default function GKResult() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 px-6 py-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2.5 px-4 sm:px-6 py-3 sm:py-4">
                             {q.options.map((opt, oIdx) => {
                               const isCorrectOpt = oIdx === q.correctAnswer;
                               const isSelectedOpt = oIdx === userSel;
@@ -475,9 +448,9 @@ export default function GKResult() {
                               if (isCorrectOpt) { optStyle = 'border-emerald-300 bg-emerald-50 text-emerald-900 font-semibold ring-1 ring-emerald-200'; badgeStyle = 'bg-emerald-600 text-white'; }
                               else if (isSelectedOpt && !isCorrect) { optStyle = 'border-rose-300 bg-rose-50 text-rose-900 font-semibold ring-1 ring-rose-200'; badgeStyle = 'bg-rose-600 text-white'; }
                               return (
-                                <div key={oIdx} className={`flex items-start gap-3 p-3.5 rounded-xl border text-sm ${optStyle}`}>
-                                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${badgeStyle}`}>{String.fromCharCode(65 + oIdx)}</span>
-                                  <span className="leading-snug flex-1"><QuestionMathJax content={opt} /></span>
+                                <div key={oIdx} className={`flex items-start gap-2.5 sm:gap-3 p-3 sm:p-3.5 rounded-xl border text-xs sm:text-sm transition-colors ${optStyle}`}>
+                                  <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center font-black text-[11px] sm:text-xs shrink-0 ${badgeStyle}`}>{String.fromCharCode(65 + oIdx)}</span>
+                                  <span className="leading-snug flex-1 break-words"><QuestionMathJax content={opt} /></span>
                                   {isCorrectOpt && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
                                   {isSelectedOpt && !isCorrect && <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />}
                                 </div>
@@ -485,9 +458,9 @@ export default function GKResult() {
                             })}
                           </div>
 
-                          <div className="mx-6 mb-5 p-4 rounded-xl bg-blue-50/40 border border-blue-100/60">
-                            <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest block mb-1.5">💡 Explanation</span>
-                            <div className="text-slate-600 text-sm leading-relaxed font-medium">
+                          <div className="mx-4 sm:mx-6 mb-4 sm:mb-5 p-3.5 sm:p-4 rounded-xl bg-blue-50/40 border border-blue-100/60">
+                            <span className="text-[9px] sm:text-[10px] font-black text-blue-700 uppercase tracking-widest block mb-1.5">💡 Explanation</span>
+                            <div className="text-slate-600 text-xs sm:text-sm leading-relaxed font-medium break-words">
                               <QuestionMathJax content={q.explanation} />
                             </div>
                           </div>

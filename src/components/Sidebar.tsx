@@ -215,6 +215,31 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
 
   // Mobile sidebar state
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Scroll detection for Dashboard hamburger background
+  const [isScrolled, setIsScrolled] = useState(false);
+  const isDashboard = currentPage === 'dashboard';
+
+  useEffect(() => {
+    const handleScroll = () => {
+      let scrolled = (window.scrollY || document.documentElement.scrollTop || 0) > 15;
+      if (!scrolled) {
+        const containers = document.querySelectorAll('.overflow-y-auto');
+        containers.forEach((el) => {
+          if (el.scrollTop > 15) {
+            scrolled = true;
+          }
+        });
+      }
+      setIsScrolled(scrolled);
+    };
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+    };
+  }, [currentPage]);
 
   // Close sidebar on mobile when navigating
   const handleMobileNavigate = (pageId: string) => {
@@ -354,6 +379,15 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
 
   const hasNavbar = ['dashboard', 'my-courses', 'courses', 'wishlist', 'cart', 'notifications'].includes(currentPage);
 
+  const isExamSessionPage = [
+    'conceptual-tutor-session',
+    'conceptual-viva-session',
+    'speakalong-session',
+    'ai-tutor-session',
+    'gk-exam-runner',
+    'theorytest'
+  ].includes(currentPage);
+
   // CSS classes for different levels
   const parentMenuClass = (isActive: boolean, isExpanded: boolean) => 
     `w-[90%] mx-auto flex items-center gap-3 px-4 py-2.5 my-0.5 rounded-xl transition-all duration-200 text-[15px] font-semibold ${
@@ -380,19 +414,33 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
 
   return (
     <>
-      {/* Mobile Top Header Strip (Only on pages that do not have a Navbar) */}
-      {!hasNavbar && (
-        <div className="md:hidden fixed top-0 left-0 right-0 h-11 bg-white border-b border-slate-200 z-20" />
+      {/* Mobile Top Header Strip */}
+      {!hasNavbar && !isExamSessionPage && (
+        <div className="md:hidden fixed top-0 left-0 right-0 h-[60px] bg-white border-b border-slate-200 z-20 shadow-sm transition-all duration-200" />
       )}
 
       {/* Mobile Hamburger Button */}
-      <button
-        data-sidebar-mini
-        onClick={() => setIsOpen(true)}
-        className="md:hidden fixed top-0 left-0 z-30 w-16 h-11 flex items-center justify-center bg-transparent border-0 text-black hover:text-black focus:outline-none shadow-none"
-      >
-        <Menu className="w-6 h-6 text-black stroke-black" strokeWidth={2.5} />
-      </button>
+      {!isExamSessionPage && (
+        <button
+          data-sidebar-mini
+          onClick={() => setIsOpen(true)}
+          className="md:hidden fixed top-0 left-0 z-40 w-14 h-[60px] flex items-center justify-center border-0 text-black hover:text-black focus:outline-none transition-all duration-200 bg-transparent shadow-none"
+        >
+          <Menu className="w-6 h-6 text-black stroke-black" strokeWidth={2.5} />
+        </button>
+      )}
+
+      {/* Mobile Right Avatar for non-Navbar pages */}
+      {!hasNavbar && !isExamSessionPage && (
+        <button
+          data-sidebar-avatar
+          onClick={() => onNavigate?.('settings')}
+          className="md:hidden fixed top-2.5 right-3.5 z-40 w-9 h-9 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-md border-2 border-white cursor-pointer active:scale-95 transition-all"
+          title="Profile Settings"
+        >
+          <span>{getInitials(username)}</span>
+        </button>
+      )}
 
       {/* Overlay */}
       {isOpen && (

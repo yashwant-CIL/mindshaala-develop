@@ -51,28 +51,42 @@ export const CourseProvider = ({ children }: { children: ReactNode }) => {
         if (!silent) setIsLoading(true);
         try {
             const data = await CourseService.getAllCourses(userId);
-            setCourses(data || []);
+            const coursesList = data || [];
+            setCourses(coursesList);
             
-            // Auto-select course: try localStorage first, then default to first purchased course
-            if (data && data.length > 0 && !selectedCourse) {
-                const storedCourseId = localStorage.getItem("selectedCourseId");
-                const purchasedCourses = data.filter((c: any) => c.purchase_status === true);
-                
-                let courseToSelect = null;
-                if (storedCourseId) {
-                    courseToSelect = data.find(c => 
-                        String(c.subscription_id) === String(storedCourseId) || 
-                        String(c.id) === String(storedCourseId)
-                    );
-                }
+            if (coursesList.length > 0) {
+                const purchasedCourses = coursesList.filter((c: any) => c.purchase_status === true || c.purchase_status === 'true');
+                const registeredCourses = purchasedCourses.length > 0 ? purchasedCourses : coursesList;
 
-                if (courseToSelect) {
-                    setSelectedCourse(courseToSelect);
-                } else if (purchasedCourses.length > 0) {
-                    setSelectedCourse(purchasedCourses[0]);
+                const storedCourseId = localStorage.getItem("selectedCourseId");
+
+                if (registeredCourses.length === 1) {
+                    const singleCourse = registeredCourses[0];
+                    const courseIdStr = String(singleCourse.subscription_id || singleCourse.id);
+                    setSelectedCourse(singleCourse);
+                    localStorage.setItem("selectedCourseId", courseIdStr);
+                } else {
+                    let courseToSelect = null;
+                    if (storedCourseId) {
+                        courseToSelect = registeredCourses.find((c: any) => 
+                            String(c.subscription_id) === String(storedCourseId) || 
+                            String(c.id) === String(storedCourseId)
+                        );
+                    }
+
+                    if (!courseToSelect) {
+                        courseToSelect = registeredCourses[0];
+                    }
+
+                    if (courseToSelect) {
+                        setSelectedCourse(courseToSelect);
+                        localStorage.setItem("selectedCourseId", String(courseToSelect.subscription_id || courseToSelect.id));
+                    }
                 }
+            } else {
+                setSelectedCourse(null);
             }
-            return data || [];
+            return coursesList;
         } catch (err) {
             console.error("Error fetching courses", err);
             setError("Failed to load courses");
@@ -80,7 +94,7 @@ export const CourseProvider = ({ children }: { children: ReactNode }) => {
         } finally {
             if (!silent) setIsLoading(false);
         }
-    }, [selectedCourse]); // selectedCourse is actually used here to check if we should auto-select
+    }, []); // selectedCourse is actually used here to check if we should auto-select
 
     const selectCourse = useCallback((courseId: string | number) => {
         // Convert input to string for consistent comparison

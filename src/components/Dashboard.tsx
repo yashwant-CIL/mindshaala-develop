@@ -112,11 +112,11 @@ function DashboardContent({ profileData, results, onStartCourse, onOpenTestGen, 
   useEffect(() => {
     const userId = localStorage.getItem('user_id') || Cookies.get("user_id");
     console.log("Dashboard userId check:", userId);
-    // Ensure courses are loaded if not already
-    if (userId && courses.length === 0) {
+    // Refresh courses and dashboard data on mount / coming back to dashboard
+    if (userId) {
         fetchCourses(userId);
     }
-  }, []);
+  }, [fetchCourses]);
 
   // Calculate assessment performance classification
   const getPerformanceClassification = () => {

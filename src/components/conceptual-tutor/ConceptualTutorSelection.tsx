@@ -582,7 +582,7 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
       </div>
 
       {/* Footer Info */}
-      <div className="mt-6 sm:mt-12 flex flex-col md:flex-row items-center justify-between gap-6 p-6 sm:p-8 bg-blue-900 rounded-2xl sm:rounded-3xl text-white shadow-2xl relative overflow-hidden">
+      {/* <div className="mt-6 sm:mt-12 flex flex-col md:flex-row items-center justify-between gap-6 p-6 sm:p-8 bg-blue-900 rounded-2xl sm:rounded-3xl text-white shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
         <div className="relative z-10">
           <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
@@ -602,7 +602,7 @@ export default function ConceptualVivaSelection({ onStartViva }: SelectionProps)
             <div className="text-[10px] uppercase font-bold tracking-widest opacity-60">Interaction</div>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

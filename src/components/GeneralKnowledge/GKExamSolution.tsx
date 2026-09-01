@@ -36,51 +36,51 @@ export default function GKExamSolution({ questions, answers, onBack }: GKExamSol
   const totalIncorrect = questions.length - totalCorrect - totalSkipped;
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20" style={{ fontFamily: "'Inter', 'Plus Jakarta Sans', sans-serif" }}>
+    <div className="min-h-screen bg-slate-50 pb-12 sm:pb-20 w-full" style={{ fontFamily: "'Inter', 'Plus Jakarta Sans', sans-serif" }}>
 
       {/* Page Header */}
-      <div className="bg-white border-b border-slate-200 px-6 md:px-10 py-5 sticky top-0 z-20">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="bg-white/95 backdrop-blur-md border-b border-slate-200 px-3 sm:px-6 md:px-10 py-3.5 sm:py-5 sticky top-0 z-20">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full sm:w-auto">
             {onBack && (
               <button
                 onClick={onBack}
-                className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors cursor-pointer shrink-0"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             )}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                <BookOpen className="w-5 h-5" />
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <BookOpen className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <h1 className="text-lg font-black text-slate-900 tracking-tight leading-none">Solution Review</h1>
-                <p className="text-xs text-slate-500 font-semibold mt-0.5">{questions.length} Questions • Detailed Explanations</p>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight leading-tight truncate">Solution Review</h1>
+                <p className="text-[11px] sm:text-xs text-slate-500 font-semibold mt-0.5 truncate">{questions.length} Questions • Detailed Explanations</p>
               </div>
             </div>
           </div>
 
           {/* Quick stats bar */}
-          <div className="hidden sm:flex items-center gap-3 text-xs font-bold">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700">
-              <CheckCircle className="w-3.5 h-3.5" />
-              {totalCorrect} Correct
+          <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs font-bold flex-wrap pt-1 sm:pt-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700">
+              <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>{totalCorrect} Correct</span>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700">
-              <XCircle className="w-3.5 h-3.5" />
-              {totalIncorrect} Wrong
+            <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-rose-50 border border-rose-100 rounded-xl text-rose-700">
+              <XCircle className="w-3.5 h-3.5 shrink-0" />
+              <span>{totalIncorrect} Wrong</span>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500">
-              <Info className="w-3.5 h-3.5" />
-              {totalSkipped} Skipped
+            <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-500">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              <span>{totalSkipped} Skipped</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Questions */}
-      <div className="max-w-5xl mx-auto px-6 md:px-10 mt-8 space-y-5">
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 md:px-10 mt-5 sm:mt-8 space-y-4 sm:space-y-5 w-full">
         {questions.map((q, idx) => {
           const ans = answers[q.id];
           const selected = ans?.selectedOption ?? null;
@@ -101,31 +101,31 @@ export default function GKExamSolution({ questions, answers, onBack }: GKExamSol
               className={`bg-white rounded-2xl border border-slate-100 shadow-sm border-l-4 ${cardBorder} overflow-hidden`}
             >
               {/* Question Header */}
-              <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-slate-100">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <span className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-700 text-sm shrink-0 mt-0.5">
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-slate-100">
+                <div className="flex items-start gap-2.5 sm:gap-3 flex-1 min-w-0">
+                  <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-slate-700 text-xs sm:text-sm shrink-0 mt-0.5">
                     {idx + 1}
                   </span>
                   <div className="flex-1 min-w-0">
                     {q.difficulty && (
-                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border mb-2 ${DIFF_STYLE[q.difficulty] || DIFF_STYLE.Medium}`}>
+                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider border mb-2 ${DIFF_STYLE[q.difficulty] || DIFF_STYLE.Medium}`}>
                         {q.difficulty}
                       </span>
                     )}
-                    <div className="font-bold text-slate-800 text-sm leading-relaxed">
+                    <div className="font-bold text-slate-800 text-xs sm:text-sm leading-relaxed break-words">
                       <QuestionMathJax content={q.question} />
                     </div>
                   </div>
                 </div>
 
-                <div className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black ${statusBadge.bg}`}>
+                <div className={`self-start sm:self-auto shrink-0 flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border text-[10px] sm:text-xs font-black ${statusBadge.bg}`}>
                   <statusBadge.icon className="w-3.5 h-3.5" />
                   {statusBadge.label}
                 </div>
               </div>
 
               {/* Options Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 px-6 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-2.5 px-4 sm:px-6 py-3 sm:py-4">
                 {q.options.map((opt, oIdx) => {
                   const isCorrectOpt = oIdx === q.correctAnswer;
                   const isSelectedOpt = oIdx === selected;
@@ -142,11 +142,11 @@ export default function GKExamSolution({ questions, answers, onBack }: GKExamSol
                   }
 
                   return (
-                    <div key={oIdx} className={`flex items-start gap-3 p-3.5 rounded-xl border text-sm transition-colors ${optStyle}`}>
-                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${badgeStyle}`}>
+                    <div key={oIdx} className={`flex items-start gap-2.5 sm:gap-3 p-3 sm:p-3.5 rounded-xl border text-xs sm:text-sm transition-colors ${optStyle}`}>
+                      <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center font-black text-[11px] sm:text-xs shrink-0 ${badgeStyle}`}>
                         {String.fromCharCode(65 + oIdx)}
                       </span>
-                      <span className="leading-snug flex-1">
+                      <span className="leading-snug flex-1 break-words">
                         <QuestionMathJax content={opt} />
                       </span>
                       {isCorrectOpt && <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
@@ -157,9 +157,9 @@ export default function GKExamSolution({ questions, answers, onBack }: GKExamSol
               </div>
 
               {/* Explanation */}
-              <div className="mx-6 mb-5 p-4 rounded-xl bg-blue-50/40 border border-blue-100/60">
-                <span className="text-[10px] font-black text-blue-700 uppercase tracking-widest block mb-1.5">💡 Explanation</span>
-                <div className="text-slate-600 text-sm leading-relaxed font-medium">
+              <div className="mx-4 sm:mx-6 mb-4 sm:mb-5 p-3.5 sm:p-4 rounded-xl bg-blue-50/40 border border-blue-100/60">
+                <span className="text-[9px] sm:text-[10px] font-black text-blue-700 uppercase tracking-widest block mb-1.5">💡 Explanation</span>
+                <div className="text-slate-600 text-xs sm:text-sm leading-relaxed font-medium break-words">
                   <QuestionMathJax content={q.explanation} />
                 </div>
               </div>
@@ -172,10 +172,10 @@ export default function GKExamSolution({ questions, answers, onBack }: GKExamSol
           <div className="flex justify-center pt-4">
             <button
               onClick={onBack}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-black text-sm transition-all cursor-pointer shadow-sm"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 sm:px-8 py-3 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-black text-xs sm:text-sm transition-all cursor-pointer shadow-sm"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Summary
+              <span>Back to Summary</span>
             </button>
           </div>
         )}

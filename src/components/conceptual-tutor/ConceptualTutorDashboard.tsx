@@ -23,6 +23,7 @@ import {
   RadarChart, 
   PolarGrid, 
   PolarAngleAxis, 
+  PolarRadiusAxis, 
   ResponsiveContainer,
   XAxis,
   YAxis,
@@ -81,10 +82,18 @@ export default function ConceptualVivaDashboard() {
           ConceptualVivaService.getConceptualDashboardSubjectRadar(userId, subscriptionId),
         ]);
 
+        console.log("Conceptual Tutor Dashboard API Responses:", { cardsRes, chaptersRes, topicsRes, radarRes });
+
         setCardsData(cardsRes?.data || cardsRes || null);
         setWeakChapters(chaptersRes?.data || (Array.isArray(chaptersRes) ? chaptersRes : []));
         setWeakTopics(topicsRes?.data || (Array.isArray(topicsRes) ? topicsRes : []));
-        setSubjectRadar(radarRes?.data || (Array.isArray(radarRes) ? radarRes : []));
+        
+        const radarDataArray = radarRes?.data || 
+                               radarRes?.subject_radar || 
+                               radarRes?.subjectRadar || 
+                               radarRes?.subjectRadarData || 
+                               (Array.isArray(radarRes) ? radarRes : []);
+        setSubjectRadar(radarDataArray);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
         toast.error("Failed to load dashboard data");
@@ -118,20 +127,34 @@ export default function ConceptualVivaDashboard() {
     { name: 'Sun', score: 88 },
   ];
 
-  const mappedSubjectData = subjectRadar && subjectRadar.length > 0 
-    ? subjectRadar.map((item: any) => ({
-        subject: item.subject_name || item.subject || 'Unknown',
-        value: item.weighted_percentage || item.value || item.mastery || 0,
+  const mappedSubjectData = (() => {
+    const list = (subjectRadar || []).map((item: any) => {
+      const name = item.subject_name || item.subject || 'Unknown';
+      const rawVal = item.weighted_percentage !== undefined ? item.weighted_percentage : (item.percentage !== undefined ? item.percentage : (item.score !== undefined ? item.score : item.accuracy));
+      const val = typeof rawVal === 'string' ? parseFloat(rawVal) : Number(rawVal);
+      return {
+        subject: name,
+        value: isNaN(val) ? 0 : val,
         full: 100
-      }))
-    : []
-    // [
-    //     { subject: 'Physics', value: 0, full: 100 },
-    //     { subject: 'Chemistry', value: 0, full: 100 },
-    //     { subject: 'Biology', value: 0, full: 100 },
-    //     { subject: 'English', value: 0, full: 100 },
-    //     { subject: 'Math', value: 0, full: 100 },
-    //   ];
+      };
+    });
+
+    // RadarChart requires at least 3 subjects to render a polygon.
+    // If we have fewer, fill with default subjects.
+    if (list.length < 3) {
+      const defaults = ['Physics', 'Chemistry', 'Biology', 'English', 'Math'];
+      for (const def of defaults) {
+        if (!list.some(item => item.subject.toLowerCase() === def.toLowerCase())) {
+          list.push({ subject: def, value: 0, full: 100 });
+        }
+        if (list.length >= 5) break;
+      }
+    }
+    return list;
+  })();
+
+  const totalVivas = cardsData ? Number(cardsData.total_viva || 0) : 0;
+  const hasAttempted = totalVivas > 0;
 
   const strongestSubject = mappedSubjectData.reduce((prev: any, current: any) => (prev.value > current.value) ? prev : current, { subject: 'Various Subjects', value: 0 });
   const strongestSubjectName = strongestSubject.subject;
@@ -143,20 +166,20 @@ export default function ConceptualVivaDashboard() {
     : `Based on your recent vivas, you demonstrate growing understanding across your subjects. Keep practicing to maintain your mastery!`;
 
   return (
-    <div className="flex-1 bg-slate-50/50 min-h-screen pb-20">
+    <div className="flex-1 bg-slate-50/50 min-h-screen pb-12 sm:pb-20">
       {/* Premium Header */}
-      <div className="bg-white border-b border-slate-200 px-8 py-4 relative overflow-hidden">
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-8 py-5 sm:py-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 -z-0"></div>
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-50/30 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 -z-0"></div>
         
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
-          <div className="flex items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-2xl group transition-transform hover:rotate-6">
-              <LayoutDashboard className="w-8 h-8" />
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-6 sm:gap-8 relative z-10">
+          <div className="flex items-center gap-4 sm:gap-5">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-2xl group transition-transform hover:rotate-6 shrink-0">
+              <LayoutDashboard className="w-6 h-6 sm:w-8 sm:h-8" />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">Conceptual Dashboard</h1>
-              <p className="text-slate-500 font-medium">Detailed analytics of your viva performance and conceptual growth.</p>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Conceptual Dashboard</h1>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium leading-relaxed">Detailed analytics of your performance and conceptual growth.</p>
             </div>
           </div>
 
@@ -172,22 +195,22 @@ export default function ConceptualVivaDashboard() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-8 mt-10">
-        <div className="grid lg:grid-cols-3 gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6 sm:mt-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           {/* Main Content Area (Left Side: Cards & Radar) */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-2 space-y-6 sm:space-y-8">
             
             {/* KPI Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               {kpiData.map((kpi, i) => (
-                <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-500 group relative overflow-hidden">
+                <div key={i} className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-500 group relative overflow-hidden">
                   <div className='flex justify-between'> 
                     <div className="relative z-10">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">{kpi.label}</div>
-                      <div className="text-3xl font-black text-slate-900 mb-1">{kpi.value}</div>
+                      <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 sm:mb-3">{kpi.label}</div>
+                      <div className="text-2xl sm:text-3xl font-black text-slate-900 mb-1">{kpi.value}</div>
                     </div>
-                    <div className={`w-12 h-12 rounded-2xl ${kpi.bg} ${kpi.color} flex items-center justify-center mt-4 transition-transform group-hover:scale-110`}>
-                      <kpi.icon className="w-6 h-6" />
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl ${kpi.bg} ${kpi.color} flex items-center justify-center mt-2 sm:mt-4 transition-transform group-hover:scale-110`}>
+                      <kpi.icon className="w-5 h-5 sm:w-6 sm:h-6" />
                     </div>
                   </div>
                 </div>
@@ -249,18 +272,31 @@ export default function ConceptualVivaDashboard() {
             </div> */}
 
             {/* Subject Mastery Radar */}
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+            <div className="bg-slate-900 rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-8 text-white shadow-2xl relative overflow-hidden group">
                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                
-               <div className="flex flex-col md:flex-row items-center gap-4">
-                  <div className="flex-1 space-y-6">
+               <div className="flex flex-col md:flex-row items-center gap-6 sm:gap-8">
+                  <div className="flex-1 space-y-4 sm:space-y-6 text-center md:text-left">
                      <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest text-blue-400">
                         <Award className="w-3 h-3" /> Mastery Analysis
                      </div>
-                     <h3 className="text-3xl font-black leading-tight">
-                       Your conceptual focus is <span className="text-blue-400">{performanceAdjective}</span> in {strongestSubjectName}.
+                     <h3 className="text-2xl sm:text-3xl font-black leading-tight">
+                       {hasAttempted ? (
+                         <>
+                           Your conceptual focus is <span className="text-blue-400">{performanceAdjective}</span> in {strongestSubjectName}.
+                         </>
+                       ) : (
+                         <>
+                           Ready to measure your <span className="text-blue-400">conceptual mastery</span>?
+                         </>
+                       )}
                      </h3>
-                     <p className="text-slate-400 text-sm leading-relaxed max-w-sm">{dynamicParagraph}</p>
+                     <p className="text-slate-400 text-xs sm:text-sm leading-relaxed max-w-sm mx-auto md:mx-0">
+                       {hasAttempted 
+                         ? dynamicParagraph 
+                         : "Attempt a Viva session to view a comprehensive breakdown of your strengths, performance metrics, and key focus areas here."
+                       }
+                     </p>
                      
                      {/* Restored Commented Button */}
                      {/* <div className="flex gap-4 pt-2">
@@ -269,13 +305,14 @@ export default function ConceptualVivaDashboard() {
                         </button>
                      </div> */}
                   </div>
-
-                  <div className="w-full md:w-[300px] h-[300px] flex items-center justify-center">
+ 
+                  <div className="w-full max-w-[300px] h-[260px] sm:h-[300px] relative mx-auto">
                     {subjectRadar && subjectRadar.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={mappedSubjectData}>
                            <PolarGrid stroke="#ffffff20" />
                            <PolarAngleAxis dataKey="subject" tick={{ fill: '#94A3B8', fontSize: 11, fontWeight: 700 }} />
+                           <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                            <Radar 
                              name="Mastery" 
                              dataKey="value" 
@@ -339,11 +376,11 @@ export default function ConceptualVivaDashboard() {
              </div> */}
 
              {/* Weak Topics */}
-             <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-xl h-full flex flex-col">
-                <h3 className="font-black text-slate-900 mb-8 flex items-center gap-2">
+             <div className="bg-white rounded-2xl sm:rounded-[2.5rem] p-6 sm:p-8 border border-slate-100 shadow-xl flex flex-col">
+                <h3 className="font-black text-slate-900 mb-6 sm:mb-8 flex items-center gap-2">
                    <Target className="w-5 h-5 text-rose-500" /> Weak Topics
                 </h3>
-                <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-3 sm:space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar max-h-[400px] lg:max-h-none">
                    {weakTopics.slice(0, 8).map((topic: any, index: number) => (
                      <div key={index} className="group p-4 bg-slate-50 rounded-2xl border border-transparent hover:border-blue-100 hover:bg-blue-50 transition-all cursor-pointer">
                         <div className="flex items-start justify-between mb-1">
@@ -355,12 +392,12 @@ export default function ConceptualVivaDashboard() {
                         </div>
                      </div>
                    ))}
-                   {weakTopics.length === 0 && (
-                     <div className="text-sm text-slate-500 text-center py-10 flex flex-col items-center gap-3">
-                        <Sparkles className="w-8 h-8 text-slate-200" />
-                        No weak topics found.
-                     </div>
-                   )}
+                    {weakTopics.length === 0 && (
+                      <div className="text-sm text-slate-500 text-center py-10 flex flex-col items-center gap-3">
+                         <Sparkles className="w-8 h-8 text-slate-200" />
+                         {hasAttempted ? "No weak topics found." : "No data available. Attempt a viva to start tracking."}
+                      </div>
+                    )}
                 </div>
              </div>
 

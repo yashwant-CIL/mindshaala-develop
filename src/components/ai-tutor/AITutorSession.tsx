@@ -293,8 +293,28 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
     }
   };
 
+  const stopAllAudioAndSpeech = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
+  // Component unmount audio cleanup
+  useEffect(() => {
+    return () => {
+      stopAllAudioAndSpeech();
+    };
+  }, []);
+
   // State Machine Transitions
   const handleNextTaskResponse = (task: any, skipExplanations = false) => {
+    stopAllAudioAndSpeech();
     setCurrentTask(task);
     setSelectedMCQOption(null);
     setAudioBlob(null);
@@ -349,6 +369,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
   };
 
   const handleEndSession = async () => {
+    stopAllAudioAndSpeech();
     setIsFinishing(true);
     toast.success("AI Tutor Session completed!");
     try {
@@ -372,6 +393,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
   };
 
   const handleExitSession = () => {
+    stopAllAudioAndSpeech();
     setShowExitConfirm(true);
   };
 
@@ -430,9 +452,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
   }, [isRecording]);
 
   const startRecording = async () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    stopAllAudioAndSpeech();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
@@ -473,14 +493,14 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
     if (isPlaying && audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current = null;
       setIsPlaying(false);
     } else {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      stopAllAudioAndSpeech();
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
       audio.onended = () => setIsPlaying(false);
+      audio.onerror = () => setIsPlaying(false);
       audio.play();
       setIsPlaying(true);
     }
@@ -503,6 +523,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
   // 1. Knowledge query response
   const handleKnowledgeCheckResponse = async (userKnows: boolean) => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (!sessionId) {
       toast.error("Session not initialized");
@@ -548,6 +569,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
   // 2. Submit Intro Audio Explanation (User said Yes/Yes I understand)
   const handleSubmitIntroAudio = async () => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (!sessionId) {
       toast.error("Session not initialized");
@@ -618,6 +640,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
   // 3. Continue explanation click
   const handleContinueExplanation = async () => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (explanationType === 'subtopic_explanation' && flowState === 'explanation_view') {
       // In the NO flow, showing subtopic explanation, click "Yes, I understand" goes to record intro
@@ -680,6 +703,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
   // 4. Submit Question Answer (MCQ/TF/Audio)
   const handleSubmitAnswer = async () => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (!currentTask?.question) return;
     if (!sessionId) {
@@ -832,6 +856,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
   };
 
   const handleProceedToNextQuestion = () => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (questionFeedback && questionFeedback.next_task) {
       handleNextTaskResponse(questionFeedback.next_task, true);
@@ -842,6 +867,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
   // Skip subtopic
   const handleSkipSubtopic = async () => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (!sessionId) {
       toast.error("Session not initialized");
@@ -888,6 +914,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
   // Repeat subtopic
   const handleRepeatSubtopic = async () => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (!sessionId) {
       toast.error("Session not initialized");
@@ -934,6 +961,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
   // Skip single question
   const handleSkipQuestion = async () => {
+    stopAllAudioAndSpeech();
     if (isSubmitting) return;
     if (!currentTask?.question) return;
     if (!sessionId) {
@@ -1008,15 +1036,12 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-6xl mx-auto min-h-screen bg-slate-50/30 pb-12 relative">
+    <div className="p-3 sm:p-5 md:p-6 max-w-6xl mx-auto min-h-screen bg-slate-50/30 pb-12 relative w-full">
       
       {/* Session Title Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3 mb-4">
         <div>
-          {/* <span className="text-[10px] font-black text-violet-600 uppercase tracking-widest bg-violet-50 px-3 py-1 rounded-full border border-violet-100">
-            {conceptualVivaData?.session?.topic_name || `${initialParams?.subjectName} • ${initialParams?.chapterName} • ${initialParams?.topicName}`}
-          </span> */}
-          <h2 className="text-xl font-black text-slate-800 tracking-tight mt-1.5">
+          <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight mt-1 break-words">
             {currentTask?.subtopic_name ? `Subtopic: ${currentTask.subtopic_name}` : "AI Tutor Active Study"}
           </h2>
           {flowState !== 'initializing' && (
@@ -1025,7 +1050,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
               <button
                 disabled={isSubmitting}
                 onClick={handleSkipSubtopic}
-                className="px-4 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 hover:text-rose-700 font-black text-[11px] uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 shadow-xs"
+                className="px-3 py-1.5 sm:px-4 sm:py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 hover:text-rose-700 font-black text-[10px] sm:text-[11px] uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 shadow-xs cursor-pointer"
                 title="Skip entire subtopic"
               >
                 <SkipForward className="w-3.5 h-3.5" />
@@ -1036,7 +1061,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
               <button
                 disabled={isSubmitting}
                 onClick={handleRepeatSubtopic}
-                className="px-4 py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-600 hover:text-violet-700 font-black text-[11px] uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 shadow-xs"
+                className="px-3 py-1.5 sm:px-4 sm:py-1.5 bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-600 hover:text-violet-700 font-black text-[10px] sm:text-[11px] uppercase tracking-wider rounded-xl flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 shadow-xs cursor-pointer"
                 title="Request additional practice"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -1046,7 +1071,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
           )}
         </div>
         
-        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto flex-wrap">
           <button 
             onClick={() => {
               if (!isMuted) {
@@ -1054,7 +1079,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
               }
               setIsMuted(!isMuted);
             }} 
-            className={`text-xs font-bold transition-all uppercase tracking-wider px-3.5 py-2 rounded-xl border flex items-center gap-1.5 ${
+            className={`text-xs font-bold transition-all uppercase tracking-wider px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border flex items-center gap-1.5 cursor-pointer ${
               isMuted 
                 ? 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100/50' 
                 : 'bg-white text-slate-500 hover:text-violet-600 border-slate-200'
@@ -1066,7 +1091,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
           <button 
             onClick={handleExitSession} 
-            className="text-xs font-bold text-white bg-rose-600 border border-rose-600 hover:bg-rose-700 transition-colors uppercase tracking-wider px-3.5 py-2 rounded-xl shadow-md shadow-rose-100/50"
+            className="text-xs font-bold text-white bg-rose-600 border border-rose-600 hover:bg-rose-700 transition-colors uppercase tracking-wider px-3.5 py-1.5 sm:py-2 rounded-xl shadow-md shadow-rose-100/50 cursor-pointer"
           >
             End Session
           </button>
@@ -1078,38 +1103,38 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
 
         {/* 1. KNOWLEDGE CHECK VIEW */}
         {flowState === 'knowledge_check' && (
-          <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-sm border border-slate-100 text-center space-y-8 relative overflow-hidden">
+          <div className="bg-white rounded-2xl sm:rounded-3xl lg:rounded-[2.5rem] p-5 sm:p-8 md:p-12 shadow-sm border border-slate-100 text-center space-y-6 sm:space-y-8 relative overflow-hidden">
              <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
              
-             <div className="w-16 h-16 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mx-auto border border-violet-100">
-               <HelpCircle className="w-9 h-9 text-violet-600" />
+             <div className="w-14 h-14 sm:w-16 sm:h-16 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mx-auto border border-violet-100 shrink-0">
+               <HelpCircle className="w-7 h-7 sm:w-9 sm:h-9 text-violet-600" />
              </div>
 
-             <div className="space-y-3">
+             <div className="space-y-2 sm:space-y-3 px-2">
                <span className="text-[10px] font-black text-violet-500 uppercase tracking-widest">Pre-Assessment Inquiry</span>
-               <h3 className="text-2xl font-black text-slate-800 tracking-tight max-w-md mx-auto">
+               <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight max-w-md mx-auto break-words leading-tight">
                  Are you aware about <span className="text-violet-600">{currentTask?.subtopic_name}</span>?
                </h3>
-               <p className="text-slate-400 text-xs max-w-sm mx-auto">
+               <p className="text-slate-400 text-xs sm:text-sm max-w-sm mx-auto leading-relaxed">
                  Choose honestly. The AI Tutor uses this check to either explain the basics or test your knowledge directly.
                </p>
              </div>
 
-             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-sm mx-auto pt-4">
+             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 max-w-md mx-auto pt-2 sm:pt-4 w-full">
                 <button
                   disabled={isSubmitting}
                   onClick={() => handleKnowledgeCheckResponse(true)}
-                  className="w-full py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:scale-[1.01] transition-transform text-white font-black rounded-2xl text-sm shadow-md shadow-violet-100 flex items-center justify-center gap-2"
+                  className="w-full py-3.5 sm:py-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:scale-[1.01] transition-transform text-white font-black rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-md shadow-violet-100 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
                   <span>YES, I KNOW THIS</span>
                 </button>
                 <button
                   disabled={isSubmitting}
                   onClick={() => handleKnowledgeCheckResponse(false)}
-                  className="w-full py-4 bg-white border-2 border-slate-200 hover:border-violet-300 text-slate-600 hover:text-violet-700 transition-colors font-black rounded-2xl text-sm flex items-center justify-center gap-2"
+                  className="w-full py-3.5 sm:py-4 bg-white border-2 border-slate-200 hover:border-violet-300 text-slate-600 hover:text-violet-700 transition-colors font-black rounded-xl sm:rounded-2xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Info className="w-4 h-4" />
+                  <Info className="w-4 h-4 shrink-0" />
                   <span>NO, EXPLAIN FIRST</span>
                 </button>
              </div>
@@ -1213,16 +1238,16 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
         {flowState === 'explanation_view' && (
           <div className="space-y-4">
              {/* Question/Brief Box */}
-             <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+             <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2 flex-1">
-                     <span className="text-[10px] font-black text-violet-500 bg-violet-50 border border-violet-100 px-3 py-1 rounded-full uppercase tracking-wider">
+                <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+                  <div className="space-y-2 flex-1 min-w-0">
+                     <span className="text-[10px] font-black text-violet-500 bg-violet-50 border border-violet-100 px-3 py-1 rounded-full uppercase tracking-wider inline-block">
                        {explanationType === 'subtopic_explanation' ? "Subtopic Introduction" : "Level Brief"}
                      </span>
                      
-                     <div className="prose text-slate-700 leading-relaxed font-medium text-sm md:text-base pt-2 whitespace-pre-line">
+                     <div className="prose text-slate-700 leading-relaxed font-medium text-xs sm:text-sm md:text-base pt-2 whitespace-pre-line break-words">
                        {explanationType === 'subtopic_explanation' 
                          ? currentTask.subtopic_explanation 
                          : currentTask.explanation
@@ -1232,7 +1257,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                   {/* Repeat Audio button */}
                   <button
                     onClick={() => speakText(explanationType === 'subtopic_explanation' ? currentTask.subtopic_explanation : currentTask.explanation, true)}
-                    className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-xl text-slate-650 hover:text-violet-650 hover:border-violet-300 transition-colors shadow-2xs font-bold text-xs shrink-0 self-start mt-1"
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-xl text-slate-650 hover:text-violet-650 hover:border-violet-300 transition-colors shadow-2xs font-bold text-xs shrink-0 self-start mt-1 cursor-pointer"
                     title="Repeat Audio"
                   >
                     <Volume2 className="w-4 h-4 text-violet-500" />
@@ -1244,7 +1269,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                    <button
                      disabled={isSubmitting}
                      onClick={handleContinueExplanation}
-                     className="px-10 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-black text-xs shadow-md shadow-violet-100 hover:scale-[1.01] flex items-center justify-center gap-1.5"
+                     className="w-full sm:w-auto px-8 sm:px-10 py-3 bg-gradient-to-r from-violet-600 to-indigo-600 text-white rounded-xl font-black text-xs shadow-md shadow-violet-100 hover:scale-[1.01] flex items-center justify-center gap-1.5 cursor-pointer"
                    >
                      <span>{explanationType === 'subtopic_explanation' ? "YES, I UNDERSTAND" : "CONTINUE"}</span>
                      <ArrowRight className="w-3.5 h-3.5" />
@@ -1259,30 +1284,30 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
           <div className="space-y-4">
              
              {/* Question Display Card */}
-             <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+             <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100 relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 
-                <div className="flex flex-col md:flex-row items-start justify-between gap-4">
-                  <div className="space-y-2 flex-1">
-                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                <div className="flex flex-col md:flex-row items-start justify-between gap-3 sm:gap-4">
+                  <div className="space-y-2 flex-1 min-w-0">
+                     <span className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest block">
                        {currentTask.question.type === 'MCQ' ? "Multiple Choice Question" : 
                         (currentTask.question.type === 'TF' || currentTask.question.type === 'True/False') ? "True or False Question" : 
                         currentTask.question.type === 'Short Answer' ? "Short Answer (Record Speech)" : "Conceptual Speech Query"}
                      </span>
-                     <p className="text-base md:text-lg font-bold text-slate-800 leading-relaxed">
+                     <div className="text-sm sm:text-base md:text-lg font-bold text-slate-800 leading-relaxed break-words">
                         {currentTask.question.question_transcribe ? (
                           currentTask.question.question_transcribe
                         ) : (
                           latexToText(currentTask.question.question_text || "Study the question:")
                         )}
-                     </p>
+                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2 self-start shrink-0 flex-wrap">
                     {/* Repeat Audio button */}
                     <button
                       onClick={() => speakText(currentTask.question.question_transcribe || currentTask.question.question_text || '', true)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-650 hover:text-violet-650 hover:border-violet-300 transition-colors shadow-2xs font-bold text-xs shrink-0"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-650 hover:text-violet-650 hover:border-violet-300 transition-colors shadow-2xs font-bold text-xs shrink-0 cursor-pointer"
                       title="Repeat Audio"
                     >
                       <Volume2 className="w-3.5 h-3.5 text-violet-500" />
@@ -1294,7 +1319,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                       <button
                         disabled={isSubmitting}
                         onClick={handleSkipQuestion}
-                        className="px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-250 text-rose-600 hover:text-rose-750 font-bold text-xs rounded-lg flex items-center gap-1 transition-all shadow-2xs animate-pulse"
+                        className="px-3 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-250 text-rose-600 hover:text-rose-750 font-bold text-xs rounded-lg flex items-center gap-1 transition-all shadow-2xs animate-pulse cursor-pointer"
                         title="Skip only the current question"
                       >
                         <FastForward className="w-3 h-3 text-rose-555" />
@@ -1347,9 +1372,9 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                         key={i}
                         disabled={hasSubmittedQuestion}
                         onClick={() => setSelectedMCQOption(option)}
-                        className={`flex items-center justify-between p-5 rounded-2xl border transition-all text-left group ${buttonClass}`}
+                        className={`flex items-center justify-between p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border transition-all text-left group cursor-pointer ${buttonClass}`}
                       >
-                         <span className="text-xs font-bold leading-tight">{option}</span>
+                         <span className="text-xs sm:text-sm font-bold leading-snug break-words">{option}</span>
                          <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ml-3 transition-colors ${badgeClass}`}>
                            {badgeContent}
                          </div>
@@ -1396,7 +1421,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                         key={option}
                         disabled={hasSubmittedQuestion}
                         onClick={() => setSelectedMCQOption(option)}
-                        className={`py-3.5 rounded-xl border transition-all font-bold text-xs uppercase flex flex-col items-center gap-1.5 group ${buttonClass}`}
+                        className={`py-3 sm:py-3.5 rounded-xl border transition-all font-bold text-xs uppercase flex flex-col items-center gap-1.5 group cursor-pointer ${buttonClass}`}
                       >
                          <span className="tracking-wider">{option}</span>
                          <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${badgeClass}`}>
@@ -1486,7 +1511,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                   <button
                     disabled={isSubmitting || ((currentTask.question.type === 'audio' || currentTask.question.type === 'Short Answer') && !audioBlob) || ((currentTask.question.type === 'MCQ' || currentTask.question.type === 'TF' || currentTask.question.type === 'True/False') && !selectedMCQOption)}
                     onClick={handleSubmitAnswer}
-                    className={`px-12 py-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all ${
+                    className={`w-full sm:w-auto px-8 sm:px-12 py-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
                       ((currentTask.question.type === 'audio' || currentTask.question.type === 'Short Answer') ? audioBlob : selectedMCQOption) && !isSubmitting
                         ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md shadow-violet-100 hover:scale-[1.01]'
                         : 'bg-slate-150 text-slate-400 cursor-not-allowed'
@@ -1498,7 +1523,7 @@ export default function AITutorSession({ initialParams, sessionId: propsSessionI
                 ) : (
                   <button
                     onClick={handleProceedToNextQuestion}
-                    className="px-12 py-3 bg-emerald-600 hover:scale-[1.01] text-white shadow-md shadow-emerald-100 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all"
+                    className="w-full sm:w-auto px-8 sm:px-12 py-3 bg-emerald-600 hover:scale-[1.01] text-white shadow-md shadow-emerald-100 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                   >
                     <span>NEXT QUESTION</span>
                     <ArrowRight className="w-4 h-4" />

@@ -66,26 +66,36 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
 
   // Session initialization is now handled pre-navigation in App.tsx
 
-  // Fullscreen management
+  // Fullscreen and Sidebar management
   useEffect(() => {
+    const sidebar = document.querySelector('[data-sidebar]') as HTMLElement;
+    const sidebarMini = document.querySelector('[data-sidebar-mini]') as HTMLElement;
+    const floatingActions = document.getElementById('floating-actions-container');
+
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     
-    // Attempt to enter fullscreen on start if we have a session
-    if (sessionId && !isInitialLoading && !document.fullscreenElement) {
+    // Trigger fullscreen and hide sidebars immediately on session mount
+    if (!document.fullscreenElement) {
       enterFullscreen();
     }
+    if (sidebar) sidebar.style.display = 'none';
+    if (sidebarMini) sidebarMini.style.display = 'none';
+    if (floatingActions) floatingActions.style.display = 'none';
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      if (sidebar) sidebar.style.display = '';
+      if (sidebarMini) sidebarMini.style.display = '';
+      if (floatingActions) floatingActions.style.display = '';
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(err => console.error("Exit fullscreen failed:", err));
       }
     };
-  }, [sessionId, isInitialLoading]);
+  }, []);
 
   const enterFullscreen = async () => {
     try {
@@ -138,6 +148,13 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
         return;
       }
 
+      // const formData = new FormData();
+      // formData.append('user_id', String(initialParams.user_id));
+      // formData.append('subject_id', String(initialParams.subject_id));
+      // formData.append('chapter_id', String(initialParams.chapter_id));
+      // formData.append('topic_id', String(initialParams.topic_id));
+      // formData.append('course_id', String(initialParams.course_id));
+      
       const payload: any = {
         user_id: Number(initialParams.user_id),
         subject_id: Number(initialParams.subject_id),
@@ -146,10 +163,13 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
         topic_id: String(initialParams.topic_id),
         module_type: "TAM"
       };
+
       if (initialParams.viva_type) {
-        payload.viva_type = String(initialParams.viva_type);
+        // formData.append('viva_type', String(initialParams.viva_type));
+         payload.viva_type = String(initialParams.viva_type);
       }
 
+      // console.log("ConceptualVivaSession start payload (FormData entries):", Array.from(formData.entries()));
       console.log("ConceptualVivaSession start payload:", payload);
       
       const response = await ConceptualVivaService.startConceptualVivaSession(payload);
@@ -218,6 +238,16 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
     }
   };
 
+  // Helper to stop recorded audio playback
+  const stopRecordedAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setIsPlaying(false);
+  };
+
   // Text to Speech logic
   const speakQuestion = (text?: string) => {
     // Strictly use transcribed text for TTS as per user requirement
@@ -231,6 +261,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
   };
 
   useEffect(() => {
+    stopRecordedAudio();
     if (currentQuestion?.question_transcrib && !isInitialLoading && isAutoTtsEnabled) {
       // Small delay to ensure UI is ready and browser allows speech
       const timer = setTimeout(() => {
@@ -239,6 +270,8 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
       return () => clearTimeout(timer);
     }
     return () => {
+      stopRecordedAudio();
+      stopSpeech();
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
@@ -260,7 +293,9 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
   }, [isRecording]);
 
   const startRecording = async () => {
-    // Stop TTS when recording starts
+    // Stop playing recorded audio and TTS when recording starts
+    stopRecordedAudio();
+    stopSpeech();
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -308,13 +343,9 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
     if (!audioUrl) return;
 
     if (isPlaying && audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setIsPlaying(false);
+      stopRecordedAudio();
     } else {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      stopRecordedAudio();
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
       audio.onended = () => setIsPlaying(false);
@@ -339,6 +370,13 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
   const handleSubmit = async () => {
     if (!sessionId) return;
     
+    // Stop any playing recorded audio & speech immediately when submitting
+    stopRecordedAudio();
+    stopSpeech();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    
     let blobToSubmit = audioBlob;
     if (isRecording && mediaRecorder) {
         setIsSubmitting(true);
@@ -357,12 +395,15 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
 
     setIsSubmitting(true);
     try {
-      const startTimeStr = questionStartTimeRef.current;
+       const startTimeStr = questionStartTimeRef.current;
       const endTimeStr = new Date().toISOString();
 
-      // Create FormData with required parameters: question_no, audio_file, time_taken, start_time, end_time
+      // Create FormData with required parameters: question_no, audio_file, time_taken
       const formData = new FormData();
-      formData.append('module_type',"TAM");
+      // formData.append('question_no', String(Math.floor(Number(currentQuestion?.question_no || 0))));
+      // formData.append('user_id', String(Math.floor(Number(initialParams?.user_id || localStorage.getItem('user_id')))));
+      // formData.append('session_id', String(Math.floor(Number(sessionId))));
+       formData.append('module_type',"TAM");
       formData.append('question_id', Math.floor(Number(currentQuestion?.question_no || 0)) as any);
       formData.append('user_id', Math.floor(Number(initialParams?.user_id || localStorage.getItem('user_id'))) as any);
       formData.append('session_id', Math.floor(Number(sessionId)) as any);
@@ -376,13 +417,14 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
       formData.append('end_time', endTimeStr);
       
       console.log("Submitting Payload:", {
-        module_type:"TAM",
+        // question_no: Math.floor(Number(currentQuestion?.question_no || 0)),
+         module_type:"TAM",
         question_id: Math.floor(Number(currentQuestion?.question_no || 0)),
         user_id: Math.floor(Number(initialParams?.user_id || localStorage.getItem('user_id'))),
         session_id: Math.floor(Number(sessionId)),
-        time_taken: String(timer),
         start_time: startTimeStr,
         end_time: endTimeStr,
+        time_taken: String(timer),
         audio_file: blobToSubmit ? `viva_${sessionId}_q${currentQuestion?.question_no}.wav` : null
       });
       
@@ -402,7 +444,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
           // Small delay for the loader/message then finish
           setTimeout(async () => {
              try {
-                await ConceptualVivaService.endConceptualViva({ session_id: sessionId, module_type: "TAM" });
+                await ConceptualVivaService.endConceptualViva({ session_id: sessionId , module_type:"TAM"});
                 onFinish(sessionId);
              } catch (error) {
                 console.error("Error ending viva:", error);
@@ -430,7 +472,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
              });
              
              try {
-                await ConceptualVivaService.endConceptualViva({ session_id: sessionId, module_type: "TAM" });
+                await ConceptualVivaService.endConceptualViva({ session_id: sessionId , module_type:"TAM"});
              } catch (error) {
                 console.error("Error ending viva after null question:", error);
              }
@@ -465,11 +507,11 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
     });
 
     if (result.isConfirmed) {
+      stopRecordedAudio();
       stopSpeech();
       setIsFinishing(true);
       try {
-        await ConceptualVivaService.endConceptualViva({ session_id: sessionId, module_type: "TAM" });
-        await exitFullscreen();
+        await ConceptualVivaService.endConceptualViva({ session_id: sessionId, module_type:"TAM" });
         onFinish(sessionId);
       } catch (error) {
         toast.error("Failed to end viva session");
@@ -528,10 +570,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
               Retry Session
             </button>
             <button 
-              onClick={async () => {
-                await exitFullscreen();
-                onExit();
-              }}
+              onClick={onExit}
               className="w-full sm:w-auto px-8 py-3 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold hover:bg-slate-50 transition-all"
             >
               Exit Exam
@@ -562,44 +601,37 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
   }
 
   return (
-    <div className="p-5 md:p-8  mx-auto">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50 p-3 sm:p-5 md:p-8 w-full">
+      <div className="max-w-7xl mx-auto min-h-screen relative flex flex-col justify-between">
+
       {/* Session Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-200">
-            <Mic className="w-6 h-6 text-white" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+          <div className="p-2.5 sm:p-3 bg-blue-600 rounded-xl sm:rounded-2xl shadow-lg shadow-blue-200 shrink-0">
+            <Mic className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
-          <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 break-words">
               {assessmentName || currentQuestion?.assessment_name}
             </h1>
-            <p className="text-sm font-bold text-slate-500 uppercase tracking-widest leading-none">
+            <p className="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-widest leading-relaxed break-words">
               {currentQuestion?.topic_context || `${initialParams?.subjectName} • ${initialParams?.chapterName} • ${initialParams?.topicName}`}
             </p>
           </div>
         </div>
-
-        {/* <div className="flex items-center gap-4">
-           <div className="px-6 py-3 bg-white rounded-2xl border border-slate-100 flex items-center gap-3 shadow-xl shadow-slate-200/50">
-              <div className={`w-3 h-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-slate-300'}`}></div>
-              <span className="font-mono font-black text-xl text-slate-700 tracking-wider">
-                 {formatTime(timer)}
-              </span>
-           </div>
-        </div> */}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8 items-stretch flex-1">
         {/* Left: Question Card */}
         <div className="flex flex-col h-full">
-          <div className="bg-white rounded-[2.5rem] p-8 md:p-12 shadow-2xl border border-slate-100 relative overflow-hidden flex-1 flex flex-col min-h-[400px]">
+          <div className="bg-white rounded-2xl sm:rounded-3xl lg:rounded-[2.5rem] p-5 sm:p-8 md:p-12 shadow-2xl border border-slate-100 relative overflow-hidden flex-1 flex flex-col justify-between min-h-[250px] sm:min-h-[350px]">
             {/* Background Accents */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 -z-0"></div>
-            <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 -z-0"></div>
+            <div className="absolute top-0 right-0 w-48 sm:w-64 h-48 sm:h-64 bg-slate-50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 -z-0"></div>
+            <div className="absolute bottom-0 left-0 w-24 sm:w-32 h-24 sm:h-32 bg-blue-50 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 -z-0"></div>
             
             <div className="relative z-10">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <h2 className="text-xl md:text-3xl font-black text-slate-800 leading-tight flex-1">
+              <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 mb-4">
+                <h2 className="text-lg sm:text-2xl md:text-3xl font-black text-slate-800 leading-tight flex-1 break-words">
                   <span className="text-blue-600 mr-2">{currentQuestion?.question_no}.</span>
                   {currentQuestion?.question_transcrib ? (
                     <span>{currentQuestion.question_transcrib}</span>
@@ -607,8 +639,8 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                     <span>{latexToText(currentQuestion?.question || "Loading question...")}</span>
                   )}
                 </h2>
-                <div className="flex gap-2">
-                  <div className={`flex items-center rounded-2xl transition-all shadow-sm ${
+                <div className="flex gap-2 self-start sm:self-auto shrink-0">
+                  <div className={`flex items-center rounded-xl sm:rounded-2xl transition-all shadow-xs ${
                     isAutoTtsEnabled ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'
                   }`}>
                     <button 
@@ -618,12 +650,12 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                         }
                         speakQuestion();
                       }}
-                      className="p-4 flex items-center gap-2 hover:bg-black/10 rounded-l-2xl transition-all active:scale-95"
+                      className="p-3 sm:p-4 flex items-center gap-2 hover:bg-black/10 rounded-l-xl sm:rounded-l-2xl transition-all active:scale-95 cursor-pointer"
                       title={isAutoTtsEnabled ? "Speak Again" : "Unmute & Speak"}
                       disabled={isSubmitting}
                     >
-                      {isAutoTtsEnabled ? <Volume2 className="w-5 h-5" /> : <Square className="w-5 h-5 opacity-50" />}
-                      <span className="text-xs font-bold uppercase tracking-tight">
+                      {isAutoTtsEnabled ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" /> : <Square className="w-4 h-4 sm:w-5 sm:h-5 opacity-50" />}
+                      <span className="text-[10px] sm:text-xs font-bold uppercase tracking-tight">
                         {isAutoTtsEnabled ? "Speak" : "Muted"}
                       </span>
                     </button>
@@ -637,7 +669,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                             window.speechSynthesis.cancel();
                           }
                         }}
-                        className="p-4 hover:bg-black/10 rounded-r-2xl border-l border-white/10 transition-all active:scale-95"
+                        className="p-3 sm:p-4 hover:bg-black/10 rounded-r-xl sm:rounded-r-2xl border-l border-white/10 transition-all active:scale-95 cursor-pointer"
                         title="Mute Auto-TTS"
                         disabled={isSubmitting}
                       >
@@ -647,49 +679,41 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                   </div>
                 </div>
               </div>
-              
-              {/* Optional Hints or Context */}
-              {/* <div className="mt-8 flex gap-3">
-                 <div className="flex items-center gap-2 text-slate-400 text-sm italic">
-                    <BrainCircuit className="w-4 h-4" />
-                    Focus on the core principle and real-world applications.
-                 </div>
-              </div> */}
             </div>
           </div>
         </div>
  
         {/* Right: Audio Response Controls */}
         <div className="flex flex-col h-full">
-          <div className="bg-slate-900 rounded-[2.5rem] p-8 md:p-10 shadow-2xl relative overflow-hidden group flex-1 flex flex-col justify-center">
+          <div className="bg-slate-900 rounded-2xl sm:rounded-3xl lg:rounded-[2.5rem] p-5 sm:p-8 md:p-10 shadow-2xl relative overflow-hidden group flex-1 flex flex-col justify-center min-h-[300px]">
             {/* Pulsing rings when recording */}
             {isRecording && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-32 h-32 bg-red-500/20 rounded-full animate-ping"></div>
-                <div className="w-48 h-48 bg-red-500/10 rounded-full animate-pulse"></div>
+                <div className="w-24 sm:w-32 h-24 sm:h-32 bg-red-500/20 rounded-full animate-ping"></div>
+                <div className="w-36 sm:w-48 h-36 sm:h-48 bg-red-500/10 rounded-full animate-pulse"></div>
               </div>
             )}
             
-            <div className="relative z-10 flex flex-col items-center gap-8">
-               <div className="text-center">
-                  <h3 className="text-white font-bold text-xl mb-2">
+            <div className="relative z-10 flex flex-col items-center gap-6 sm:gap-8">
+               <div className="text-center px-2">
+                  <h3 className="text-white font-bold text-base sm:text-xl mb-2">
                     {isRecording ? "Listening to your response..." : audioBlob ? "Response Captured" : "Ready to provide your answer?"}
                   </h3>
-                  <div className="flex justify-center mb-4">
-                    <div className="px-5 py-2 bg-white/5 rounded-xl border border-white/10 flex items-center gap-3">
+                  <div className="flex justify-center mb-3 sm:mb-4">
+                    <div className="px-4 sm:px-5 py-1.5 sm:py-2 bg-white/5 rounded-xl border border-white/10 flex items-center gap-2 sm:gap-3">
                       <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-white/20'}`}></div>
-                      <span className="font-mono font-bold text-lg text-white tracking-widest leading-none">
+                      <span className="font-mono font-bold text-base sm:text-lg text-white tracking-widest leading-none">
                         {isRecording || audioBlob ? `${timer.toString().padStart(2, '0')}s` : "00s"}
                       </span>
                     </div>
                   </div>
-                  <p className="text-slate-400 text-sm">
+                  <p className="text-slate-400 text-xs sm:text-sm max-w-sm mx-auto">
                     {isRecording ? "Speak clearly and explain the concept in your own words." : audioBlob ? "Review your answer or record again if needed." : "Tap the microphone to start recording your explanation."}
                   </p>
                </div>
 
                {/* Visualizer (Mock) */}
-               <div className="flex items-end justify-center gap-1 h-12 w-full px-12">
+               <div className="flex items-end justify-center gap-0.5 sm:gap-1 h-8 sm:h-12 w-full px-4 sm:px-12">
                   {[...Array(24)].map((_, i) => (
                     <div 
                       key={i} 
@@ -704,13 +728,13 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                   ))}
                </div>
 
-               <div className="flex items-center justify-center gap-6">
+               <div className="flex items-center justify-center gap-4 sm:gap-6">
                    {audioUrl && !isRecording && (
                     <div className="relative group/play flex justify-center items-center">
                       <button 
                         onClick={handlePlayToggle}
                         disabled={isSubmitting}
-                        className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all border ${
+                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all border cursor-pointer ${
                           isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
                         } ${
                           isPlaying 
@@ -718,7 +742,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                           : 'bg-white/10 text-white border-white/10 hover:bg-white/20'
                         }`}
                       >
-                        {isPlaying ? <Square className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current" />}
+                        {isPlaying ? <Square className="w-5 h-5 sm:w-6 sm:h-6 fill-current" /> : <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />}
                       </button>
                       <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover/play:opacity-100 transition-opacity bg-slate-800 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-lg whitespace-nowrap pointer-events-none z-20">
                         {isPlaying ? "Stop playback" : "Play last recording"}
@@ -731,36 +755,24 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                       <button 
                         onClick={startRecording}
                         disabled={isSubmitting}
-                        className={`w-24 h-24 rounded-[2rem] bg-blue-600 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-500/30 group-hover/record:rotate-6 duration-500 ${
+                        className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-[2rem] bg-blue-600 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-500/30 group-hover/record:rotate-6 duration-500 cursor-pointer ${
                           isSubmitting ? 'opacity-50 cursor-not-allowed grayscale' : ''
                         }`}
                       >
-                        <Mic className="w-10 h-10" />
+                        <Mic className="w-8 h-8 sm:w-10 sm:h-10" />
                       </button>
                     ) : (
                       <button 
                         onClick={stopRecording}
-                        className="w-24 h-24 rounded-[2rem] bg-red-600 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-red-500/30 animate-pulse"
+                        className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-[2rem] bg-red-600 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-red-500/30 animate-pulse cursor-pointer"
                       >
-                        <Square className="w-8 h-8 fill-current" />
+                        <Square className="w-7 h-7 sm:w-8 sm:h-8 fill-current" />
                       </button>
                     )}
                     <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/record:opacity-100 transition-opacity bg-slate-800 text-white text-xs font-bold py-1.5 px-3 rounded-lg shadow-lg whitespace-nowrap pointer-events-none z-20">
                       {isRecording ? "Stop recording" : "Start recording"}
                     </div>
                   </div>
-
-                  {/* <button 
-                    disabled={isSubmitting}
-                    onClick={handleSubmit}
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                      !isSubmitting
-                        ? 'bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-500/20' 
-                        : 'bg-white/5 text-slate-600 cursor-not-allowed border border-white/5'
-                    }`}
-                  >
-                    {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <ChevronRight className="w-6 h-6" />}
-                  </button> */}
                </div>
                
                {isSubmitting && (
@@ -774,21 +786,21 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
        </div>
        
        {/* Footer Nav */}
-       <div className="mt-8 flex justify-center items-center bg-white p-4 rounded-3xl border border-slate-100 shadow-sm w-full">
+       <div className="mt-6 sm:mt-8 flex justify-center items-center bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm w-full">
           {canEnd ? (
             <button 
               onClick={handleFinishViva}
               disabled={isFinishing}
-              className="flex items-center gap-2 px-12 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-sm rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest cursor-pointer"
+              className="flex items-center justify-center gap-2 px-8 sm:px-12 py-3.5 sm:py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest cursor-pointer w-full sm:w-auto"
             >
                {isFinishing ? <Loader2 className="w-5 h-5 animate-spin" /> : <>FINISH SESSION <Target className="w-4 h-4" /></>}
             </button>
           ) : (
-            <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+            <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full sm:w-auto justify-center">
               <button 
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className={`flex items-center gap-2 px-12 py-4 font-black text-sm rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest cursor-pointer ${
+                className={`flex items-center justify-center gap-2 px-8 sm:px-12 py-3.5 sm:py-4 font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl transition-all shadow-xl hover:scale-105 active:scale-95 uppercase tracking-widest cursor-pointer w-full sm:w-auto ${
                   !isSubmitting 
                     ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white' 
                     : 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -800,7 +812,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
                 <button 
                   onClick={handleFinishViva}
                   disabled={isSubmitting || isFinishing || Number(currentQuestion?.question_no) === 1}
-                  className={`flex items-center justify-center gap-2 px-12 py-4 font-black text-sm rounded-2xl transition-all shadow-md uppercase tracking-widest w-full sm:w-auto ${
+                  className={`flex items-center justify-center gap-2 px-8 sm:px-12 py-3.5 sm:py-4 font-black text-xs sm:text-sm rounded-xl sm:rounded-2xl transition-all shadow-md uppercase tracking-widest w-full sm:w-auto ${
                     Number(currentQuestion?.question_no) === 1
                       ? 'bg-slate-100 text-slate-300 border border-slate-200 cursor-not-allowed'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 hover:scale-105 active:scale-95 cursor-pointer'
@@ -818,6 +830,7 @@ export default function ConceptualVivaSession({ initialParams, sessionId: propsS
             </div>
           )}
        </div>
+      </div>
     </div>
   );
 }

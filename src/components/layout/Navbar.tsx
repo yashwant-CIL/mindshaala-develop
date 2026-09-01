@@ -23,32 +23,62 @@ export function Navbar({ onNavigate, activePage }: NavbarProps) {
     } = useCourse();
 
     const [username, setUsername] = useState('');
+    const [isFullscreen, setIsFullscreen] = useState(false);
 
     useEffect(() => {
         const storedName = localStorage.getItem('username') || Cookies.get('username') || 'User';
         setUsername(storedName);
     }, []);
 
+    // Fullscreen detection to hide main Navbar during exam/fullscreen modes
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!(
+                document.fullscreenElement ||
+                (document as any).webkitFullscreenElement ||
+                (document as any).mozFullScreenElement ||
+                (document as any).msFullscreenElement
+            ));
+        };
+
+        handleFullscreenChange();
+
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        return () => {
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+            document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+        };
+    }, []);
+
     // Page-scoped fetching for Courses, Wishlist and Cart
     useEffect(() => {
         const userId = localStorage.getItem('user_id') || Cookies.get("user_id");
         if (userId) {
-            if (courses.length === 0) {
-                fetchCourses(userId);
-            }
-            // if (activePage === 'wishlist') {
-            //     fetchWishlist(userId);
-            // } else if (activePage === 'cart') {
-            //     fetchCart(userId);
-            // } else if (['courses', 'my-courses', 'test-series', 'take-test'].includes(activePage)) {
-                // Fetch courses only if not already loaded into state
-                
-            }
-        
-    }, [activePage, courses.length, fetchCourses]);
+            fetchCourses(userId, true);
+        }
+    }, [activePage, fetchCourses]);
+
+    const isExamPage = [
+        'conceptual-tutor-session',
+        'conceptual-viva-session',
+        'speakalong-session',
+        'ai-tutor-session',
+        'gk-exam-runner',
+        'theorytest'
+    ].includes(activePage);
+
+    if (isFullscreen || isExamPage) {
+        return null;
+    }
 
     return (
-        <div className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-10 w-full">
+        <div className="bg-white border-b border-gray-200 pl-14 pr-4 py-2.5 md:px-6 md:py-3 sticky top-0 z-10 w-full">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-1">
                     <select 
@@ -119,12 +149,13 @@ export function Navbar({ onNavigate, activePage }: NavbarProps) {
                         <div className="absolute top-2 right-2.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
                     </button>
                     
-                    {/* Profile Link (Mobile or extra) */}
+                    {/* Profile Link */}
                     <button 
                         onClick={() => onNavigate('settings')}
-                        className="flex md:hidden items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 overflow-hidden"
+                        className="flex items-center justify-center w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs shadow-md border-2 border-white cursor-pointer active:scale-95 transition-all ml-1 shrink-0"
+                        title="Profile Settings"
                     >
-                        <span className="text-xs font-bold">{getInitials(username)}</span>
+                        <span>{getInitials(username)}</span>
                     </button>
                 </div>
             </div>

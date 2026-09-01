@@ -421,76 +421,76 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
         </div>
       ) : (
         <>
-          <div className="shrink-0 w-full bg-black text-white px-4 py-3 text-base flex justify-between items-center z-[1100] max-md:p-2 max-md:text-sm max-sm:text-xs">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setIsMenuOpen((prev) => !prev)} className="hidden max-md:flex items-center justify-center text-2xl bg-transparent border-none text-white cursor-pointer leading-none relative">
+          <div className="shrink-0 w-full bg-black text-white px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm flex justify-between items-center z-[1100]">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+              <button onClick={() => setIsMenuOpen((prev) => !prev)} className="hidden max-md:flex items-center justify-center text-xl sm:text-2xl bg-transparent border-none text-white cursor-pointer leading-none relative p-1">
                 ☰
               </button>
-              <span className="font-semibold text-lg max-md:text-base">Question Paper</span>
+              <span className="font-semibold text-xs sm:text-sm md:text-base truncate">Question Paper</span>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-right font-medium max-md:mr-2">Candidate: {candidateUsername}</span>
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <span className="text-right font-medium text-xs sm:text-sm truncate">Candidate: {candidateUsername}</span>
             </div>
           </div>
 
           <div className="flex flex-1 w-full overflow-hidden select-none relative">
-            <div className="flex flex-1 flex-col overflow-hidden text-sm max-md:overflow-y-auto w-full">
-              <div className="shrink-0 flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-white max-md:flex-col max-md:items-start max-md:gap-4 max-md:px-4 max-md:py-3 shadow-sm z-10 w-full">
-                <div className="flex flex-col gap-1.5 min-w-0">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">Exam Name</span>
-                  <span className="text-2xl font-extrabold text-slate-800 m-0 tracking-tight truncate max-w-[800px] max-md:max-w-full">
+            <div className="flex flex-1 flex-col overflow-hidden text-xs sm:text-sm max-md:overflow-y-auto w-full">
+              <div className="shrink-0 flex justify-between items-center px-3 sm:px-5 py-2 sm:py-3 border-b border-slate-200 bg-white max-md:flex-col max-md:items-start max-md:gap-2 shadow-sm z-10 w-full">
+                <div className="flex flex-col gap-0.5 min-w-0 w-full max-md:w-auto">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5">Exam Name</span>
+                  <span className="text-sm sm:text-lg md:text-xl font-extrabold text-slate-800 m-0 tracking-tight break-words max-w-[800px] max-md:max-w-full">
                     <QuestionMathJax content={assessmentTitle || comp.title} />
                   </span>
                 </div>
-                <div className="flex items-center gap-4 max-md:flex-col max-md:items-start shrink-0">
-                  <div className="flex flex-col items-end max-md:items-start gap-1">
-                    <span className="text-[10px] font-extrabold text-red-600 uppercase tracking-widest">Tab Switch Count</span>
-                    <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 text-red-700 border-2 border-red-500 font-black text-sm shadow-sm">
-                      <AlertTriangle className="w-4 h-4 text-red-600 animate-pulse" />
-                      <span>Warnings: <strong className="text-red-700 font-black text-base">{tabSwitchWarnings} / 3</strong></span>
+                <div className="flex items-center gap-2.5 sm:gap-4 max-md:w-full max-md:justify-between shrink-0 flex-wrap">
+                  <div className="flex flex-col items-start sm:items-end gap-0.5">
+                    <span className="text-[9px] font-extrabold text-red-600 uppercase tracking-widest">Tab Switch Count</span>
+                    <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-lg bg-red-50 text-red-700 border border-red-400 font-black text-xs shadow-sm">
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-600 animate-pulse shrink-0" />
+                      <span>Warnings: <strong className="text-red-700 font-black text-xs sm:text-sm">{tabSwitchWarnings} / 3</strong></span>
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end max-md:items-start gap-1 shrink-0">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest pr-1 max-md:pr-0">Time Remaining</span>
+                  <div className="flex flex-col items-start sm:items-end gap-0.5 shrink-0">
+                    <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Remaining</span>
                     <div className={`
-                      flex justify-center items-center px-5 py-2.5 rounded-xl font-mono text-xl font-bold transition-all duration-300
+                      flex justify-center items-center px-3 sm:px-4 py-1 sm:py-1.5 rounded-lg font-mono text-xs sm:text-base md:text-lg font-bold transition-all duration-300
                       ${remainingMs <= 60000
                         ? 'bg-red-50 text-red-700 border-2 border-red-500 animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.4)]'
                         : remainingMs <= 300000
                           ? 'bg-orange-50 text-orange-600 border-2 border-orange-400'
-                          : 'bg-slate-50 text-slate-700 border-2 border-slate-200'}
+                          : 'bg-slate-50 text-slate-700 border border-slate-200'}
                     `}>
-                      <Clock className="h-6 w-6 mr-2.5 opacity-80" />
+                      <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 opacity-80 shrink-0" />
                       <span className="tracking-wider">{timeRemainingStr}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="shrink-0 text-base text-[#e07a05] px-4 py-2 border-b border-black flex justify-between items-center gap-4 flex-wrap max-md:flex-col max-md:items-start max-md:gap-2 max-md:px-2">
-                <div className="flex-1 overflow-hidden max-w-full flex items-center gap-3">
-                  <button className="px-6 py-2 rounded-full font-semibold bg-[#0079D1] text-white border-2 border-[#0079D1] shadow-md cursor-default">
+              <div className="shrink-0 text-xs sm:text-sm text-[#e07a05] px-3 sm:px-4 py-1.5 border-b border-slate-300 flex justify-between items-center gap-2 flex-wrap bg-slate-50">
+                <div className="flex-1 overflow-hidden max-w-full flex items-center gap-2">
+                  <button className="px-3 py-1 rounded-full font-semibold bg-[#0079D1] text-white border border-[#0079D1] shadow-sm cursor-default text-xs truncate">
                     <QuestionMathJax content="General Knowledge (GK)" />
                   </button>
                 </div>
-                <div className="shrink-0 flex items-center gap-4">
-                  <p className="font-bold m-0 whitespace-nowrap text-right max-md:text-left text-slate-800">
+                <div className="shrink-0 flex items-center gap-2 sm:gap-4">
+                  <p className="font-bold m-0 whitespace-nowrap text-right max-md:text-left text-slate-800 text-xs">
                     Type: MCQ | Marks: {comp.total_marks || (qCount * 10)} | Question {currentQuestionIndex + 1} of {qCount}
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-1 flex-col overflow-y-auto text-xl px-4 py-4 max-md:p-2">
-                <div className="w-full">
-                  <div className="text-lg font-bold m-2.5 mb-6 leading-relaxed flex flex-wrap items-start gap-x-2 gap-y-1 relative">
-                    <span className="mr-2 whitespace-nowrap text-blue-800">Question {currentQuestionIndex + 1}:</span>
-                    <div className="flex-1 min-w-[200px] inline-block whitespace-pre-wrap [&_p]:!m-0 [&_p]:whitespace-normal [&_p]:inline [&_mjx-container]:!inline-block [&_mjx-container]:!m-0 [&_span]:!inline [&_br]:hidden">
+              <div className="flex flex-1 flex-col overflow-y-auto text-xs sm:text-sm md:text-base px-3 sm:px-5 py-2.5 sm:py-4">
+                <div className="w-full max-w-5xl mx-auto">
+                  <div className="text-xs sm:text-base md:text-lg font-bold m-0 mb-3 sm:mb-4 leading-normal flex flex-wrap items-start gap-x-2 gap-y-1 relative">
+                    <span className="mr-1 whitespace-nowrap text-blue-800 shrink-0">Question {currentQuestionIndex + 1}:</span>
+                    <div className="flex-1 min-w-[200px] inline-block whitespace-pre-wrap break-words [&_p]:!m-0 [&_p]:whitespace-normal [&_p]:inline [&_mjx-container]:!inline-block [&_mjx-container]:!m-0 [&_span]:!inline [&_br]:hidden">
                       <QuestionMathJax content={currentQText} />
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2 mt-3">
+                  <div className="flex flex-col gap-1.5 sm:gap-2 mt-1 sm:mt-2">
                     {currentQOptions.map((optText: string, optIdx: number) => {
                       const label = optionLabels[optIdx] || `${optIdx + 1}`;
                       const isSelectedOpt =
@@ -507,14 +507,14 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
                               [currentQId]: label
                             }));
                           }}
-                          className={`py-3 px-3 flex flex-row items-start gap-3 w-full rounded-xl transition-colors cursor-pointer border ${
-                            isSelectedOpt ? 'bg-blue-50 border-blue-400 font-bold' : 'hover:bg-slate-50 border-transparent'
+                          className={`py-2 sm:py-2.5 px-3 flex flex-row items-start gap-2 sm:gap-2.5 w-full rounded-lg transition-colors cursor-pointer border ${
+                            isSelectedOpt ? 'bg-blue-50 border-blue-400 font-bold shadow-sm' : 'hover:bg-slate-50 border-slate-200'
                           }`}
                         >
                           <input
                             type="radio"
                             id={`gk-opt-${currentQId}-${optIdx}`}
-                            className="shrink-0 cursor-pointer w-4 h-4 mt-[6px] accent-[#0079D1]"
+                            className="shrink-0 cursor-pointer w-3.5 h-3.5 sm:w-4 sm:h-4 mt-[3px] accent-[#0079D1]"
                             name={`gk-q-${currentQId}`}
                             checked={isSelectedOpt}
                             onChange={() => {
@@ -526,12 +526,12 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
                           />
                           <label
                             htmlFor={`gk-opt-${currentQId}-${optIdx}`}
-                            className="cursor-pointer flex-1 flex flex-row items-start gap-1 break-words leading-relaxed text-lg [&_p]:!m-0 [&_p]:inline [&_mjx-container]:!inline-block [&_mjx-container]:!m-0 [&_mjx-container]:!align-middle [&_span]:!inline [&_br]:hidden"
+                            className="cursor-pointer flex-1 flex flex-row items-start gap-1 break-words leading-snug text-xs sm:text-sm md:text-base [&_p]:!m-0 [&_p]:inline [&_mjx-container]:!inline-block [&_mjx-container]:!m-0 [&_mjx-container]:!align-middle [&_span]:!inline [&_br]:hidden"
                           >
-                            <span className="font-semibold mr-1 shrink-0 min-w-[1.5rem]">
+                            <span className="font-semibold mr-0.5 shrink-0 min-w-[1.1rem]">
                               {label}.
                             </span>
-                            <span className="inline-block whitespace-pre-wrap">
+                            <span className="inline-block whitespace-pre-wrap break-words">
                               <QuestionMathJax content={optText} />
                             </span>
                           </label>
@@ -542,7 +542,7 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
 
                   {hasSelection && (
                     <button
-                      className="px-4 py-2 mt-4 bg-[#ff1e1e] hover:bg-[#870505] text-white border-none rounded-[10px] cursor-pointer transition-colors font-bold text-sm"
+                      className="px-3 py-1 sm:px-3.5 sm:py-1.5 mt-2.5 bg-[#ff1e1e] hover:bg-[#870505] text-white border-none rounded-lg cursor-pointer transition-colors font-bold text-xs"
                       onClick={() => {
                         const nextAnswers = { ...userAnswers };
                         delete nextAnswers[currentQId];
@@ -555,10 +555,10 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
                 </div>
               </div>
 
-              <div className="shrink-0 text-xl flex justify-end items-center border-t border-black p-4 max-md:flex-col max-md:justify-center max-md:p-3">
-                <div className="flex justify-end items-center w-full gap-4 max-md:gap-3 flex-wrap">
+              <div className="shrink-0 flex justify-end items-center border-t border-slate-200 p-2 sm:p-3 bg-white">
+                <div className="flex justify-between sm:justify-end items-center w-full gap-2 sm:gap-3 flex-wrap">
                   <button
-                    className="cursor-pointer px-4 py-3 rounded-[10px] bg-[#77549A] text-white border-none text-lg font-bold transition-all hover:bg-[#4c3463] hover:scale-105 active:scale-95 flex-1 max-w-[220px]"
+                    className="cursor-pointer px-3 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-[#77549A] text-white border-none text-xs sm:text-base font-bold transition-all hover:bg-[#4c3463] flex-1 max-w-none sm:max-w-[180px] text-center"
                     onClick={() => {
                       setReviewMarked((prev) => ({
                         ...prev,
@@ -566,12 +566,12 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
                       }));
                     }}
                   >
-                    {isCurrentMarkedReview ? "Remove from Review" : "Mark for Review"}
+                    {isCurrentMarkedReview ? "Remove Review" : "Mark for Review"}
                   </button>
 
                   {currentQuestionIndex > 0 && (
                     <button
-                      className="cursor-pointer px-8 py-3 rounded-[10px] bg-[#0079D1] text-white border-none text-lg font-bold transition-all hover:bg-[#034d82] hover:scale-105 active:scale-95 flex-1 max-w-[150px]"
+                      className="cursor-pointer px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-[#0079D1] text-white border-none text-xs sm:text-base font-bold transition-all hover:bg-[#034d82] flex-1 max-w-none sm:max-w-[120px] text-center"
                       onClick={() => handleNavigateQuestion(Math.max(0, currentQuestionIndex - 1))}
                     >
                       Prev
@@ -580,85 +580,91 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
 
                   {currentQuestionIndex < qCount - 1 && (
                     <button
-                      className="cursor-pointer px-8 py-3 rounded-[10px] bg-[#0079D1] text-white border-none text-lg font-bold transition-all hover:bg-[#034d82] hover:scale-105 active:scale-95 flex-1 max-w-[150px]"
+                      className="cursor-pointer px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-[#0079D1] text-white border-none text-xs sm:text-base font-bold transition-all hover:bg-[#034d82] flex-1 max-w-none sm:max-w-[120px] text-center"
                       onClick={() => handleNavigateQuestion(Math.min(qCount - 1, currentQuestionIndex + 1))}
                     >
                       Next
                     </button>
                   )}
+
+                  <button
+                    className="cursor-pointer px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-[#17ab07] hover:bg-[#118005] text-white border-none text-xs sm:text-base font-extrabold transition-all flex items-center justify-center gap-1.5 flex-1 max-w-none sm:max-w-[140px] text-center shadow-md"
+                    onClick={() => setShowConfirmEndModal(true)}
+                  >
+                    <FileCheck className="w-4 h-4 shrink-0" /> Submit
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div className={`w-[25%] min-w-[300px] max-w-[380px] shrink-0 border-l border-black shadow-sm flex flex-col bg-white text-lg max-md:w-full max-md:border-none ${isMenuOpen ? 'max-md:flex max-md:absolute max-md:inset-0 max-md:z-[1050] max-md:h-full' : 'max-md:hidden'}`}>
-              <div className="w-full border-b border-black p-4 bg-slate-900 text-white shrink-0 space-y-3 relative">
+            <div className={`w-[25%] min-w-[280px] max-w-[360px] shrink-0 border-l border-slate-200 shadow-sm flex flex-col bg-white text-sm max-md:w-full max-md:border-none ${isMenuOpen ? 'max-md:flex max-md:absolute max-md:inset-0 max-md:z-[1050] max-md:h-full' : 'max-md:hidden'}`}>
+              <div className="w-full border-b border-slate-200 p-3.5 sm:p-4 bg-slate-900 text-white shrink-0 space-y-3 relative">
                 {isMenuOpen && (
-                  <button onClick={() => setIsMenuOpen(false)} className="hidden max-md:block absolute top-2 right-2 bg-white text-black text-2xl w-8 h-8 rounded-full z-10 font-bold border-0 cursor-pointer shadow-lg leading-none">
+                  <button onClick={() => setIsMenuOpen(false)} className="hidden max-md:block absolute top-2 right-2 bg-white text-black text-xl w-7 h-7 rounded-full z-10 font-bold border-0 cursor-pointer shadow-lg leading-none">
                     ×
                   </button>
                 )}
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#0079D1] text-white font-bold flex items-center justify-center text-lg border-2 border-white/20 shrink-0">
-                    <User className="w-6 h-6" />
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#0079D1] text-white font-bold flex items-center justify-center text-base border-2 border-white/20 shrink-0">
+                    <User className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-white truncate">{candidateUsername}</div>
-                    {/* <div className="text-xs text-slate-300">User ID: {currentUserId}</div> */}
+                    <div className="text-xs sm:text-sm font-bold text-white truncate">{candidateUsername}</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-[11px] bg-white/10 p-2.5 rounded-lg border border-white/15">
                   <div>
                     <span className="text-slate-400 block uppercase font-bold text-[9px]">Questions</span>
-                    <span className="text-white font-extrabold text-sm">{qCount}</span>
+                    <span className="text-white font-extrabold text-xs sm:text-sm">{qCount}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block uppercase font-bold text-[9px]">Marks</span>
-                    <span className="text-amber-400 font-extrabold text-sm">{comp.total_marks || (qCount * 10)}</span>
+                    <span className="text-amber-400 font-extrabold text-xs sm:text-sm">{comp.total_marks || (qCount * 10)}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block uppercase font-bold text-[9px]">Warnings</span>
-                    <span className={`font-extrabold text-sm ${tabSwitchWarnings > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>{tabSwitchWarnings}/3</span>
+                    <span className={`font-extrabold text-xs sm:text-sm ${tabSwitchWarnings > 0 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`}>{tabSwitchWarnings}/3</span>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-x-1 gap-y-2.5 w-full p-2.5 border-b border-slate-200 bg-white">
                 <div className="flex items-center">
-                  <span className="h-8 w-8 bg-[#17ab07] flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">{answeredCount}</span>
-                  <p className="text-[12px] m-0 leading-tight font-medium">Answered</p>
+                  <span className="h-7 w-7 sm:h-8 sm:w-8 bg-[#17ab07] flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">{answeredCount}</span>
+                  <p className="text-[11px] sm:text-[12px] m-0 leading-tight font-medium">Answered</p>
                 </div>
                 <div className="flex items-center">
-                  <span className="h-8 w-8 bg-[#eb0a0a] flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">{unansweredCount}</span>
-                  <p className="text-[12px] m-0 leading-tight font-medium">Not Answered</p>
+                  <span className="h-7 w-7 sm:h-8 sm:w-8 bg-[#eb0a0a] flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">{unansweredCount}</span>
+                  <p className="text-[11px] sm:text-[12px] m-0 leading-tight font-medium">Not Answered</p>
                 </div>
                 <div className="flex items-center">
-                  <span className="h-8 w-8 bg-[#77549A] relative flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">
+                  <span className="h-7 w-7 sm:h-8 sm:w-8 bg-[#77549A] relative flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">
                     {reviewCount}
                     <span className="w-2.5 h-2.5 rounded-full bg-[#eb0a0a] border border-white absolute -top-1 -right-1 flex items-center justify-center text-[7px] font-black leading-none">✕</span>
                   </span>
-                  <p className="text-[12px] m-0 leading-tight font-medium">Marked for Review</p>
+                  <p className="text-[11px] sm:text-[12px] m-0 leading-tight font-medium">Marked for Review</p>
                 </div>
                 <div className="flex items-center">
-                  <span className="h-8 w-8 bg-[#77549A] relative flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">
+                  <span className="h-7 w-7 sm:h-8 sm:w-8 bg-[#77549A] relative flex items-center justify-center text-center mr-1.5 rounded-[5px] text-white font-bold text-xs shrink-0">
                     {reviewAnsweredCount}
                     <span className="w-2.5 h-2.5 rounded-full bg-[#17ab07] border border-white absolute -top-1 -right-1 flex items-center justify-center text-[7px] font-black leading-none">✓</span>
                   </span>
-                  <p className="text-[12px] m-0 leading-tight font-medium">Ans & Marked Review</p>
+                  <p className="text-[11px] sm:text-[12px] m-0 leading-tight font-medium">Ans & Marked Review</p>
                 </div>
                 <div className="flex items-center col-span-2">
                   <span className="h-7 w-7 bg-[#D6D6D6] flex items-center justify-center text-center mr-1.5 rounded-[5px] text-black font-bold text-xs shrink-0">{notVisitedCount}</span>
-                  <p className="text-[12px] m-0 leading-tight font-medium">Not Visited</p>
+                  <p className="text-[11px] sm:text-[12px] m-0 leading-tight font-medium">Not Visited</p>
                 </div>
               </div>
 
               <div className="shrink-0 bg-[#0079D1] w-full p-2.5 flex items-center justify-center text-white border-y border-[#005e8e] font-bold">
-                <div className="m-0 text-base">General Knowledge (GK)</div>
+                <div className="m-0 text-sm sm:text-base">General Knowledge (GK)</div>
               </div>
 
               <div className="flex flex-col flex-1 overflow-hidden bg-[#E5F6FD] w-full">
-                <div className="flex-1 overflow-y-auto w-full p-4">
-                  <div className="flex flex-wrap gap-2.5 justify-start">
+                <div className="flex-1 overflow-y-auto w-full p-3 sm:p-4">
+                  <div className="flex flex-wrap gap-2 sm:gap-2.5 justify-start">
                     {questions.map((q, idx) => {
                       const qId = getQId(q, idx);
                       const isAns = checkAnswered(userAnswers, qId);
@@ -683,11 +689,14 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
                       return (
                         <button
                           key={idx}
-                          onClick={() => handleNavigateQuestion(idx)}
+                          onClick={() => {
+                            handleNavigateQuestion(idx);
+                            setIsMenuOpen(false);
+                          }}
                           className={`
-                            h-9 w-9 rounded-[6px] font-bold text-sm flex items-center justify-center relative cursor-pointer border-none transition-all
+                            h-8 w-8 sm:h-9 sm:w-9 rounded-[6px] font-bold text-xs sm:text-sm flex items-center justify-center relative cursor-pointer border-none transition-all
                             ${bgClass}
-                            ${isCurr ? 'ring-2 ring-[#0079D1] ring-offset-2 scale-110 shadow-md font-black' : 'hover:opacity-90'}
+                            ${isCurr ? 'ring-2 ring-[#0079D1] ring-offset-2 scale-105 shadow-md font-black' : 'hover:opacity-90'}
                           `}
                         >
                           {idx + 1}
@@ -703,12 +712,12 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
                   </div>
                 </div>
 
-                <div className="shrink-0 text-xl flex justify-center items-center border-t border-black p-4 max-md:p-3 bg-white">
+                <div className="shrink-0 flex justify-center items-center border-t border-slate-200 p-3 sm:p-4 bg-white">
                   <button
-                    className="cursor-pointer px-8 py-3 rounded-[10px] bg-[#17ab07] text-white border-none text-lg font-bold transition-all hover:bg-[#118005] hover:scale-105 active:scale-95 w-full flex items-center justify-center gap-2"
+                    className="cursor-pointer px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl bg-[#17ab07] text-white border-none text-sm sm:text-lg font-bold transition-all hover:bg-[#118005] w-full flex items-center justify-center gap-2"
                     onClick={() => setShowConfirmEndModal(true)}
                   >
-                    <FileCheck className="w-5 h-5" /> Submit
+                    <FileCheck className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> Submit
                   </button>
                 </div>
               </div>

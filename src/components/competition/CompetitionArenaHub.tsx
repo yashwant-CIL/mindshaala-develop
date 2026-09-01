@@ -27,7 +27,7 @@ export const CompetitionArenaHub: React.FC<{ initialTab?: CompetitionTabType }> 
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
       {/* Top Arena Navigation Bar - Light Theme */}
-      <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 md:px-8 py-3.5 flex items-center justify-between shadow-sm">
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-200 pl-14 pr-4 md:px-8 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold shadow-md shadow-blue-500/20">
             <Trophy className="w-5 h-5" />

@@ -286,7 +286,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             else if (isCorrect) correct++;
             else incorrect++;
 
-            const timeSec = Number(q.total_time_taken || q.time_taken_seconds || q.time_taken || q.timeSpent || 0);
+            const timeSec = Number(q.total_time_taken || q.time_taken_seconds || q.time_taken || q.timeSpent );
 
             return {
               id: String(q.question_id || q.gk_question_id || q.v_ans_id || q.id || `q-${idx + 1}`),
@@ -301,7 +301,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               isSkipped,
               explanation: q.answer_description || q.gk_answer || q.answer_explanation || q.explanation || q.gk_explanation || q.solution || 'Detailed solution for this question.',
               aiFeedback: q.ai_feedback || q.speech_transcript || q.feedback_text || (isCorrect ? 'Strong response precision!' : (isSkipped ? 'Question was not attempted.' : 'Review fundamental concepts for this question.')),
-              timeSpent: timeSec > 0 ? `${timeSec}s` : (q.timeSpent || 'Viva Oral'),
+              timeSpent: timeSec > 0 ? `${timeSec}s` : (q.time_taken_seconds),
               topic: q.topic_name || q.subject || q.topic || sessionObj.subject_name || sessionObj.assessment_name || sessionObj.gk_assessment_name || 'General Knowledge',
               difficulty: q.difficulty || (idx % 3 === 0 ? 'Easy' : idx % 3 === 1 ? 'Medium' : 'Hard'),
               userTranscription: q.user_transcription || undefined
@@ -427,162 +427,121 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
   const activeModuleUpper = (activeResult.moduleType || moduleType || 'GK').toUpperCase();
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-4 md:p-6 lg:p-8 space-y-8 font-sans">
+    <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-3 sm:p-5 md:p-6 lg:p-8 space-y-6 md:space-y-8 font-sans max-w-7xl mx-auto">
       {/* Top Bar with Back Button */}
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs shadow-sm transition-all cursor-pointer"
+          className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs shadow-sm transition-all cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4 text-slate-600" />
+          <ArrowLeft className="w-4 h-4 text-slate-600 shrink-0" />
           Back to Competition History
         </button>
-
-        {/* <div className="flex items-center gap-2">
-          <button className="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer">
-            <Share2 className="w-3.5 h-3.5 text-slate-500" /> Share Result
-          </button>
-          <button className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 cursor-pointer">
-            <Download className="w-3.5 h-3.5" /> Download Report (PDF)
-          </button>
-        </div> */}
       </div>
 
       {/* Main Result Summary Header Card */}
-      <div className="bg-gradient-to-br from-white via-slate-50 to-blue-50/40 border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold uppercase tracking-wider">
+      <div className="bg-gradient-to-br from-white via-slate-50 to-blue-50/40 border border-slate-200 rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm space-y-4 sm:space-y-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-[10px] sm:text-xs font-bold uppercase tracking-wider">
                 {activeModuleUpper} Module
               </span>
               <span className="text-xs text-slate-500">{activeResult.attemptDate}</span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight break-words">
               {activeResult.competitionTitle}
             </h1>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
               Detailed performance analysis, topic breakdown, AI feedback, and step-by-step question solutions.
             </p>
           </div>
 
           {/* Score & Rank Badges */}
-          <div className="flex flex-wrap items-center gap-3 md:gap-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-center gap-3.5 shadow-sm">
-              <div className="p-3 rounded-xl bg-amber-500 text-white font-black shadow-md shadow-amber-500/20">
-                <Trophy className="w-6 h-6" />
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 sm:gap-4 w-full lg:w-auto">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 sm:px-5 sm:py-4 flex items-center gap-2.5 sm:gap-3.5 shadow-sm flex-1 sm:flex-none">
+              <div className="p-2 sm:p-3 rounded-xl bg-amber-500 text-white font-black shadow-md shadow-amber-500/20 shrink-0">
+                <Trophy className="w-4 h-4 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-[11px] text-slate-500 uppercase font-semibold">National Rank</div>
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] text-slate-500 uppercase font-semibold truncate">National Rank</div>
                 {activeResult.rank !== undefined && activeResult.rank !== null ? (
-                  <div className="text-xl font-black text-amber-700">Rank #{activeResult.rank}</div>
+                  <div className="text-base sm:text-xl font-black text-amber-700 truncate">Rank #{activeResult.rank}</div>
                 ) : (
-                  <div className="text-sm font-bold text-slate-400 py-0.5">Not Declared</div>
+                  <div className="text-xs sm:text-sm font-bold text-slate-400 py-0.5 truncate">Not Declared</div>
                 )}
-                {/* <div className="text-[10px] text-amber-600 font-bold">Top {activeResult.percentile}% Percentile</div> */}
               </div>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 flex items-center gap-3.5 shadow-sm">
-              <div className="p-3 rounded-xl bg-blue-600 text-white font-black shadow-md shadow-blue-500/20">
-                <Award className="w-6 h-6" />
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 sm:px-5 sm:py-4 flex items-center gap-2.5 sm:gap-3.5 shadow-sm flex-1 sm:flex-none">
+              <div className="p-2 sm:p-3 rounded-xl bg-blue-600 text-white font-black shadow-md shadow-blue-500/20 shrink-0">
+                <Award className="w-4 h-4 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-[11px] text-slate-500 uppercase font-semibold">Total Score</div>
-                <div className="text-xl font-black text-slate-900">
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] text-slate-500 uppercase font-semibold truncate">Total Score</div>
+                <div className="text-base sm:text-xl font-black text-slate-900 truncate">
                   {activeResult.score} <span className="text-xs text-slate-500 font-normal">/ {activeResult.maxScore}</span>
                 </div>
-                <div className="text-[10px] text-blue-700 font-bold">{activeResult.percentage}% Score</div>
+                <div className="text-[10px] text-blue-700 font-bold truncate">{activeResult.percentage}% Score</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Overview Stat Counters */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-slate-200">
-          <div className="bg-emerald-50/80 border border-emerald-200 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Correct Answers
-            </div>
-            <div className="text-2xl font-black text-emerald-800">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 pt-4 border-t border-slate-200">
+          <div className="bg-emerald-50/80 border border-emerald-200 p-3 sm:p-4 rounded-2xl space-y-1">
+            {/* <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold truncate">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Correct Answers
+            </div> */}
+            <div className="text-xl sm:text-2xl font-black text-emerald-800">
               {activeResult.correctCount} <span className="text-xs font-semibold text-emerald-600">/ {activeResult.totalQuestions}</span>
             </div>
           </div>
 
-          <div className="bg-red-50/80 border border-red-200 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-red-700 text-xs font-bold">
-              <XCircle className="w-4 h-4 text-red-600" /> Incorrect Answers
-            </div>
-            <div className="text-2xl font-black text-red-800">
+          <div className="bg-red-50/80 border border-red-200 p-3 sm:p-4 rounded-2xl space-y-1">
+            {/* <div className="flex items-center gap-1.5 text-red-700 text-xs font-bold truncate">
+              <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 shrink-0" /> Incorrect Answers
+            </div> */}
+            <div className="text-xl sm:text-2xl font-black text-red-800">
               {activeResult.incorrectCount} <span className="text-xs font-semibold text-red-600">Questions</span>
             </div>
           </div>
 
-          <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-amber-700 text-xs font-bold">
-              <AlertCircle className="w-4 h-4 text-amber-600" /> Unattempted / Skipped
+          <div className="bg-amber-50/80 border border-amber-200 p-3 sm:p-4 rounded-2xl space-y-1">
+            <div className="flex items-center gap-1.5 text-amber-700 text-xs font-bold truncate">
+              <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" /> Unattempted / Skipped
             </div>
-            <div className="text-2xl font-black text-amber-800">
+            <div className="text-xl sm:text-2xl font-black text-amber-800">
               {activeResult.skippedCount} <span className="text-xs font-semibold text-amber-600">Skipped</span>
             </div>
           </div>
 
-          <div className="bg-indigo-50/80 border border-indigo-200 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-indigo-700 text-xs font-bold">
-              <Clock className="w-4 h-4 text-indigo-600" /> Time Taken
+          <div className="bg-indigo-50/80 border border-indigo-200 p-3 sm:p-4 rounded-2xl space-y-1">
+            <div className="flex items-center gap-1.5 text-indigo-700 text-xs font-bold truncate">
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" /> Time Taken
             </div>
-            <div className="text-2xl font-black text-indigo-900">{activeResult.timeTaken}</div>
+            <div className="text-xl sm:text-2xl font-black text-indigo-900">{activeResult.timeTaken}</div>
           </div>
         </div>
       </div>
 
-      {/* Topic-Wise Performance Breakdown Section */}
-      {/* <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-blue-600" />
-            Topic-Wise Mastery Breakdown
-          </h2>
-          <span className="text-xs text-slate-500 font-medium">Performance per syllabus chapter</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {activeResult.topicBreakdown.map((t, idx) => (
-            <div key={idx} className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                <span>{t.topic}</span>
-                <span className="text-blue-700">{t.correct} / {t.total} Correct</span>
-              </div>
-
-              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full"
-                  style={{ width: `${t.percentage}%` }}
-                />
-              </div>
-
-              <div className="text-[11px] text-slate-500 font-medium text-right">{t.percentage.toFixed(0)}% Accuracy</div>
-            </div>
-          ))}
-        </div>
-      </div> */}
-
       {/* Question-By-Question Detailed Review Section */}
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-indigo-600 shrink-0" />
               Attempted Questions, AI Feedback & Solutions
             </h2>
             <p className="text-xs text-slate-500">Review selected choices, correct answers, step-by-step reasoning, and AI feedback.</p>
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm self-start sm:self-auto">
+          <div className="flex items-center gap-1 sm:gap-1.5 bg-white p-1 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto no-scrollbar scrollbar-none max-w-full">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'all' ? 'bg-blue-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -590,7 +549,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             </button>
             <button
               onClick={() => setFilterType('correct')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'correct' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -598,7 +557,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             </button>
             <button
               onClick={() => setFilterType('incorrect')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'incorrect' ? 'bg-red-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -606,7 +565,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             </button>
             <button
               onClick={() => setFilterType('skipped')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'skipped' ? 'bg-amber-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -617,12 +576,12 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
 
         {/* Questions List */}
         {filteredQuestions.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-2">
-            <HelpCircle className="w-10 h-10 text-slate-400 mx-auto" />
-            <p className="text-slate-700 font-semibold">No questions found matching this filter.</p>
+          <div className="p-8 sm:p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-2">
+            <HelpCircle className="w-8 h-8 sm:w-10 sm:h-10 text-slate-400 mx-auto" />
+            <p className="text-xs sm:text-sm text-slate-700 font-semibold">No questions found matching this filter.</p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {filteredQuestions.map((q) => (
               <QuestionReviewCard key={q.id} question={q} moduleType={activeModuleUpper} />
             ))}
@@ -637,7 +596,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
 const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: string }> = ({ question, moduleType = 'GK' }) => {
   return (
     <div
-      className={`bg-white border rounded-3xl p-6 space-y-5 shadow-sm transition-all ${
+      className={`bg-white border rounded-3xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-sm transition-all ${
         question.isCorrect
           ? 'border-emerald-200 hover:border-emerald-300'
           : question.isSkipped
@@ -646,10 +605,10 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
       }`}
     >
       {/* Question Card Top Bar */}
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 sm:pb-4">
+        <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`w-8 h-8 rounded-full font-black text-xs flex items-center justify-center text-white ${
+            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full font-black text-[11px] sm:text-xs flex items-center justify-center text-white shrink-0 ${
               question.isCorrect
                 ? 'bg-emerald-600 shadow-md shadow-emerald-600/20'
                 : question.isSkipped
@@ -660,12 +619,12 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
             Q{question.questionNumber}
           </span>
 
-          <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-semibold">
+          <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] sm:text-xs font-semibold break-words">
             {question.topic}
           </span>
 
           <span
-            className={`px-2.5 py-0.5 rounded-md text-xs font-bold ${
+            className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold ${
               question.difficulty === 'Easy'
                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                 : question.difficulty === 'Medium'
@@ -677,34 +636,34 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-500 font-mono flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-slate-400" /> {question.timeSpent}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <span className="text-[11px] sm:text-xs text-slate-500 font-mono flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {question.timeSpent} sec
           </span>
 
           {question.isCorrect ? (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-extrabold">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Correct
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] sm:text-xs font-extrabold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Correct
             </span>
           ) : question.isSkipped ? (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-extrabold">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Unattempted
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] sm:text-xs font-extrabold">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" /> Unattempted
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-extrabold">
-              <XCircle className="w-3.5 h-3.5 text-red-600" /> Incorrect
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-[11px] sm:text-xs font-extrabold">
+              <XCircle className="w-3.5 h-3.5 text-red-600 shrink-0" /> Incorrect
             </span>
           )}
         </div>
       </div>
 
       {/* Question Text */}
-      <div className="text-base font-bold text-slate-900 leading-relaxed">
+      <div className="text-sm sm:text-base font-bold text-slate-900 leading-relaxed break-words">
         {question.questionText}
       </div>
 
       {/* Options Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 pt-1 sm:pt-2">
         {question.options.map((opt, optIdx) => {
           const isSelected = question.selectedOption === optIdx;
           const isCorrectChoice = question.correctOption === optIdx;
@@ -720,11 +679,11 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
           return (
             <div
               key={optIdx}
-              className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${optionStyle}`}
+              className={`p-3 sm:p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-all ${optionStyle}`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1 break-words">
                 <span
-                  className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center border ${
+                  className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center border shrink-0 mt-0.5 sm:mt-0 ${
                     isCorrectChoice
                       ? 'bg-emerald-600 text-white border-emerald-600'
                       : isSelected && !isCorrectChoice
@@ -734,18 +693,20 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
                 >
                   {String.fromCharCode(65 + optIdx)}
                 </span>
-                <span className="text-sm">{opt}</span>
+                <span className="text-xs sm:text-sm leading-snug break-words">{opt}</span>
               </div>
 
               {isCorrectChoice && (
-                <span className="text-xs font-extrabold text-emerald-700 flex items-center gap-1">
-                  <Check className="w-4 h-4 text-emerald-600" /> Correct Answer
-                </span>
+                ""
+                // <span className="text-[11px] sm:text-xs font-extrabold text-emerald-700 flex items-center gap-1 shrink-0 self-start sm:self-auto">
+                //   <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Correct Answer
+                // </span>
               )}
               {isSelected && !isCorrectChoice && (
-                <span className="text-xs font-extrabold text-red-700 flex items-center gap-1">
-                  <XCircle className="w-4 h-4 text-red-600" /> Your Choice
-                </span>
+                ""
+                // <span className="text-[11px] sm:text-xs font-extrabold text-red-700 flex items-center gap-1 shrink-0 self-start sm:self-auto">
+                //   <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 shrink-0" /> Your Choice
+                // </span>
               )}
             </div>
           );
@@ -754,30 +715,30 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
 
       {/* Transcribed Spoken Response (for Viva) */}
       {question.userTranscription && (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-1 mt-3">
-          <div className="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Recorded Answer</div>
-          <p className="text-xs text-slate-700 italic font-sans">"{question.userTranscription}"</p>
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 sm:p-4 space-y-1 mt-3">
+          <div className="text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider">Your Recorded Answer</div>
+          <p className="text-xs text-slate-700 italic font-sans break-words">"{question.userTranscription}"</p>
         </div>
       )}
 
       {/* AI Feedback Section */}
       {question.aiFeedback && (
-        <div className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-4 space-y-2 mt-3">
-          <div className="flex items-center gap-2 text-xs font-extrabold text-indigo-900 uppercase tracking-wider">
-            <Sparkles className="w-4 h-4 text-indigo-600" /> AI Feedback & Evaluation
+        <div className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-3.5 sm:p-4 space-y-1.5 mt-3">
+          <div className="flex items-center gap-2 text-[10px] sm:text-xs font-extrabold text-indigo-900 uppercase tracking-wider">
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" /> AI Feedback & Evaluation
           </div>
-          <p className="text-xs text-slate-700 leading-relaxed font-sans">{question.aiFeedback}</p>
+          <p className="text-xs text-slate-700 leading-relaxed font-sans break-words">{question.aiFeedback}</p>
         </div>
       )}
 
       {/* Answer Explanation / Model Solution Box */}
       {question.explanation && (
-        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 space-y-2 mt-2">
-          <div className="flex items-center gap-2 text-xs font-extrabold text-amber-900 uppercase tracking-wider">
-            <BookOpen className="w-4 h-4 text-amber-600" />
+        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 sm:p-4 space-y-1.5 mt-2">
+          <div className="flex items-center gap-2 text-[10px] sm:text-xs font-extrabold text-amber-900 uppercase tracking-wider">
+            <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" />
             {moduleType === 'GK' ? 'GK Answer Explanation' : 'Model Answer & Solution'}
           </div>
-          <p className="text-xs text-slate-700 leading-relaxed font-sans">{question.explanation}</p>
+          <p className="text-xs text-slate-700 leading-relaxed font-sans break-words">{question.explanation}</p>
         </div>
       )}
     </div>

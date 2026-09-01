@@ -142,6 +142,26 @@ export default function GKExamRunner({
     };
   }, [examSubmitted]);
 
+  // Hide sidebars, mobile avatar, and floating action buttons (Focus Mode & AI Support icons) during secure GK exam runner execution
+  useEffect(() => {
+    const sidebar = document.querySelector('[data-sidebar]') as HTMLElement;
+    const sidebarMini = document.querySelector('[data-sidebar-mini]') as HTMLElement;
+    const sidebarAvatar = document.querySelector('[data-sidebar-avatar]') as HTMLElement;
+    const floatingActions = document.getElementById('floating-actions-container');
+
+    if (sidebar) sidebar.style.display = 'none';
+    if (sidebarMini) sidebarMini.style.display = 'none';
+    if (sidebarAvatar) sidebarAvatar.style.display = 'none';
+    if (floatingActions) floatingActions.style.display = 'none';
+
+    return () => {
+      if (sidebar) sidebar.style.display = '';
+      if (sidebarMini) sidebarMini.style.display = '';
+      if (sidebarAvatar) sidebarAvatar.style.display = '';
+      if (floatingActions) floatingActions.style.display = '';
+    };
+  }, []);
+
   // Keep track of visited questions
   useEffect(() => {
     setVisitedQuestions(prev => {
@@ -978,19 +998,19 @@ export default function GKExamRunner({
 
       {/* 5. POST-EXAM SCORECARD / PERFORMANCE ANALYTICS */}
       {examSubmitted && !showSolution && (
-        <div className="max-w-5xl mx-auto px-6 py-10 space-y-8 animate-fadeIn text-slate-800">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6 py-6 sm:py-10 space-y-5 sm:space-y-8 animate-fadeIn text-slate-800 w-full">
           {/* Performance Summary Banner */}
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+          <div className="bg-white p-5 sm:p-8 rounded-2xl sm:rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 sm:gap-8 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-96 h-96 bg-blue-50/40 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 -z-0"></div>
             
-            <div className="space-y-4 relative z-10">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[10px] font-black uppercase tracking-widest">
+            <div className="space-y-3 sm:space-y-4 relative z-10 text-center md:text-left">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
                 Exam Successfully Completed
               </span>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight">{feedbackHeading}</h1>
-              <p className="text-slate-500 font-medium max-w-xl">{feedbackSub}</p>
+              <h1 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">{feedbackHeading}</h1>
+              <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl">{feedbackSub}</p>
               
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 flex-wrap">
+              <div className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-center md:justify-start gap-1.5 flex-wrap">
                 <span>Category:</span>
                 <span className="text-slate-800">{category}</span>
                 <span className="text-slate-300">•</span>
@@ -1003,7 +1023,7 @@ export default function GKExamRunner({
             </div>
 
             {/* Circular score gauge */}
-            <div className="shrink-0 flex flex-col items-center justify-center p-6 bg-slate-50 rounded-full border border-slate-100 relative w-44 h-44 shadow-inner">
+            <div className="shrink-0 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-50 rounded-full border border-slate-100 relative w-36 h-36 sm:w-44 sm:h-44 shadow-inner">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
                 <circle
                   cx="60"
@@ -1024,51 +1044,51 @@ export default function GKExamRunner({
                 />
               </svg>
               <div className="absolute flex flex-col items-center">
-                <span className="text-3xl font-black text-slate-800">{correctCount}/{questions.length}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Correct</span>
+                <span className="text-2xl sm:text-3xl font-black text-slate-800">{correctCount}/{questions.length}</span>
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Correct</span>
               </div>
             </div>
           </div>
 
           {/* Performance metrics grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                <TrendingUp className="w-6 h-6" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+            <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4.5 h-4.5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Accuracy</span>
-                <h4 className="text-2xl font-black text-slate-800 mt-0.5">{accuracyRate}%</h4>
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Accuracy</span>
+                <h4 className="text-base sm:text-2xl font-black text-slate-800 mt-0.5 leading-tight">{accuracyRate}%</h4>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                <Clock className="w-6 h-6" />
+            <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                <Clock className="w-4.5 h-4.5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Taken</span>
-                <h4 className="text-2xl font-black text-slate-800 mt-0.5">{Math.floor(timeSpent / 60)}m {timeSpent % 60}s</h4>
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Time Taken</span>
+                <h4 className="text-base sm:text-2xl font-black text-slate-800 mt-0.5 leading-tight">{Math.floor(timeSpent / 60)}m {timeSpent % 60}s</h4>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                <Zap className="w-6 h-6" />
+            <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                <Zap className="w-4.5 h-4.5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pace</span>
-                <h4 className="text-2xl font-black text-slate-800 mt-0.5">{speedPerQuestion}s / Q</h4>
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Pace</span>
+                <h4 className="text-base sm:text-2xl font-black text-slate-800 mt-0.5 leading-tight">{speedPerQuestion}s / Q</h4>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-                <Brain className="w-6 h-6" />
+            <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                <Brain className="w-4.5 h-4.5 sm:w-6 sm:h-6" />
               </div>
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Max Streak</span>
-                <h4 className="text-2xl font-black text-slate-800 mt-0.5">{maxStreak} Correct</h4>
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Max Streak</span>
+                <h4 className="text-base sm:text-2xl font-black text-slate-800 mt-0.5 leading-tight">{maxStreak} Correct</h4>
               </div>
             </div>
           </div>

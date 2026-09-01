@@ -15,6 +15,8 @@ import {
 import { toast } from 'react-hot-toast';
 import { SpeakAlongService } from '../../services/SpeakAlongService';
 import QuestionMathJax from '../../shared/mathjaxconfig/QuestionMathJax';
+import { speakText } from '../../utils/ttsHelper';
+
 
 interface SpeakAlongSessionProps {
   courseId: number;
@@ -35,7 +37,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   const [isPlaying, setIsPlaying] = useState(false);
   const [isSpeakingQuestion, setIsSpeakingQuestion] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [speechRate, setSpeechRate] = useState(0.9);
+  const [speechRate, setSpeechRate] = useState(1.0);
   
   const [userTranscript, setUserTranscript] = useState('');
   
@@ -46,7 +48,13 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   const audioChunksRef = useRef<Blob[]>([]);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
   const [isQuestionFinished, setIsQuestionFinished] = useState(false);
+  const [isSpeakingFull, setIsSpeakingFull] = useState(false);
   const [autoPlayNext, setAutoPlayNext] = useState(false);
+  const [practiceMode, setPracticeMode] = useState<'chunks' | 'full'>('chunks');
+  
+  const [fullAnswerTokens, setFullAnswerTokens] = useState<string[]>([]);
+  const [currentTokenIdx, setCurrentTokenIdx] = useState<number>(-1);
+  const tokenRangesRef = useRef<{ start: number; end: number }[]>([]);
 
   const aiSpeechStartTimeRef = useRef<number>(0);
   const speechTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -94,7 +102,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
             setQuestions(parsed.questions);
             setCurrentQuestionIdx(parsed.currentQuestionIdx || 0);
             setCurrentChunkIdx(parsed.currentChunkIdx || 0);
-            setSpeechRate(parsed.speechRate || 0.9);
+            setSpeechRate(parsed.speechRate || 1.0);
             setLoading(false);
             return;
           }
@@ -118,7 +126,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
             questions: data,
             currentQuestionIdx: 0,
             currentChunkIdx: 0,
-            speechRate: 0.9
+            speechRate: 1.0
           }));
         } else {
           toast.error("No questions found for this selection.");
@@ -157,6 +165,56 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     }
   }, [questions, currentQuestionIdx, currentChunkIdx, speechRate]);
 
+  // NEW: Handle Fullscreen Mode and hide layout decorations (sidebar, floating tools)
+  useEffect(() => {
+    const enterFullscreen = async () => {
+      const elem = document.documentElement;
+      try {
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen();
+        } else if ((elem as any).msRequestFullscreen) {
+          await (elem as any).msRequestFullscreen();
+        }
+      } catch (err) {
+        console.warn("Could not enter fullscreen mode:", err);
+      }
+    };
+
+    enterFullscreen();
+
+    // Hide Sidebar and Floating Actions dynamically for true screen takeover
+    const sidebar = document.querySelector('[data-sidebar]') as HTMLElement;
+    const floatingActions = document.getElementById('floating-actions-container');
+    
+    if (sidebar) sidebar.style.display = 'none';
+    if (floatingActions) floatingActions.style.display = 'none';
+
+    return () => {
+      const exitFullscreen = async () => {
+        try {
+          if (document.fullscreenElement) {
+            if (document.exitFullscreen) {
+              await document.exitFullscreen();
+            } else if ((document as any).webkitExitFullscreen) {
+              await (document as any).webkitExitFullscreen();
+            } else if ((document as any).msExitFullscreen) {
+              await (document as any).msExitFullscreen();
+            }
+          }
+        } catch (err) {
+          console.warn("Could not exit fullscreen mode:", err);
+        }
+      };
+      exitFullscreen();
+
+      // Restore Sidebar and Floating Actions
+      if (sidebar) sidebar.style.display = '';
+      if (floatingActions) floatingActions.style.display = '';
+    };
+  }, []);
+
   // Initialize Speech Recognition & Media Recorder
   useEffect(() => {
     // Request microphone for media recorder
@@ -183,7 +241,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
+      recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
@@ -195,7 +253,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
         let interimTranscript = '';
         let finalTranscript = '';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
           if (event.results[i].isFinal) {
             finalTranscript += event.results[i][0].transcript;
           } else {
@@ -212,11 +270,22 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
       recognition.onerror = (event: any) => {
         console.error("Speech recognition error", event.error);
-        setIsListening(false);
+        if (!speechTimerRef.current) {
+          setIsListening(false);
+        }
       };
 
       recognition.onend = () => {
-        setIsListening(false);
+        // If our recording timer is still active, restart recognition to keep listening!
+        if (speechTimerRef.current) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.error("Failed to restart speech recognition:", e);
+          }
+        } else {
+          setIsListening(false);
+        }
       };
 
       recognitionRef.current = recognition;
@@ -278,9 +347,10 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
         // This is imperfect but usually better than nothing
         if (speechWords[i]) currentSpeech.push(speechWords[i]);
         
-        // Chunk triggers: LaTeX block, punctuation, or count
+        // Chunk triggers: LaTeX block, punctuation (comma, semicolon, full stops for all languages), or safety length limit
         const isLatex = displayTokens[i].startsWith('\\');
-        if (isLatex || displayTokens[i].match(/[.,!?]/) || currentDisplay.length >= 7 || i === displayTokens.length - 1) {
+        const isSentenceEnd = displayTokens[i].match(/[.,!?;\u0964\u0965\u06D4\u061F\u3002\uFF01\uFF1F|\uFF0C\u3001\u060C\uFF1B]["')\]}”’]*$/);
+        if (isLatex || isSentenceEnd || currentDisplay.length >= 100 || i === displayTokens.length - 1) {
            newDisplayChunks.push(currentDisplay.join(' '));
            newSpeechChunks.push(currentSpeech.join(' '));
            currentDisplay = [];
@@ -296,9 +366,23 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
       setChunks(newDisplayChunks);
       setSpeechChunks(newSpeechChunks);
+      
+      const tokensList = getTokens(speechText);
+      setFullAnswerTokens(tokensList);
+      
+      let sum = 0;
+      tokenRangesRef.current = tokensList.map((token) => {
+        const start = sum;
+        const end = sum + token.length;
+        sum = end + 1; // plus 1 for space
+        return { start, end };
+      });
+      setCurrentTokenIdx(-1);
+
       setCurrentChunkIdx(0);
       setUserTranscript('');
       setIsQuestionFinished(false);
+      setIsSpeakingFull(false);
       setRecordedAudioUrl(null);
       audioChunksRef.current = [];
       
@@ -325,68 +409,108 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     const text = q?.question_transcribe || q.question_transcribe || "";
     if (!text) return;
 
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = speechRate;
-    
-    utterance.onstart = () => {
-      setIsSpeakingQuestion(true);
-      setIsPlaying(true);
-    };
-    
-    utterance.onend = () => {
-      setIsSpeakingQuestion(false);
-      setIsPlaying(false);
-      // After question finishes, start first chunk
-      setAutoPlayNext(true);
-    };
+    speakText(text, {
+      rate: speechRate,
+      onstart: () => {
+        setIsSpeakingQuestion(true);
+        setIsPlaying(true);
+      },
+      onend: () => {
+        setIsSpeakingQuestion(false);
+        setIsPlaying(false);
+        // After question finishes, start first chunk
+        setAutoPlayNext(true);
+      },
+      onerror: () => {
+        setIsSpeakingQuestion(false);
+        setIsPlaying(false);
+        setAutoPlayNext(true);
+      }
+    });
+  };
 
-    utterance.onerror = () => {
-      setIsSpeakingQuestion(false);
+  const speakFullAnswer = () => {
+    if (isPlaying && isSpeakingFull) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       setIsPlaying(false);
-      setAutoPlayNext(true);
-    };
+      setIsSpeakingFull(false);
+      return;
+    }
     
-    synth.speak(utterance);
+    const q = questions[currentQuestionIdx];
+    const text = q?.answer_transcribe || "";
+    if (!text || !synth) return;
+    
+    // Stop listening if we were listening
+    if (recognitionRef.current && isListening) {
+      try { recognitionRef.current.stop(); } catch(e){}
+    }
+    if (speechTimerRef.current) {
+      clearTimeout(speechTimerRef.current);
+      speechTimerRef.current = null;
+    }
+    
+    speakText(text, {
+      rate: speechRate,
+      onstart: () => {
+        setIsSpeakingFull(true);
+        setIsPlaying(true);
+        setCurrentTokenIdx(-1);
+        aiSpeechStartTimeRef.current = Date.now();
+      },
+      onend: () => {
+        setIsSpeakingFull(false);
+        setIsPlaying(false);
+        setCurrentTokenIdx(-1);
+      },
+      onerror: () => {
+        setIsSpeakingFull(false);
+        setIsPlaying(false);
+        setCurrentTokenIdx(-1);
+      },
+      onboundary: (event: any) => {
+        if (event.name === 'word') {
+          const charIndex = event.charIndex;
+          const ranges = tokenRangesRef.current;
+          const tokenIdx = ranges.findIndex(r => charIndex >= r.start && charIndex < r.end);
+          if (tokenIdx !== -1) {
+            setCurrentTokenIdx(tokenIdx);
+          }
+        }
+      }
+    });
   };
 
   const speakCurrentChunk = () => {
     const textToSpeak = speechChunks[currentChunkIdx] || chunks[currentChunkIdx];
     if (!textToSpeak || !synth) return;
     
-    // Cancel any ongoing speech
-    synth.cancel();
-    
     // Pause MediaRecorder if it was recording
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
        mediaRecorderRef.current.pause();
     }
     
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.rate = speechRate;
-    
-    utterance.onstart = () => {
-      setIsPlaying(true);
-      aiSpeechStartTimeRef.current = Date.now();
-      if (recognitionRef.current && isListening) {
-         try { recognitionRef.current.stop(); } catch(e){}
+    speakText(textToSpeak, {
+      rate: speechRate,
+      onstart: () => {
+        setIsPlaying(true);
+        aiSpeechStartTimeRef.current = Date.now();
+        if (recognitionRef.current && isListening) {
+           try { recognitionRef.current.stop(); } catch(e){}
+        }
+      },
+      onend: () => {
+        setIsPlaying(false);
+      },
+      onerror: (e) => {
+         console.error("TTS Error", e);
+         setIsPlaying(false);
       }
-    };
-    
-    utterance.onend = () => {
-      setIsPlaying(false);
-      const speechDuration = Date.now() - aiSpeechStartTimeRef.current;
-      // Automatically start listening after speaking, passing the exact duration
-      startListening(speechDuration);
-    };
-    
-    utterance.onerror = (e) => {
-       console.error("TTS Error", e);
-       setIsPlaying(false);
-    }
-    
-    synth.speak(utterance);
+    });
   };
+
 
   /* Original startListening
   const startListening = (duration: number = 3000) => {
@@ -419,8 +543,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   };
   */
 
-  // NEW: Updated startListening with timing sync and commented auto-next
+  // NEW: Updated startListening with dynamic comfortable duration
   const startListening = (duration: number = 3000) => {
+    setIsListening(true); // Force listening state to true immediately
     if (recognitionRef.current) {
       setUserTranscript('');
       try {
@@ -443,11 +568,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     // Set auto-advance timer strictly based on AI speech duration
     if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
     
-    // PER USER REQUEST: The time taken by the AI to speak the chunk is used to determine the user's turn.
-    // MODIFICATION: We add a 1-second buffer (1000ms) to the duration. 
-    // This is because humans need a moment to process the speech and start talking. 
-    // Without this buffer, short chunks (less than 1s) feel "instant" and cut off the user.
-    const recordingDuration = Math.max(duration + 1000, 2000); // Give at least 2 seconds for any chunk
+    // PER USER REQUEST: The recording duration is exactly 2x the time taken by the speech, with a safe 5-second minimum
+    const recordingDuration = Math.max(duration , 2000);
     
     /* 
     // AUTO-NEXT FUNCTIONALITY: Commented out as per user request.
@@ -459,11 +581,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
     // Since auto-next is disabled, we automatically stop recognition/recording after the calculated duration
     speechTimerRef.current = setTimeout(() => {
+       speechTimerRef.current = null;
        if (recognitionRef.current && isListening) {
          try { recognitionRef.current.stop(); } catch(e){}
        }
-       // If it's the last chunk, we stop the media recorder to finalize the audio
-       if (currentChunkIdx === chunks.length - 1) {
+       // If it's the last chunk or practice mode is full, we stop the media recorder to finalize the audio
+       if (practiceMode === 'full' || currentChunkIdx === chunks.length - 1) {
          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
             setIsQuestionFinished(true);
@@ -483,7 +606,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       try { recognitionRef.current.stop(); } catch(e){}
     }
     
-    if (currentChunkIdx < chunks.length - 1) {
+    if (currentChunkIdx < chunks.length - 1 && practiceMode === 'chunks') {
       setCurrentChunkIdx(prev => prev + 1);
       setUserTranscript('');
       setAutoPlayNext(true); // Trigger auto-play
@@ -508,28 +631,69 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   };
 
   const handlePlayPause = () => {
+    // Request fullscreen on user interaction to bypass browser gesture security constraints
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      try {
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          (elem as any).webkitRequestFullscreen();
+        }
+      } catch (err) {
+        console.warn("Could not request fullscreen on user interaction:", err);
+      }
+    }
+
     if (isPlaying) {
       synth.cancel();
       setIsPlaying(false);
       setIsSpeakingQuestion(false);
+      setIsSpeakingFull(false);
     } else {
       if (isQuestionFinished) return;
-      if (currentChunkIdx === 0 && !isSpeakingQuestion) {
-          speakQuestion();
+      if (practiceMode === 'full') {
+        speakFullAnswer();
       } else {
+        if (currentChunkIdx === 0 && !isSpeakingQuestion) {
+          speakQuestion();
+        } else {
           speakCurrentChunk();
+        }
       }
     }
   };
 
   const handleDiscard = () => {
-    if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
+    if (speechTimerRef.current) {
+      clearTimeout(speechTimerRef.current);
+      speechTimerRef.current = null;
+    }
     setIsQuestionFinished(false);
+    setIsSpeakingFull(false);
     setRecordedAudioUrl(null);
     audioChunksRef.current = [];
     setCurrentChunkIdx(0);
     setUserTranscript('');
     speakQuestion();
+  };
+
+  const handleEndSession = () => {
+    if (speechTimerRef.current) {
+      clearTimeout(speechTimerRef.current);
+      speechTimerRef.current = null;
+    }
+    if (synth) synth.cancel();
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+
+    const sessionKey = `speakalong_session_${courseId}_${subjectId}_${chapterId}`;
+    localStorage.removeItem(sessionKey);
+    onExit();
   };
 
   if (loading) {
@@ -544,333 +708,214 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   const question = questions?.[currentQuestionIdx];
   const question_text = question?.question_details?.question_latex;
   console.log("question_text", question_text);
-  // Original UI
-  // return (
-  //   <div className="min-h-screen bg-slate-50 flex flex-col">
-  //     {/* Header */}
-  //     <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-  //       <div className="flex items-center gap-4">
-  //         <button 
-  //           onClick={onExit}
-  //           className="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors"
-  //         >
-  //           <ArrowLeft className="w-5 h-5" />
-  //         </button>
-  //         <div>
-  //           <h2 className="font-bold text-slate-800 text-lg">SpeakAlong Practice</h2>
-  //           <p className="text-xs text-slate-500 font-medium">{subjectName} • Question {currentQuestionIdx + 1} of {questions.length}</p>
-  //         </div>
-  //       </div>
-  //       
-  //       {/* Speed Control */}
-  //       <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
-  //          <Settings className="w-4 h-4 text-slate-400" />
-  //          <span className="text-xs font-bold text-slate-500 uppercase">Speed: {speechRate}x</span>
-  //          <input 
-  //            type="range" 
-  //            min="0.5" max="1.5" step="0.1" 
-  //            value={speechRate}
-  //            onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
-  //            className="w-24 accent-indigo-600"
-  //          />
-  //       </div>
-  //     </div>
-  //
-  //     {/* Main Content Area */}
-  //     <div className="flex-1 max-w-4xl w-full mx-auto p-6 md:p-8 flex flex-col gap-8">
-  //       
-  //       {/* Question Card */}
-  //       <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm relative overflow-hidden">
-  //          <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
-  //          <span className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-2 block">Question {currentQuestionIdx + 1}</span>
-  //          <div className={`text-2xl font-black transition-colors duration-500 ${isSpeakingQuestion ? 'text-indigo-600' : 'text-slate-800'} leading-snug`}>
-  //            <QuestionMathJax content={question?.question_details?.question_latex} />
-  //          </div>
-  //       </div>
-  //
-  //       <div className="flex-1 bg-white rounded-3xl p-8 border border-slate-200 shadow-xl flex flex-col">
-  //            
-  //            <div className="flex items-center justify-between mb-8 pb-6 border-b border-slate-100">
-  //               <div className="flex items-center gap-2">
-  //                  <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-  //                     Chunk {currentChunkIdx + 1} of {chunks.length}
-  //                  </span>
-  //               </div>
-  //               
-  //               {/* Status Indicator */}
-  //               <div className="flex items-center gap-2">
-  //                  {isSpeakingQuestion ? (
-  //                     <span className="flex items-center gap-2 text-indigo-600 font-bold text-sm bg-indigo-50 px-4 py-2 rounded-full">
-  //                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></div>
-  //                        AI is reading question...
-  //                     </span>
-  //                  ) : isPlaying ? (
-  //                     <span className="flex items-center gap-2 text-indigo-600 font-bold text-sm bg-indigo-50 px-4 py-2 rounded-full">
-  //                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></div>
-  //                        AI is speaking...
-  //                     </span>
-  //                  ) : isListening ? (
-  //                     <span className="flex items-center gap-2 text-rose-600 font-bold text-sm bg-rose-50 px-4 py-2 rounded-full">
-  //                        <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
-  //                        Listening to you...
-  //                     </span>
-  //                  ) : isQuestionFinished ? (
-  //                     <span className="flex items-center gap-2 text-green-600 font-bold text-sm bg-green-50 px-4 py-2 rounded-full">
-  //                        <CheckCircle2 className="w-4 h-4" /> Finished
-  //                     </span>
-  //                  ) : (
-  //                     <span className="flex items-center gap-2 text-slate-500 font-bold text-sm bg-slate-100 px-4 py-2 rounded-full">
-  //                        <CheckCircle2 className="w-4 h-4" /> Ready
-  //                     </span>
-  //                  )}
-  //               </div>
-  //            </div>
-  //
-  //            <div className="flex-1 flex flex-col justify-center gap-10">
-  //               {/* Target Text */}
-  //               <div className="text-left bg-slate-50 p-6 rounded-2xl border border-slate-200">
-  //                  <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Listen & Repeat</p>
-  //                  <div className="text-2xl md:text-3xl font-medium leading-relaxed">
-  //                     {chunks.map((chunk, idx) => (
-  //                        <div 
-  //                           key={idx} 
-  //                           className={`inline-block transition-all duration-300 ${
-  //                              idx === currentChunkIdx && !isQuestionFinished && !isSpeakingQuestion
-  //                                 ? 'text-indigo-600 font-bold' 
-  //                                 : idx < currentChunkIdx || isQuestionFinished
-  //                                    ? 'text-slate-600' 
-  //                                   : 'text-slate-300'
-  //                           }`}
-  //                        >
-  //                           <QuestionMathJax content={chunk} />
-  //                           {' '}
-  //                        </div>
-  //                     ))}
-  //                  </div>
-  //               </div>
-  //
-  //               {/* User Feedback */}
-  //               {userTranscript && !isQuestionFinished && (
-  //                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-center mx-auto max-w-2xl w-full">
-  //                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
-  //                        <Mic className="w-3 h-3 text-rose-500" /> You said:
-  //                     </p>
-  //                     <p className="text-lg font-medium text-slate-700 italic">
-  //                        "{userTranscript}"
-  //                     </p>
-  //                  </div>
-  //               )}
-  //
-  //               {/* Playback UI when finished */}
-  //               {isQuestionFinished && (
-  //                  <div className="bg-green-50 p-6 rounded-2xl border border-green-200 w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-  //                     <div className="flex flex-col items-center gap-4">
-  //                        <div className="text-center">
-  //                           <h4 className="font-bold text-green-800 text-lg mb-1">Great Job!</h4>
-  //                           <p className="text-sm text-green-600">Listen to your complete response to analyze your fluency.</p>
-  //                        </div>
-  //                        <div className="w-full max-w-md bg-white p-4 rounded-xl border border-green-100 shadow-sm">
-  //                           {recordedAudioUrl ? (
-  //                              <audio src={recordedAudioUrl} controls className="w-full" />
-  //                           ) : (
-  //                              <div className="flex items-center justify-center h-12 text-slate-400">Processing audio...</div>
-  //                           )}
-  //                        </div>
-  //                     </div>
-  //                  </div>
-  //               )}
-  //            </div>
-  //
-  //            {/* Controls */}
-  //            <div className="mt-8 flex items-center justify-center gap-6">
-  //               {!isQuestionFinished ? (
-  //                  <>
-  //                     <button
-  //                       onClick={handlePlayPause}
-  //                       disabled={isListening}
-  //                       className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg ${
-  //                         isPlaying 
-  //                           ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 shadow-amber-200' 
-  //                           : isListening 
-  //                              ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
-  //                              : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200 hover:-translate-y-1'
-  //                       }`}
-  //                     >
-  //                       {isPlaying ? <Square className="w-6 h-6 fill-current" /> : <Play className="w-8 h-8 fill-current ml-1" />}
-  //                     </button>
-  //
-  //                     <button
-  //                       onClick={handleNextChunk}
-  //                       className="px-6 py-4 bg-white border-2 border-slate-200 text-slate-600 font-bold rounded-2xl hover:border-indigo-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-2 active:scale-95"
-  //                     >
-  //                        <span>{currentChunkIdx < chunks.length - 1 ? 'Next Chunk' : 'Finish Question'}</span>
-  //                        <SkipForward className="w-5 h-5" />
-  //                     </button>
-  //                  </>
-  //               ) : (
-  //                  <>
-  //                     <button
-  //                       onClick={handleDiscard}
-  //                       className="px-6 py-4 bg-rose-50 text-rose-600 font-bold rounded-2xl hover:bg-rose-100 hover:-translate-y-1 transition-all active:scale-95"
-  //                     >
-  //                        Discard & Retry
-  //                     </button>
-  //
-  //                     <button
-  //                       onClick={proceedToNextQuestion}
-  //                       className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-200 hover:-translate-y-1 transition-all flex items-center gap-2 active:scale-95"
-  //                     >
-  //                        <span>{currentQuestionIdx < questions.length - 1 ? 'Proceed to Next Question' : 'End Session'}</span>
-  //                        <SkipForward className="w-5 h-5" />
-  //                     </button>
-  //                  </>
-  //               )}
-  //            </div>
-  //       </div>
-  //     </div>
-  //   </div>
-  // );
-
-
+  
   // NEW: Revamped Premium Light Theme UI
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex flex-col font-sans selection:bg-indigo-100">
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-50 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center gap-5">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-3 py-2.5 sm:px-6 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-50 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          {/* Back arrow button - commented out as requested so user uses explicit End Session */}
+          {/*
           <button 
             onClick={onExit}
-            className="group w-12 h-12 rounded-2xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all active:scale-90"
+            className="group w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all active:scale-90"
           >
-            <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 group-hover:-translate-x-1 transition-transform" />
           </button>
-          <div className="h-10 w-[1px] bg-slate-200"></div>
+          <div className="h-5 sm:h-6 md:h-10 w-[1px] bg-slate-200"></div>
+          */}
           <div>
-            <h2 className="font-extrabold text-slate-900 text-xl tracking-tight">SpeakAlong <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Viva</span></h2>
-            <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{subjectName} • {currentQuestionIdx + 1} / {questions.length}</p>
+            <h2 className="font-extrabold text-slate-900 text-sm sm:text-base md:text-xl tracking-tight">SpeakAlong <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Viva</span></h2>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <p className="text-[10px] sm:text-xs text-slate-500 font-bold uppercase tracking-wider">{subjectName}</p>
             </div>
           </div>
         </div>
         
-        {/* Settings/Controls */}
-        <div className="flex items-center gap-4">
-            <div className="flex items-center gap-4 bg-slate-100/50 px-5 py-2.5 rounded-2xl border border-slate-200/50 w-full sm:min-w-[280px]">
-               <div className="flex items-center gap-2 shrink-0">
-                  <Settings className="w-4 h-4 text-slate-400" />
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">AI Speed</span>
-               </div>
-               <div className="flex-1 flex items-center gap-3">
-                  <input 
-                    type="range" 
-                    min="0.5" 
-                    max="3.0" 
-                    step="0.1" 
-                    value={speechRate}
-                    onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
-                    className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                  <span className="text-xs font-black text-indigo-600 w-8">{speechRate.toFixed(1)}x</span>
-               </div>
-            </div>
-        </div>
+        {/* End Session Button */}
+        <button
+          onClick={handleEndSession}
+          className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-md shadow-red-600/20 cursor-pointer border border-red-500 shrink-0"
+        >
+          <span>End Session</span>
+        </button>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-8 flex flex-col gap-6">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-3 md:p-8 flex flex-col  pb-24 lg:pb-8">
         
-        {/* Progress Bar */}
-        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-2 shadow-inner">
-            <div 
-                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(79,70,229,0.4)]"
-                style={{ width: `${((currentQuestionIdx) / questions.length) * 100}%` }}
-            ></div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-start">
             
             {/* Left Column: Question & Target */}
-            <div className="lg:col-span-8 flex flex-col gap-6">
+            <div className="lg:col-span-8 flex flex-col gap-3 md:gap-4">
+
+                {/* Question Counter & AI Speed Control on Same Line */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider">
+                    Question {currentQuestionIdx + 1} of {questions.length}
+                  </p>
+
+                  {/* AI Speed Control */}
+                  <div className="flex items-center gap-1.5 sm:gap-2.5 bg-white/90 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 shadow-sm shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Settings className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter shrink-0">AI Speed</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="range" 
+                        min="0.5" 
+                        max="3.0" 
+                        step="0.1" 
+                        value={speechRate}
+                        onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
+                        className="w-14 sm:w-20 md:w-28 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <span className="text-xs font-black text-indigo-600 w-6 sm:w-7 text-right shrink-0">{speechRate.toFixed(1)}x</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress Bar (Aligned with Question Section Width on Desktop) */}
+                <div className="w-full bg-slate-200 h-1.5 md:h-2 rounded-full overflow-hidden shadow-inner">
+                    <div 
+                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(79,70,229,0.4)]"
+                        style={{ width: `${((currentQuestionIdx) / questions.length) * 100}%` }}
+                    ></div>
+                </div>
                 
                 {/* Question Card */}
-                <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] relative overflow-hidden group">
+                <div className="bg-white rounded-2xl md:rounded-[2rem] p-4 md:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] relative overflow-hidden group">
                    <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <BrainCircuit className="w-32 h-32 text-indigo-600" />
+                      <BrainCircuit className="w-24 h-24 md:w-32 md:h-32 text-indigo-600" />
                    </div>
-                   <div className="flex items-center gap-3 mb-6">
-                      <span className="px-4 py-1.5 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-[0.2em]">Active Question</span>
+                   <div className="flex items-center gap-3 mb-3 md:mb-6">
+                      <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em]">Active Question</span>
                       {isSpeakingQuestion && (
-                         <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[10px] uppercase">
+                         <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
                             <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Speaking
                          </span>
                       )}
+                      {isPlaying && isSpeakingFull && (
+                         <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
+                            <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Reading Full
+                         </span>
+                      )}
                    </div>
-                   <div className={`text-2xl md:text-3xl font-bold transition-all duration-500 ${isSpeakingQuestion ? 'text-indigo-600 scale-[1.01]' : 'text-slate-800'} leading-[1.4]`}>
+                   <div className={`text-base sm:text-2xl md:text-3xl font-bold transition-all duration-500 ${isSpeakingQuestion ? 'text-indigo-600 scale-[1.01]' : 'text-slate-800'} leading-[1.4]`}>
                      <QuestionMathJax content={question?.question_details?.question_latex} />
                    </div>
                 </div>
 
                 {/* Target Answer / Chunks Card */}
-                <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] flex flex-col">
-                     <div className="flex items-center justify-between mb-10">
-                        <div className="flex flex-col gap-1">
-                           <h3 className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em]">Practice Phrase</h3>
-                           <p className="text-sm font-bold text-slate-600">Listen carefully and repeat the highlighted part</p>
+                <div className="bg-white rounded-2xl md:rounded-[2rem] p-4 md:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] flex flex-col">
+                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-10">
+                        <div className="flex flex-col gap-0.5">
+                           <h3 className="text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em]">Practice Phrase</h3>
+                           <p className="text-xs md:text-sm font-bold text-slate-600">Listen carefully and repeat the highlighted part</p>
                         </div>
-                        <div className="px-4 py-2 rounded-2xl bg-slate-50 border border-slate-100 text-slate-500 text-xs font-black">
-                           CHUNK {currentChunkIdx + 1} OF {chunks.length}
-                        </div>
-                     </div>
-
-                     <div className="flex-1 min-h-[200px] flex flex-col justify-center">
-                        <div className="text-2xl md:text-4xl font-medium leading-[1.6] tracking-tight">
-                           {chunks.map((chunk, idx) => (
-                              <div 
-                                 key={idx} 
-                                 className={`inline transition-all duration-500 px-1 rounded-lg ${
-                                    idx === currentChunkIdx && !isQuestionFinished && !isSpeakingQuestion
-                                       ? 'text-indigo-600 font-bold bg-indigo-50/50 shadow-[0_0_20px_rgba(79,70,229,0.1)]' 
-                                       : idx < currentChunkIdx || isQuestionFinished
-                                          ? 'text-slate-400/60' 
-                                          : 'text-slate-200'
+                        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                            {/* Segmented Control Practice Mode Selector */}
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/50 shrink-0">
+                               <button
+                                 onClick={() => {
+                                   synth.cancel();
+                                   setIsPlaying(false);
+                                   setIsSpeakingFull(false);
+                                   setPracticeMode('chunks');
+                                 }}
+                                 disabled={isSpeakingQuestion}
+                                 className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                   practiceMode === 'chunks'
+                                     ? 'bg-indigo-600 text-white shadow-sm'
+                                     : 'text-slate-500 hover:text-slate-700'
                                  }`}
-                              >
-                                 <QuestionMathJax content={chunk} />
-                                 {' '}
-                              </div>
-                           ))}
-                        </div>
+                               >
+                                  Chunks
+                               </button>
+                               <button
+                                 onClick={() => {
+                                   synth.cancel();
+                                   setIsPlaying(false);
+                                   setPracticeMode('full');
+                                 }}
+                                 disabled={isSpeakingQuestion}
+                                 className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                   practiceMode === 'full'
+                                     ? 'bg-indigo-600 text-white shadow-sm'
+                                     : 'text-slate-500 hover:text-slate-700'
+                                 }`}
+                               >
+                                  Full Answer
+                               </button>
+                            </div>
+
+                            {practiceMode === 'chunks' && (
+                               <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-wider shrink-0">
+                                  CHUNK {currentChunkIdx + 1} OF {chunks.length}
+                               </div>
+                            )}
+                         </div>
                      </div>
 
-                     {/* Micro-Interaction for Voice */}
-                     <div className="mt-10 h-12 flex items-center justify-center gap-1">
-                        {isListening ? (
-                           Array.from({ length: 12 }).map((_, i) => (
-                              <div 
-                                key={i}
-                                className="w-1.5 bg-indigo-500 rounded-full animate-voice-bar"
-                                style={{ 
-                                    height: `${Math.random() * 100 + 20}%`,
-                                    animationDelay: `${i * 0.1}s`
-                                }}
-                              ></div>
-                           ))
-                        ) : isPlaying ? (
-                           <div className="flex items-center gap-3 text-indigo-500 font-bold text-sm tracking-wide bg-indigo-50/50 px-6 py-2 rounded-full border border-indigo-100/50">
-                              <Volume2 className="w-4 h-4 animate-bounce" />
-                              AI is speaking...
-                           </div>
-                        ) : (
-                           <div className="w-full h-[1px] bg-slate-100 relative">
-                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
-                           </div>
-                        )}
+                     <div className="flex-1 min-h-[120px] md:min-h-[200px] flex flex-col justify-center">
+                        <div className="text-base sm:text-2xl md:text-4xl font-medium leading-[1.6] tracking-tight">
+                           {isSpeakingFull ? (
+                              fullAnswerTokens.map((token, idx) => (
+                                 <div
+                                    key={idx}
+                                    className={`inline transition-all duration-300 px-0.5 rounded ${
+                                       idx === currentTokenIdx
+                                          ? 'text-indigo-700 font-extrabold bg-indigo-100 shadow-[0_0_15px_rgba(79,70,229,0.25)] scale-[1.1] border border-indigo-200/50 relative z-10'
+                                          : 'text-indigo-600 font-bold bg-indigo-50/50 shadow-[0_0_20px_rgba(79,70,229,0.06)]'
+                                    }`}
+                                 >
+                                    <QuestionMathJax content={token} />
+                                    {' '}
+                                 </div>
+                              ))
+                           ) : (
+                               chunks.map((chunk, idx) => {
+                                  const isHighlighted = (practiceMode === 'full' || idx === currentChunkIdx) && !isQuestionFinished && !isSpeakingQuestion;
+                                  const isDimmed = isQuestionFinished || (practiceMode !== 'full' && idx < currentChunkIdx);
+                                  return (
+                                     <div 
+                                        key={idx} 
+                                        className={`inline transition-all duration-500 px-1 rounded-lg ${
+                                           isHighlighted
+                                              ? 'text-indigo-600 font-bold bg-indigo-50/50 shadow-[0_0_20px_rgba(79,70,229,0.1)]' 
+                                              : isDimmed
+                                                 ? 'text-slate-400/60' 
+                                                 : 'text-slate-200'
+                                        }`}
+                                     >
+                                        <QuestionMathJax content={chunk} />
+                                        {' '}
+                                     </div>
+                                  );
+                               })
+                           )}
+                        </div>
                      </div>
                 </div>
+
+                {/* User Feedback */}
+                {userTranscript && !isQuestionFinished && (
+                   <div className="bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200 text-center mx-auto max-w-2xl w-full">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
+                         <Mic className="w-3 h-3 text-rose-500" /> You said:
+                      </p>
+                      <p className="text-base md:text-lg font-medium text-slate-700 italic">
+                         "{userTranscript}"
+                      </p>
+                   </div>
+                )}
             </div>
 
-            {/* Right Column: Interaction & Feedback */}
-            <div className="lg:col-span-4 flex flex-col gap-6 sticky top-28">
+            {/* Right Column: Interaction & Feedback - Hidden on Mobile, Sticky on Desktop */}
+            <div className="hidden lg:flex lg:col-span-4 flex-col gap-6 sticky top-28">
                 
                 {/* Control Center */}
                 <div className="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-[0_20px_40px_rgba(79,70,229,0.3)] relative overflow-hidden">
@@ -884,12 +929,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                         </div>
 
                         {!isQuestionFinished ? (
-                           <div className="flex flex-col items-center gap-5 w-full">
+                           <div className="flex flex-col items-center gap-4 w-full">
                               <button
                                 onClick={handlePlayPause}
                                 disabled={isListening}
                                 className={`group w-24 h-24 rounded-[2rem] flex items-center justify-center transition-all shadow-2xl relative overflow-hidden ${
-                                  isPlaying 
+                                  isPlaying
                                     ? 'bg-white text-indigo-600' 
                                     : isListening 
                                        ? 'bg-indigo-500/50 text-indigo-300 cursor-not-allowed border-2 border-indigo-400/20'
@@ -909,9 +954,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
                               <button
                                 onClick={handleNextChunk}
-                                className="w-full py-5 bg-white/10 backdrop-blur-md border border-white/20 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-white/20 transition-all flex items-center justify-center gap-3 group"
+                                className="w-full py-4.5 bg-white/10 backdrop-blur-md border border-white/20 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-white/20 transition-all flex items-center justify-center gap-3 group"
                               >
-                                 <span>{currentChunkIdx < chunks.length - 1 ? 'Next Chunk' : 'Finish Question'}</span>
+                                 <span>{(practiceMode === 'full' || currentChunkIdx >= chunks.length - 1) ? 'Finish Question' : 'Next Chunk'}</span>
                                  <SkipForward className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                               </button>
                            </div>
@@ -919,7 +964,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                            <div className="flex flex-col gap-4 w-full">
                               <button
                                 onClick={proceedToNextQuestion}
-                                className="w-full py-6 bg-white text-indigo-600 font-black text-sm uppercase tracking-widest rounded-[1.5rem] hover:bg-slate-50 transition-all shadow-xl shadow-indigo-900/20 flex items-center justify-center gap-3 hover:-translate-y-1"
+                                className="w-full py-5 bg-white text-indigo-600 font-black text-sm uppercase tracking-widest rounded-[1.5rem] hover:bg-slate-50 transition-all shadow-xl shadow-indigo-900/20 flex items-center justify-center gap-3 hover:-translate-y-1"
                               >
                                  <span>{currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'End Session'}</span>
                                  <SkipForward className="w-5 h-5" />
@@ -927,7 +972,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
                               <button
                                 onClick={handleDiscard}
-                                className="w-full py-4 bg-transparent border border-white/30 text-white font-bold text-xs rounded-2xl hover:bg-white/10 transition-all"
+                                className="w-full py-3.5 bg-transparent border border-white/30 text-white font-bold text-xs rounded-2xl hover:bg-white/10 transition-all"
                               >
                                  Retry This Question
                               </button>
@@ -935,51 +980,66 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                         )}
                     </div>
                 </div>
-
-                {/* Status & Feedback Card */}
-                <div className={`bg-white rounded-[2rem] p-8 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] transition-all duration-500 ${isListening ? 'ring-2 ring-rose-100' : ''}`}>
-                    <div className="flex items-center justify-between mb-6">
-                        <h5 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Live Status</h5>
-                        <div className={`w-3 h-3 rounded-full ${isListening ? 'bg-rose-500 animate-ping' : isPlaying ? 'bg-indigo-500 animate-pulse' : 'bg-slate-200'}`}></div>
-                    </div>
-
-                    <div className="min-h-[120px] flex flex-col justify-center gap-4">
-                        {isListening ? (
-                           <div className="flex flex-col gap-4">
-                              <div className="flex items-center gap-3">
-                                 <Mic className="w-5 h-5 text-rose-500" />
-                                 <p className="text-sm font-bold text-rose-600">Recording your voice...</p>
-                              </div>
-                              <p className="text-lg font-medium text-slate-700 italic leading-relaxed">
-                                 {userTranscript ? `"${userTranscript}"` : "Waiting for speech..."}
-                              </p>
-                           </div>
-                        ) : isQuestionFinished ? (
-                           <div className="flex flex-col items-center text-center gap-4">
-                              <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center text-green-500 mb-2">
-                                 <CheckCircle2 className="w-8 h-8" />
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                 <h6 className="font-black text-slate-800 uppercase tracking-tighter">Analysis Ready</h6>
-                                 <p className="text-xs text-slate-500 font-medium">Listen to your complete response below</p>
-                              </div>
-                              {recordedAudioUrl && (
-                                <div className="w-full bg-slate-50 p-2 rounded-2xl border border-slate-100">
-                                    <audio src={recordedAudioUrl} controls className="w-full h-10" />
-                                </div>
-                              )}
-                           </div>
-                        ) : (
-                           <div className="flex flex-col items-center text-center text-slate-400 gap-3">
-                              <AlertCircle className="w-10 h-10 opacity-20" />
-                              <p className="text-sm font-medium">System is ready.<br/>AI will guide your practice.</p>
-                           </div>
-                        )}
-                    </div>
-                </div>
             </div>
         </div>
       </main>
+
+      {/* Sticky Bottom Control Bar for Mobile Viewports */}
+      {!isQuestionFinished ? (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-lg border-t border-slate-200 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.06)] flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5 shrink-0">
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Mode</span>
+            <span className="text-[11px] font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200/60 text-center min-w-[36px]">
+              {practiceMode === 'full' ? 'Full' : `${currentChunkIdx + 1} / ${chunks.length}`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePlayPause}
+              disabled={isListening}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-md shrink-0 ${
+                isPlaying
+                  ? 'bg-amber-500 text-white shadow-amber-100 active:scale-95' 
+                  : isListening 
+                     ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
+                     : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100 active:scale-95'
+              }`}
+            >
+              {isPlaying ? (
+                  <Square className="w-4.5 h-4.5 fill-current" />
+              ) : (
+                  <Play className="w-5 h-5 fill-current ml-0.5" />
+              )}
+            </button>
+          </div>
+
+          <button
+            onClick={handleNextChunk}
+            className="px-4 py-3.5 bg-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-indigo-700 transition-all flex items-center gap-1.5 shadow-md shadow-indigo-100 shrink-0"
+          >
+            <span>{(practiceMode === 'full' || currentChunkIdx >= chunks.length - 1) ? 'Finish' : 'Next'}</span>
+            <SkipForward className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-lg border-t border-slate-200 px-4 py-3.5 shadow-[0_-8px_30px_rgba(0,0,0,0.06)] flex items-center justify-between gap-3">
+          <button
+            onClick={handleDiscard}
+            className="flex-1 py-3.5 bg-rose-50 text-rose-600 border border-rose-100 font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-rose-100 transition-all text-center"
+          >
+            Retry
+          </button>
+
+          <button
+            onClick={proceedToNextQuestion}
+            className="flex-[2] px-4 py-3.5 bg-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-100"
+          >
+            <span>{currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'End Session'}</span>
+            <SkipForward className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Global CSS for Voice Animation */}
       <style>{`

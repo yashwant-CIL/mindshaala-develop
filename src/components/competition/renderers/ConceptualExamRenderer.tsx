@@ -402,36 +402,36 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-slate-50 text-slate-800 font-sans flex flex-col p-4 md:p-8 space-y-6">
+    <div className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-slate-50 text-slate-800 font-sans flex flex-col p-3 sm:p-5 md:p-8 space-y-4 sm:space-y-6">
       {/* Top Bar Header */}
-      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-blue-600 text-white font-bold shadow-md">
-            <Sparkles className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-blue-600 text-white font-bold shadow-md shrink-0">
+            <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <div className="text-xs text-blue-700 font-bold uppercase tracking-wider">
+          <div className="min-w-0">
+            <div className="text-[10px] sm:text-xs text-blue-700 font-bold uppercase tracking-wider truncate">
               {currentQuestion?.assessment_name || `${comp.module_type || 'TAM'} Assessment`}
             </div>
-            <div className="text-base font-extrabold text-slate-800">{comp.title}</div>
+            <div className="text-sm sm:text-base font-extrabold text-slate-800 truncate">{comp.title}</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-black">
-            <AlertTriangle className="w-4 h-4 text-red-600 animate-pulse" />
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-[11px] sm:text-xs font-black">
+            <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 animate-pulse shrink-0" />
             <span>Warnings: {tabSwitchWarnings}/3</span>
           </div>
 
-          <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl text-sm font-mono font-bold text-slate-700 border border-slate-200">
-            <Clock className="w-4 h-4 text-slate-500" />
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-100 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-mono font-bold text-slate-700 border border-slate-200">
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 shrink-0" />
             <span>{timeRemainingStr}</span>
           </div>
 
           <button
             onClick={toggleMute}
             disabled={isSubmittingAnswer || isSubmitting}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
               isSubmittingAnswer || isSubmitting
                 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
                 : isMuted
@@ -439,7 +439,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
                 : 'bg-blue-600 text-white border-blue-600 shadow-md cursor-pointer'
             }`}
           >
-            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 animate-pulse" />}
+            {isMuted ? <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse" />}
             <span>{isMuted ? 'Muted' : 'Audio On'}</span>
           </button>
         </div>
@@ -451,11 +451,11 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
           <p className="text-slate-600 text-sm font-semibold">Initializing Conceptual Viva Assessment...</p>
         </div>
       ) : (
-        <div className="max-w-4xl mx-auto w-full space-y-6 my-auto relative">
+        <div className="max-w-4xl mx-auto w-full space-y-4 sm:space-y-6 my-auto relative">
           {/* Active Submitting Answer Overlay */}
           {isSubmittingAnswer && (
-            <div className="absolute inset-0 z-50 backdrop-blur-[2px] rounded-3xl flex items-center justify-center p-6 transition-all animate-fadeIn">
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-center space-y-3 max-w-sm w-full">
+            <div className="absolute inset-0 z-50 backdrop-blur-[2px] rounded-3xl flex items-center justify-center p-4 sm:p-6 transition-all animate-fadeIn">
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-2xl text-center space-y-3 max-w-sm w-full">
                 <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto" />
                 <div className="space-y-1">
                   <h4 className="text-sm font-extrabold text-slate-900">Submitting Answer...</h4>
@@ -466,43 +466,43 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
           )}
 
           {/* Question Header & Context Line */}
-          <div className="flex justify-between items-center text-xs font-extrabold text-slate-500 uppercase tracking-widest px-1">
-            <span className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-blue-600" />
+          <div className="flex justify-between items-center text-[10px] sm:text-xs font-extrabold text-slate-500 uppercase tracking-widest px-1">
+            <span className="flex items-center gap-1.5 sm:gap-2">
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
               Question #{currentQuestion?.question_no ?? (submittedCount + 1)}
             </span>
-            <span>Questions Attempted: {submittedCount}</span>
+            <span>Attempted: {submittedCount}</span>
           </div>
 
           {/* Question Display Card */}
-          <div className={`bg-white border border-slate-200 rounded-3xl p-6 md:p-8 space-y-4 shadow-sm relative ${isSubmittingAnswer || isSubmitting ? 'pointer-events-none opacity-80' : ''}`}>
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-[11px] font-black uppercase tracking-wider flex items-center gap-1">
-                <HelpCircle className="w-3.5 h-3.5" /> Conceptual Audio Viva Question
+          <div className={`bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 space-y-3 sm:space-y-4 shadow-sm relative ${isSubmittingAnswer || isSubmitting ? 'pointer-events-none opacity-80' : ''}`}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="px-2.5 sm:px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-[10px] sm:text-[11px] font-black uppercase tracking-wider flex items-center gap-1">
+                <HelpCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Conceptual Audio Viva Question
               </span>
               {currentQuestion?.topic_context && (
-                <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200 flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5" /> {currentQuestion.topic_context}
+                <span className="px-2.5 sm:px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] sm:text-xs font-bold border border-indigo-200 flex items-center gap-1">
+                  <Tag className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> {currentQuestion.topic_context}
                 </span>
               )}
             </div>
 
-            <h2 className="text-lg md:text-2xl font-bold text-slate-900 leading-relaxed">
+            <h2 className="text-base sm:text-xl md:text-2xl font-bold text-slate-900 leading-relaxed break-words">
               <QuestionMathJax content={questionText} />
             </h2>
           </div>
 
           {/* Audio Recorder Section Below Question */}
-          <div className={`bg-white border border-slate-200 rounded-3xl p-6 md:p-8 space-y-6 shadow-sm text-center ${isSubmittingAnswer || isSubmitting ? 'pointer-events-none opacity-80' : ''}`}>
-            <h3 className="text-sm font-extrabold text-slate-700 uppercase tracking-wider">
+          <div className={`bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 shadow-sm text-center ${isSubmittingAnswer || isSubmitting ? 'pointer-events-none opacity-80' : ''}`}>
+            <h3 className="text-xs sm:text-sm font-extrabold text-slate-700 uppercase tracking-wider">
               Audio Response Recorder
             </h3>
 
             {/* State 1: Recording in Progress */}
             {isRecording ? (
-              <div className="space-y-4 py-4">
-                <div className="inline-flex items-center justify-center gap-3 px-6 py-3 rounded-full bg-red-50 border border-red-200 text-red-600 font-mono text-xl font-black animate-pulse">
-                  <span className="w-3.5 h-3.5 rounded-full bg-red-600 animate-ping" />
+              <div className="space-y-3 sm:space-y-4 py-2 sm:py-4">
+                <div className="inline-flex items-center justify-center gap-2 sm:gap-3 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full bg-red-50 border border-red-200 text-red-600 font-mono text-base sm:text-xl font-black animate-pulse">
+                  <span className="w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full bg-red-600 animate-ping" />
                   <span>Recording: {formatSecs(recordingSeconds)}</span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium">Speak clearly into your microphone to record your answer.</p>
@@ -511,21 +511,21 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
                   <button
                     onClick={stopRecording}
                     disabled={isSubmittingAnswer || isSubmitting}
-                    className="px-6 py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm shadow-lg shadow-red-600/30 transition-all flex items-center gap-2 mx-auto cursor-pointer"
+                    className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-red-600/30 transition-all flex items-center gap-2 mx-auto cursor-pointer"
                   >
-                    <Square className="w-4 h-4 fill-current" /> Stop Recording
+                    <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" /> Stop Recording
                   </button>
                 </div>
               </div>
             ) : audioUrl ? (
               /* State 2: Audio Recorded - Preview & Re-record */
-              <div className="space-y-4 py-2">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 max-w-md mx-auto space-y-3">
+              <div className="space-y-3 sm:space-y-4 py-2">
+                <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200 max-w-md mx-auto space-y-2.5">
                   <div className="flex items-center justify-between text-xs font-bold text-slate-600">
                     <span>Recorded Answer Preview</span>
                     <span className="text-blue-600">{formatSecs(recordingSeconds)}</span>
                   </div>
-                  <audio src={audioUrl} controls className="w-full h-10 rounded-lg" />
+                  <audio src={audioUrl} controls className="w-full h-9 sm:h-10 rounded-lg" />
                 </div>
 
                 <div className="flex items-center justify-center gap-3">
@@ -536,63 +536,63 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
                       isSubmittingAnswer || isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
                     }`}
                   >
-                    <RotateCcw className="w-4 h-4" /> Re-record Audio
+                    <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Re-record Audio
                   </button>
                 </div>
               </div>
             ) : (
               /* State 3: Ready to Record (Idle) */
-              <div className="py-6 space-y-4">
+              <div className="py-4 sm:py-6 space-y-3 sm:space-y-4">
                 <button
                   onClick={startRecording}
                   disabled={isSubmittingAnswer || isSubmitting}
-                  className={`w-20 h-20 rounded-full text-white shadow-xl transition-all flex items-center justify-center mx-auto border-4 border-blue-100 ${
+                  className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full text-white shadow-xl transition-all flex items-center justify-center mx-auto border-4 border-blue-100 ${
                     isSubmittingAnswer || isSubmitting
                       ? 'bg-slate-300 opacity-50 cursor-not-allowed shadow-none'
                       : 'bg-blue-600 hover:bg-blue-700 hover:scale-105 shadow-blue-600/30 cursor-pointer'
                   }`}
                 >
-                  <Mic className="w-8 h-8" />
+                  <Mic className="w-6 h-6 sm:w-8 sm:h-8" />
                 </button>
                 <div className="space-y-1">
-                  <p className="text-sm font-bold text-slate-800">Tap to Record Your Answer</p>
-                  <p className="text-xs text-slate-400">Click the microphone button to start recording your response.</p>
+                  <p className="text-xs sm:text-sm font-bold text-slate-800">Tap to Record Your Answer</p>
+                  <p className="text-[11px] sm:text-xs text-slate-400">Click the microphone button to start recording your response.</p>
                 </div>
               </div>
             )}
           </div>
 
           {/* Bottom Action Footer Bar */}
-          <div className="pt-2 flex items-center justify-between gap-4 flex-wrap">
+          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 flex-wrap">
             {/* Skip / Empty Answer Button */}
             <button
               onClick={() => handleSubmitAnswer(true)}
               disabled={isSubmittingAnswer || isSubmitting || isRecording}
-              className={`px-5 py-3 rounded-2xl border text-xs font-bold transition-all flex items-center gap-2 ${
+              className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                 isSubmittingAnswer || isSubmitting || isRecording
                   ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-50'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200 cursor-pointer'
               }`}
             >
-              <SkipForward className="w-4 h-4 text-slate-500" />
+              <SkipForward className="w-4 h-4 text-slate-500 shrink-0" />
               <span>Skip Question (No Audio)</span>
             </button>
 
-            <div className="flex items-center gap-3 ml-auto">
+            <div className="flex items-center gap-2.5 sm:gap-3 flex-col sm:flex-row w-full sm:w-auto">
               {/* Submit Answer & Next Question Button */}
               <button
                 onClick={() => handleSubmitAnswer(false)}
                 disabled={isSubmittingAnswer || isSubmitting || isRecording || !audioBlob}
-                className={`px-7 py-3 rounded-2xl text-xs font-extrabold shadow-lg transition-all flex items-center gap-2 ${
+                className={`px-6 sm:px-7 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl text-xs font-extrabold shadow-lg transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${
                   isSubmittingAnswer || isSubmitting || isRecording || !audioBlob
                     ? 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50 shadow-none'
                     : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/30 cursor-pointer'
                 }`}
               >
                 {isSubmittingAnswer ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <Send className="w-4 h-4 shrink-0" />
                 )}
                 <span>Submit Answer</span>
               </button>
@@ -601,13 +601,13 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
               <button
                 onClick={() => setShowConfirmEndModal(true)}
                 disabled={isSubmittingAnswer || isSubmitting}
-                className={`px-5 py-3 rounded-2xl font-extrabold text-xs shadow-md transition-all flex items-center gap-2 ${
+                className={`px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${
                   isSubmittingAnswer || isSubmitting
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50 shadow-none'
                     : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
                 }`}
               >
-                <FileCheck className="w-4 h-4" /> End Assessment
+                <FileCheck className="w-4 h-4 shrink-0" /> End Assessment
               </button>
             </div>
           </div>

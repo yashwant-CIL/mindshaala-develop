@@ -420,82 +420,71 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
   const totalXp = attempts.reduce((acc, curr) => acc + (curr.xpEarned || 0), 0);
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-4 md:p-6 lg:p-8 space-y-8 font-sans">
+    <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-3 sm:p-5 md:p-6 lg:p-8 space-y-6 md:space-y-8 font-sans max-w-7xl mx-auto">
       {/* Top Header & Overview Stats Bar - Light Theme */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-        <div className="space-y-1">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold uppercase tracking-wider">
-            <Award className="w-3.5 h-3.5 text-blue-600" /> My Competition Scorecards
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6 bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
+        <div className="space-y-1.5 max-w-2xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-[11px] sm:text-xs font-bold uppercase tracking-wider">
+            <Award className="w-3.5 h-3.5 text-blue-600 shrink-0" /> My Competition Scorecards
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight break-words">
             Attempted Competition History
           </h1>
-          <p className="text-sm text-slate-500 max-w-xl">
+          <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
             Review all contests you have attempted till now, check detailed scorecards, national rank standings, and attempted question-answer lists.
           </p>
         </div>
 
         {/* Overview Stats Badges */}
-        <div className="flex flex-wrap items-center gap-3 md:gap-4">
-          <div className="bg-blue-50/80 border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-blue-600 text-white font-bold shadow-md shadow-blue-500/20">
-              <Trophy className="w-5 h-5" />
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 sm:gap-4 w-full lg:w-auto">
+          <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3 flex-1 sm:flex-none">
+            <div className="p-2 sm:p-2.5 rounded-lg bg-blue-600 text-white font-bold shadow-md shadow-blue-500/20 shrink-0">
+              <Trophy className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="text-xs text-slate-500 font-medium">Total Competitions</div>
-              <div className="text-xl font-black text-slate-900">{totalAttempted} Attempted</div>
-            </div>
-          </div>
-
-          <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-emerald-600 text-white font-bold shadow-md shadow-emerald-500/20">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 font-medium">Average Score</div>
-              <div className="text-xl font-black text-emerald-700">{avgScore}%</div>
+            <div className="min-w-0">
+              <div className="text-[10px] sm:text-xs text-slate-500 font-medium truncate">Total Competitions</div>
+              <div className="text-base sm:text-xl font-black text-slate-900 truncate">{totalAttempted} Attempted</div>
             </div>
           </div>
 
-          {/* <div className="bg-amber-50/80 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-amber-500 text-white font-bold shadow-md shadow-amber-500/20">
-              <Zap className="w-5 h-5" />
+          <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3 sm:px-4 sm:py-3 flex items-center gap-2.5 sm:gap-3 flex-1 sm:flex-none">
+            <div className="p-2 sm:p-2.5 rounded-lg bg-emerald-600 text-white font-bold shadow-md shadow-emerald-500/20 shrink-0">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="text-xs text-slate-500 font-medium">Total XP Earned</div>
-              <div className="text-xl font-black text-amber-700">{totalXp.toLocaleString()} XP</div>
+            <div className="min-w-0">
+              <div className="text-[10px] sm:text-xs text-slate-500 font-medium truncate">Average Score</div>
+              <div className="text-base sm:text-xl font-black text-emerald-700 truncate">{avgScore}%</div>
             </div>
-          </div> */}
+          </div>
         </div>
       </div>
 
       {/* Module Type & Search Controls */}
-      <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-stretch md:items-center justify-between bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm">
         {/* Search Bar */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search attempted competition by assessment name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors"
           />
         </div>
 
         {/* Module Filter Tabs */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-slate-500 mr-1">Module:</span>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <span className="text-xs font-semibold text-slate-500 mr-1 hidden sm:inline">Module:</span>
           {[
             { label: 'GK Sprint', key: 'GK' },
             { label: 'Viva Voice', key: 'VIVA' },
             { label: 'Conceptual', key: 'TAM' },
-            // { label: 'All Modules', key: 'ALL' }
           ].map((tab) => (
             <button
               key={tab.key}
               onClick={() => setSelectedModuleType(tab.key as any)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex-1 sm:flex-none text-center ${
                 selectedModuleType === tab.key
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
                   : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
@@ -509,36 +498,36 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
 
       {/* Loading & Empty States */}
       {isLoading ? (
-        <div className="p-16 text-center bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center space-y-3">
-          <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-          <p className="text-slate-600 font-medium text-sm">Fetching attempted competition history...</p>
+        <div className="p-8 sm:p-16 text-center bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center space-y-3">
+          <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-blue-600 animate-spin" />
+          <p className="text-slate-600 font-medium text-xs sm:text-sm">Fetching attempted competition history...</p>
         </div>
       ) : attempts.length === 0 ? (
-        <div className="p-12 md:p-16 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4 max-w-xl mx-auto my-8">
-          <div className="w-16 h-16 rounded-full bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center mx-auto">
-            <Trophy className="w-8 h-8 text-blue-600" />
+        <div className="p-6 sm:p-12 md:p-16 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4 max-w-xl mx-auto my-4 sm:my-8">
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center mx-auto">
+            <Trophy className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
           </div>
-          <div className="space-y-2">
-            <h3 className="text-lg md:text-xl font-black text-slate-900">
+          <div className="space-y-1.5">
+            <h3 className="text-base sm:text-lg md:text-xl font-black text-slate-900">
               No Competition Attempted Yet
             </h3>
-            <p className="text-xs md:text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
+            <p className="text-xs sm:text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
               There is no competition attempted yet. Go ahead, register for an active competition and attempt it to view your performance scorecards and national ranks here!
             </p>
           </div>
           {onExploreCompetitions && (
             <button
               onClick={onExploreCompetitions}
-              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/20 transition-all cursor-pointer inline-flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/20 transition-all cursor-pointer inline-flex items-center gap-2"
             >
               Explore & Register Competitions <ChevronRight className="w-4 h-4" />
             </button>
           )}
         </div>
       ) : filteredAttempts.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
-          <FileText className="w-12 h-12 text-slate-400 mx-auto" />
-          <h3 className="text-base font-bold text-slate-800">No Matching Attempted Competitions</h3>
+        <div className="p-8 sm:p-12 text-center bg-white rounded-3xl border border-slate-200 shadow-sm space-y-3">
+          <FileText className="w-10 h-10 sm:w-12 sm:h-12 text-slate-400 mx-auto" />
+          <h3 className="text-sm sm:text-base font-bold text-slate-800">No Matching Attempted Competitions</h3>
           <p className="text-xs text-slate-500">No attempted competitions found matching your search term "{searchQuery}".</p>
           <button
             onClick={() => {
@@ -553,17 +542,17 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
         </div>
       ) : (
         /* Attempt History Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {filteredAttempts.map((attempt) => (
             <div
               key={attempt.attemptId}
-              className="bg-white border border-slate-200 hover:border-blue-300 rounded-3xl p-6 space-y-5 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group"
+              className="bg-white border border-slate-200 hover:border-blue-300 rounded-3xl p-4 sm:p-6 space-y-4 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group"
             >
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 {/* Header Row */}
                 <div className="space-y-2">
                   {/* Top Row: Module & Viva Type (Left) and Date/Time (Right) */}
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
                     <span className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider">
                       {((attempt.moduleType === 'VIVA' || attempt.moduleType === 'TAM' || selectedModuleType === 'VIVA' || selectedModuleType === 'TAM') && attempt.vivaType)
                         ? `${attempt.moduleType || selectedModuleType} - ${attempt.vivaType}`
@@ -575,12 +564,12 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
                   </div>
 
                   {/* Title & Status Row: Assessment Name (Left) and Status (Right / Same line) */}
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-blue-600 transition-colors leading-snug break-words">
                       {attempt.title}
                     </h3>
 
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 flex items-center gap-1 border ${
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold shrink-0 self-start flex items-center gap-1 border ${
                       String(attempt.status).toUpperCase().includes('UNATTEMPT')
                         ? 'bg-red-50 text-red-700 border-red-200'
                         : String(attempt.status).toUpperCase().includes('PROGRESS')
@@ -593,64 +582,64 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
                 </div>
 
                 {/* Score, Accuracy, Rank & Percentile Overview Box */}
-                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="bg-slate-50 border border-slate-200 p-3 sm:p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">
                   {/* My Score */}
-                  <div>
+                  <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100">
                     <div className="text-[10px] text-slate-400 uppercase font-semibold">My Score</div>
-                    <div className="text-base font-extrabold text-slate-900">
+                    <div className="text-sm sm:text-base font-extrabold text-slate-900 truncate">
                       {attempt.score} <span className="text-[10px] text-slate-400 font-normal">/ {attempt.maxScore}</span>
                     </div>
                   </div>
 
                   {/* Accuracy */}
-                  <div className="border-l border-slate-200 pl-2">
+                  <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-2">
                     <div className="text-[10px] text-slate-400 uppercase font-semibold">Accuracy</div>
                     {attempt.accuracy !== undefined && attempt.accuracy !== null ? (
                       <>
-                        <div className="text-base font-extrabold text-blue-600">
+                        <div className="text-sm sm:text-base font-extrabold text-blue-600 truncate">
                           {attempt.accuracy}%
                         </div>
                         <div className="text-[10px] text-blue-700 font-bold">Precision</div>
                       </>
                     ) : (
-                      <div className="text-xs font-semibold text-slate-400 py-1">
-                        Not Calculated
+                      <div className="text-xs font-semibold text-slate-400 py-0.5">
+                        Not Calc
                       </div>
                     )}
                   </div>
 
                   {/* National Rank */}
-                  <div className="border-l border-slate-200 pl-2">
+                  <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-2">
                     <div className="text-[10px] text-slate-400 uppercase font-semibold">National Rank</div>
                     {attempt.rank !== undefined && attempt.rank !== null ? (
                       <>
-                        <div className="text-base font-extrabold text-amber-600">
+                        <div className="text-sm sm:text-base font-extrabold text-amber-600 truncate">
                           Rank #{attempt.rank}
                         </div>
                         {attempt.totalParticipants !== undefined && (
-                          <div className="text-[10px] text-slate-500">{attempt.totalParticipants} Candidates</div>
+                          <div className="text-[10px] text-slate-500 truncate">{attempt.totalParticipants} Candidates</div>
                         )}
                       </>
                     ) : (
-                      <div className="text-xs font-semibold text-slate-400 py-1">
+                      <div className="text-xs font-semibold text-slate-400 py-0.5">
                         Not Declared
                       </div>
                     )}
                   </div>
 
                   {/* Percentage */}
-                  <div className="border-l border-slate-200 pl-2">
+                  <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-2">
                     <div className="text-[10px] text-slate-400 uppercase font-semibold">Percentage</div>
                     {attempt.percentage !== undefined && attempt.percentage !== null ? (
                       <>
-                        <div className="text-base font-extrabold text-emerald-600">
+                        <div className="text-sm sm:text-base font-extrabold text-emerald-600 truncate">
                           {attempt.percentage}%
                         </div>
                         <div className="text-[10px] text-emerald-700 font-bold">Overall Score</div>
                       </>
                     ) : (
-                      <div className="text-xs font-semibold text-slate-400 py-1">
-                        Not Calculated
+                      <div className="text-xs font-semibold text-slate-400 py-0.5">
+                        Not Calc
                       </div>
                     )}
                   </div>
@@ -658,49 +647,32 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
 
                 {/* Correct / Incorrect / Skipped / Attempted Breakdown if available */}
                 {(attempt.attemptedCount !== undefined || attempt.correctCount !== undefined || attempt.skippedCount !== undefined) && (
-                  <div className="flex items-center justify-between text-xs bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl text-slate-600 font-medium flex-wrap gap-2">
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-start sm:justify-between text-xs bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-slate-600 font-medium gap-2">
                     {attempt.correctCount !== undefined && (
-                      <span className="text-emerald-700 font-bold">✓ {attempt.correctCount} Correct</span>
+                      <span className="text-emerald-700 font-bold whitespace-nowrap truncate">✓ {attempt.correctCount} Correct</span>
                     )}
                     {attempt.incorrectCount !== undefined && (
-                      <span className="text-red-600 font-bold">✗ {attempt.incorrectCount} Incorrect</span>
+                      <span className="text-red-600 font-bold whitespace-nowrap truncate">✗ {attempt.incorrectCount} Incorrect</span>
                     )}
                     {attempt.attemptedCount !== undefined && (
-                      <span className="text-blue-700 font-bold">🎙 {attempt.attemptedCount} Attempted</span>
+                      <span className="text-blue-700 font-bold whitespace-nowrap truncate">🎙 {attempt.attemptedCount} Attempted</span>
                     )}
                     {attempt.skippedCount !== undefined && (
-                      <span className="text-amber-600 font-bold">⊘ {attempt.skippedCount} Skipped</span>
+                      <span className="text-amber-600 font-bold whitespace-nowrap truncate">⊘ {attempt.skippedCount} Skipped</span>
                     )}
                     {attempt.unattemptedCount !== undefined && (
-                      <span className="text-slate-500 font-bold">… {attempt.unattemptedCount} Unattempted</span>
+                      <span className="text-slate-500 font-bold whitespace-nowrap truncate">… {attempt.unattemptedCount} Unattempted</span>
                     )}
                     {attempt.accuracy !== undefined && (
-                      <span className="text-blue-700 font-extrabold">{attempt.accuracy}% Accuracy</span>
+                      <span className="text-blue-700 font-extrabold whitespace-nowrap truncate">{attempt.accuracy}% Accuracy</span>
                     )}
                   </div>
                 )}
-
-
-                {/* Tags & Reward Badge */}
-                {/* <div className="space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {attempt.tags.map((t, idx) => (
-                      <span key={idx} className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200">
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-amber-50/70 border border-amber-200 px-3 py-1.5 rounded-xl">
-                    <Medal className="w-4 h-4 text-amber-500" />
-                    <span>Reward: {attempt.badge}</span>
-                  </div>
-                </div> */}
               </div>
 
               {/* Action Footer Button */}
-              <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-3">
-                <div className="text-xs text-slate-400 font-mono">
+              <div className="pt-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 mt-3">
+                <div className="text-xs text-slate-400 font-mono text-center sm:text-left">
                   Time: {attempt.timeTaken}
                 </div>
 
@@ -713,9 +685,9 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
                     session_id: attempt.rawItem?.session_id || attempt.rawItem?.gk_user_ass_id || attempt.attemptId,
                     gk_user_ass_id: attempt.rawItem?.gk_user_ass_id || attempt.rawItem?.session_id || attempt.attemptId
                   })}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  View Detailed Result & Questions <ArrowUpRight className="w-3.5 h-3.5" />
+                  View Detailed Result & Questions <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
                 </button>
               </div>
             </div>

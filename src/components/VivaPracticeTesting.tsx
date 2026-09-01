@@ -177,6 +177,18 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
   const [isOpenChapterDropdown, setIsOpenChapterDropdown] = useState(false);
   const [chapterSearchQuery, setChapterSearchQuery] = useState('');
 
+  // Subject menu collapsible state (collapses on selection on small screens)
+  const [isSubjectMenuOpen, setIsSubjectMenuOpen] = useState(true);
+
+  const handleSubjectSelect = (subjectId: string) => {
+    setSelectedSubject(subjectId);
+    setSelectedChapter('');
+    setIsOpenChapterDropdown(false);
+    setChapterSearchQuery('');
+    // Auto-minimize subject menu on small screens after selection
+    setIsSubjectMenuOpen(false);
+  };
+
   // Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(45);
@@ -253,6 +265,7 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
   useEffect(() => {
     const sidebar = document.querySelector('[data-sidebar]') as HTMLElement;
     const sidebarMini = document.querySelector('[data-sidebar-mini]') as HTMLElement;
+    const sidebarAvatar = document.querySelector('[data-sidebar-avatar]') as HTMLElement;
     const floatingActions = document.getElementById('floating-actions-container');
 
     if (sessionStarted) {
@@ -280,9 +293,10 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
       window.addEventListener('popstate', handlePopState);
       window.addEventListener('beforeunload', handleBeforeUnload);
 
-      // Hide full sidebar, mobile mini strip, and floating actions
+      // Hide full sidebar, mobile mini strip, avatar, and floating actions
       if (sidebar) sidebar.style.display = 'none';
       if (sidebarMini) sidebarMini.style.display = 'none';
+      if (sidebarAvatar) sidebarAvatar.style.display = 'none';
       if (floatingActions) floatingActions.style.display = 'none';
 
       return () => {
@@ -292,9 +306,10 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
         window.removeEventListener('popstate', handlePopState);
         window.removeEventListener('beforeunload', handleBeforeUnload);
 
-        // Restore full sidebar, mobile mini strip, and floating actions
+        // Restore full sidebar, mobile mini strip, avatar, and floating actions
         if (sidebar) sidebar.style.display = '';
         if (sidebarMini) sidebarMini.style.display = '';
+        if (sidebarAvatar) sidebarAvatar.style.display = '';
         if (floatingActions) floatingActions.style.display = '';
 
         // Exit Full Screen
@@ -303,9 +318,10 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
         }
       };
     } else {
-      // ── SELECTION PAGE: always ensure both sidebar elements are visible ──
+      // ── SELECTION PAGE: always ensure sidebar, hamburger, avatar, and floating actions are visible ──
       if (sidebar) sidebar.style.display = '';
       if (sidebarMini) sidebarMini.style.display = '';
+      if (sidebarAvatar) sidebarAvatar.style.display = '';
       if (floatingActions) floatingActions.style.display = '';
     }
 
@@ -313,6 +329,7 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
     return () => {
       if (sidebar) sidebar.style.display = '';
       if (sidebarMini) sidebarMini.style.display = '';
+      if (sidebarAvatar) sidebarAvatar.style.display = '';
       if (floatingActions) floatingActions.style.display = '';
     };
   }, [sessionStarted]);
@@ -1008,20 +1025,49 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
           </div>
         </div>
 
-        {/* Subjects Selection - Modern Cards - Compact */}
+        {/* Subjects Selection - Collapsible Section on Small Screens Only */}
         <div className="space-y-3 shrink-0">
-          <div className="flex items-center justify-between px-2">
+          {/* Header for Desktop */}
+          <div className="hidden sm:flex items-center justify-between px-2">
             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-purple-600" /> Select Subject
             </h3>
             {selectedSubject && (
-              <span className="text-sm font-medium text-slate-500 hidden md:block">
+              <span className="text-sm font-medium text-slate-500">
                 Showing chapters for <span className="text-purple-600 font-bold">{subjects.find(s => s.subject_id === selectedSubject)?.subject_name}</span>
               </span>
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {/* Header for Small Screens / Mobile (Collapsible Toggle) */}
+          <div 
+            onClick={() => setIsSubjectMenuOpen(prev => !prev)}
+            className="sm:hidden flex items-center justify-between px-3 py-2 rounded-xl bg-white border border-slate-200/80 shadow-sm cursor-pointer select-none transition-all hover:bg-slate-50"
+          >
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-purple-600 shrink-0" /> Select Subject
+              </h3>
+              {selectedSubject && (
+                <span className="text-xs font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200/60 flex items-center gap-1 shrink-0">
+                  <span>{subjects.find(s => s.subject_id === selectedSubject)?.icon}</span>
+                  <span>{subjects.find(s => s.subject_id === selectedSubject)?.subject_name}</span>
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                {isSubjectMenuOpen ? 'Minimize' : 'Change'}
+              </span>
+              <div className={`p-1 rounded-lg bg-slate-100 text-slate-600 transition-transform duration-300 ${isSubjectMenuOpen ? 'rotate-180' : ''}`}>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Subjects Grid */}
+          <div className={`${(isSubjectMenuOpen || !selectedSubject) ? 'grid' : 'hidden sm:grid'} grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 animate-in fade-in slide-in-from-top-2 duration-300`}>
             {subjectsLoading ? (
               // Skeleton cards while fetching from API
               Array.from({ length: 5 }).map((_, i) => (
@@ -1037,13 +1083,8 @@ export default function VivaPracticeTesting({ onFinish }: VivaPracticeTestingPro
               subjects.map(subject => (
                 <button
                   key={subject.subject_id}
-                  onClick={() => {
-                    setSelectedSubject(subject.subject_id);
-                    setSelectedChapter('');
-                    setIsOpenChapterDropdown(false);
-                    setChapterSearchQuery('');
-                  }}
-                  className={`group flex flex-col items-center justify-center p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-300 relative overflow-hidden backdrop-blur-sm focus:outline-none ${selectedSubject === subject.subject_id
+                  onClick={() => handleSubjectSelect(subject.subject_id)}
+                  className={`group flex flex-col items-center justify-center p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all duration-300 relative overflow-hidden backdrop-blur-sm focus:outline-none cursor-pointer ${selectedSubject === subject.subject_id
                     ? 'border-purple-600 bg-purple-50/80 shadow-lg scale-102 border-2'
                     : 'border-slate-200 bg-white hover:border-purple-200 hover:bg-slate-50 hover:shadow-md'
                     }`}

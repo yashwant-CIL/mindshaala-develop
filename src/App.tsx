@@ -570,7 +570,7 @@ export default function App() {
 
         {currentStep === "main" && (
           <div className="min-h-screen bg-gray-50 flex">
-            {activePage !== "conceptual-tutor-session" && activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && (
+            {activePage !== "conceptual-tutor-session" && activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && activePage !== "theorytest" && (
               <Sidebar
                   activePage={activePage}
                   onNavigate={handleNavigate}
@@ -583,7 +583,7 @@ export default function App() {
                     <Navbar activePage={activePage} onNavigate={handleNavigate} />
                 )}
                 
-                <div className="flex-1 overflow-y-auto">
+                <div className={`flex-1 overflow-y-auto ${(!['dashboard', 'my-courses', 'courses', 'wishlist', 'cart', 'notifications'].includes(activePage) && !['conceptual-tutor-session', 'conceptual-viva-session', 'speakalong-session', 'ai-tutor-session', 'gk-exam-runner', 'theorytest'].includes(activePage)) ? 'pt-[60px] md:pt-0' : ''}`}>
                     {activePage === "dashboard" && (
                     <Dashboard
                     profileData={profileData}
@@ -1155,19 +1155,21 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Floating Action Buttons - Always visible in main */}
-              <div id="floating-actions-container">
-                {!showAICompanion && (
-                  <AICompanionButton
-                  onClick={() => setShowAICompanion(true)}
-                  />
-                )}
-                {!showFocusMode && (
-                  <FocusButton
-                    onClick={() => setShowFocusMode(true)}
+              {/* Floating Action Buttons - Hidden during exam runner & study sessions */}
+              {activePage !== "conceptual-tutor-session" && activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && (
+                <div id="floating-actions-container">
+                  {!showAICompanion && (
+                    <AICompanionButton
+                    onClick={() => setShowAICompanion(true)}
                     />
                   )}
-              </div>
+                  {!showFocusMode && (
+                    <FocusButton
+                      onClick={() => setShowFocusMode(true)}
+                      />
+                    )}
+                </div>
+              )}
 
               {/* Overlays */}
               <AIStudyCompanion
