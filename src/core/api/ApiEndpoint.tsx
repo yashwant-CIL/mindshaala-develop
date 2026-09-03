@@ -233,7 +233,7 @@ export const API_ENDPOINT = {
                 GET_LIST_COMPETITION_ASSESSMENT: (user_id: number | string | undefined, module_type: string, subscription_id?: number | string) => {
             const isTamOrViva = module_type === 'TAM' || module_type === 'VIVA';
             const subParam = (isTamOrViva && subscription_id) ? `&subscription_id=${subscription_id}` : '';
-            return `/api/v3/mindshaala/user-sessions?user_id=${user_id}&module_type=${module_type}${subParam}`;
+            return `/api/v3/mindshaala/competition-sessions?user_id=${user_id}&module_type=${module_type}${subParam}`;
         },
         GET_RESULT_COMPETITION_ASSESSMENT: (module_type: string, user_id: number | string | undefined, session_id?: number | string, gk_user_ass_id?: number | string) => {
             const upperMod = (module_type || '').toUpperCase();
