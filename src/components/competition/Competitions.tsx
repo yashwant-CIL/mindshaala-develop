@@ -70,7 +70,10 @@ export const getStatusBadgeStyle = (status?: string): string => {
   if (s === 'IN_PROGRESS' || s === 'IN PROGRESS' || s.includes('PROGRESS')) {
     return 'bg-blue-100 text-blue-800 border-blue-300';
   }
-  if (s === 'COMPLETED' || s.includes('COMPLET') || s.includes('ATTEMPT')) {
+  // if (s === 'COMPLETED' || s.includes('COMPLET') || s.includes('ATTEMPT')) {
+  //   return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+  // }
+   if (s === 'COMPLETED' || s === 'SUBMITTED') {
     return 'bg-emerald-100 text-emerald-800 border-emerald-300';
   }
   if (s.includes('PEND')) {

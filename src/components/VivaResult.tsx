@@ -117,12 +117,29 @@ export default function VivaResult() {
     try {
       // Use actual user ID when available
       const data = await VivaService.getVivaHistory(userId, subscriptionId);
-      if (data) {
-        console.log("Viva History:", data);
-        setHistory(data);
+      console.log("Viva History Data:", data);
+      let list: VivaHistoryItem[] = [];
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (data && typeof data === 'object') {
+        if (Array.isArray(data.data)) {
+          list = data.data;
+        } else if (Array.isArray(data.sessions)) {
+          list = data.sessions;
+        } else if (Array.isArray(data.user_sessions)) {
+          list = data.user_sessions;
+        } else if (Array.isArray(data.attempts)) {
+          list = data.attempts;
+        } else if (Array.isArray(data.results)) {
+          list = data.results;
+        } else if (Array.isArray(data.assessments)) {
+          list = data.assessments;
+        }
       }
+      setHistory(list);
     } catch (error) {
       console.error("Failed to fetch history", error);
+      setHistory([]);
     } finally {
       setLoading(false);
     }
@@ -237,8 +254,9 @@ export default function VivaResult() {
     return 'text-red-600 bg-red-50 border-red-200';
   };
 
-  const filteredHistory = history.filter((item) => 
-    item.assessment_name ? (item.assessment_name).toUpperCase().includes(searchTerm.toUpperCase()) : false
+  const safeHistory = Array.isArray(history) ? history : [];
+  const filteredHistory = safeHistory.filter((item) => 
+    item && item.assessment_name ? (item.assessment_name).toUpperCase().includes(searchTerm.toUpperCase()) : false
   );
 
   // ============================================================================
