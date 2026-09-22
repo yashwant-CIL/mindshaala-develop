@@ -109,7 +109,7 @@ export const stopSpeech = () => {
     try {
       window.speechSynthesis.cancel();
       delete (window as any)._activeUtterance;
-      console.log('Speech synthesis cancelled/stopped.');
+      // console.log('Speech synthesis cancelled/stopped.');
     } catch (e) {
       console.warn('Failed to stop speech synthesis:', e);
     }
@@ -137,81 +137,86 @@ export const speakText = (text: string, options?: SpeakOptions) => {
   }
 
   try {
-    // 1. Cancel any active speech
-    window.speechSynthesis.cancel();
+    const executeSpeak = () => {
+      // Create the utterance object
+      const utterance = new SpeechSynthesisUtterance(text);
 
-    // 2. Create the utterance object
-    const utterance = new SpeechSynthesisUtterance(text);
+      // Keep global reference to avoid garbage collection bug on long speech in Chrome
+      (window as any)._activeUtterance = utterance;
 
-    // Keep global reference to avoid garbage collection bug on long speech in Chrome
-    (window as any)._activeUtterance = utterance;
+      // Set basic parameters
+      utterance.rate = options?.rate ?? 1.0;
+      utterance.pitch = options?.pitch ?? 1.0;
 
-    // 3. Set basic parameters
-    utterance.rate = options?.rate ?? 1.0;
-    utterance.pitch = options?.pitch ?? 1.0;
+      // Detect language and configure voice selection
+      const { lang, voiceSearch } = detectLanguage(text);
+      utterance.lang = lang;
 
-    // 4. Detect language and configure voice selection
-    const { lang, voiceSearch } = detectLanguage(text);
-    utterance.lang = lang;
+      // Select the best voice from available voices
+      const selectVoice = () => {
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices || voices.length === 0) {
+          return null;
+        }
 
-    // 5. Select the best voice from available voices
-    const selectVoice = () => {
+        for (const pattern of voiceSearch) {
+          const match = voices.find(v => {
+            const vLang = v.lang.toLowerCase().replace('_', '-');
+            const p = pattern.toLowerCase();
+            return vLang === p || vLang.startsWith(p + '-') || v.name.toLowerCase().includes(p);
+          });
+          if (match) return match;
+        }
+        return null;
+      };
+
+      const bestVoice = selectVoice();
+      if (bestVoice) {
+        utterance.voice = bestVoice;
+        // console.log(`TTS Voice selected: ${bestVoice.name} (${bestVoice.lang}) for text language: ${lang}`);
+      } else {
+        console.warn(`No specific voice found matching language search patterns: ${voiceSearch.join(', ')}. Relying on browser default for lang: ${lang}`);
+      }
+
+      // Hook up event listeners
+      if (options?.onstart) utterance.onstart = options.onstart;
+      
+      // Wrap onend and onerror to clean up the global reference when done
+      utterance.onend = () => {
+        delete (window as any)._activeUtterance;
+        if (options?.onend) options.onend();
+      };
+
+      utterance.onerror = (event) => {
+        delete (window as any)._activeUtterance;
+        if (options?.onerror) options.onerror(event);
+      };
+
+      if (options?.onboundary) utterance.onboundary = options.onboundary;
+
+      // Execute speech synthesis
+      window.speechSynthesis.speak(utterance);
+
+      // Fix chrome/safari getVoices loading delay:
       const voices = window.speechSynthesis.getVoices();
       if (!voices || voices.length === 0) {
-        return null;
+        const handleVoicesChanged = () => {
+          const freshVoice = selectVoice();
+          if (freshVoice && (window as any)._activeUtterance === utterance) {
+            utterance.voice = freshVoice;
+            console.log(`TTS Voices changed: dynamically updated active utterance to voice: ${freshVoice.name}`);
+          }
+          window.speechSynthesis.onvoiceschanged = null; // cleanup
+        };
+        window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
       }
-
-      for (const pattern of voiceSearch) {
-        const match = voices.find(v => {
-          const vLang = v.lang.toLowerCase().replace('_', '-');
-          const p = pattern.toLowerCase();
-          return vLang === p || vLang.startsWith(p + '-') || v.name.toLowerCase().includes(p);
-        });
-        if (match) return match;
-      }
-      return null;
     };
 
-    const bestVoice = selectVoice();
-    if (bestVoice) {
-      utterance.voice = bestVoice;
-      console.log(`TTS Voice selected: ${bestVoice.name} (${bestVoice.lang}) for text language: ${lang}`);
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel();
+      setTimeout(executeSpeak, 150);
     } else {
-      console.warn(`No specific voice found matching language search patterns: ${voiceSearch.join(', ')}. Relying on browser default for lang: ${lang}`);
-    }
-
-    // 6. Hook up event listeners
-    if (options?.onstart) utterance.onstart = options.onstart;
-    
-    // Wrap onend and onerror to clean up the global reference when done
-    utterance.onend = () => {
-      delete (window as any)._activeUtterance;
-      if (options?.onend) options.onend();
-    };
-
-    utterance.onerror = (event) => {
-      delete (window as any)._activeUtterance;
-      if (options?.onerror) options.onerror(event);
-    };
-
-    if (options?.onboundary) utterance.onboundary = options.onboundary;
-
-    // 7. Execute speech synthesis
-    window.speechSynthesis.speak(utterance);
-
-    // 8. Fix chrome/safari getVoices loading delay:
-    // If voices are empty, wait for voiceschanged and re-apply voice if speech is still active.
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices || voices.length === 0) {
-      const handleVoicesChanged = () => {
-        const freshVoice = selectVoice();
-        if (freshVoice && (window as any)._activeUtterance === utterance) {
-          utterance.voice = freshVoice;
-          console.log(`TTS Voices changed: dynamically updated active utterance to voice: ${freshVoice.name}`);
-        }
-        window.speechSynthesis.onvoiceschanged = null; // cleanup
-      };
-      window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
+      executeSpeak();
     }
   } catch (error: any) {
     console.error('Error in speakText:', error);

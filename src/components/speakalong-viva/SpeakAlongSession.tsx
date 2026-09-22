@@ -10,7 +10,13 @@ import {
   AlertCircle,
   Loader2,
   BrainCircuit,
-  Volume2
+  Volume2,
+  BookOpen,
+  X,
+  Maximize2,
+  FileText,
+  Image as ImageIcon,
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { SpeakAlongService } from '../../services/SpeakAlongService';
@@ -58,6 +64,128 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
   const aiSpeechStartTimeRef = useRef<number>(0);
   const speechTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // View Notes Side Panel States
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
+  const [selectedNoteImage, setSelectedNoteImage] = useState<string | null>(null);
+
+  // Keyboard shortcut: close notes panel on Esc
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showNotesPanel) {
+        setShowNotesPanel(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showNotesPanel]);
+
+  // Helper to extract note images from current question object
+  const getNoteImages = (): string[] => {
+    const currentQ = questions?.[currentQuestionIdx];
+    if (!currentQ) return [];
+    const images: string[] = [];
+
+    const rawCandidates = [
+      currentQ?.note_image,
+      currentQ?.note_image_url,
+      currentQ?.solution_img_url,
+      currentQ?.solution_image,
+      currentQ?.diagram_url,
+      currentQ?.image_url,
+      currentQ?.question_details?.note_image,
+      currentQ?.question_details?.note_image_url,
+      currentQ?.question_details?.solution_img_url,
+      currentQ?.question_details?.solution_image,
+      currentQ?.question_details?.diagram_url,
+      currentQ?.question_details?.image_url,
+      currentQ?.question_details?.image,
+    ];
+
+    if (Array.isArray(currentQ?.note_images)) {
+      rawCandidates.push(...currentQ.note_images);
+    }
+    if (Array.isArray(currentQ?.question_details?.note_images)) {
+      rawCandidates.push(...currentQ.question_details.note_images);
+    }
+
+    rawCandidates.forEach((img) => {
+      if (img && typeof img === 'string' && img.trim() !== '') {
+        let fullUrl = img.trim();
+        if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://') && !fullUrl.startsWith('data:')) {
+          const baseUrl = import.meta.env.VITE_MINDSHAALA_API_URL || import.meta.env.VITE_API_URL || '';
+          fullUrl = `${baseUrl}/api/v1/cil/images/${fullUrl.replace(/^\/+/, '')}`;
+        }
+        if (!images.includes(fullUrl)) {
+          images.push(fullUrl);
+        }
+      }
+    });
+
+    return images;
+  };
+
+  // Record Answer & Feedback States
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [skipWarningForSession, setSkipWarningForSession] = useState(false);
+  const [isRecordingAnswerMode, setIsRecordingAnswerMode] = useState(false);
+  const [recordingAnswerState, setRecordingAnswerState] = useState<'idle' | 'recording' | 'recorded' | 'submitted'>('idle');
+  const [recordedText, setRecordedText] = useState('');
+  const [feedbackData, setFeedbackData] = useState<{
+    score: number;
+    wordAnalysis: { word: string; matched: boolean }[];
+    feedback: string;
+  } | null>(null);
+
+  const evaluateAnswer = (userText: string, expectedText: string) => {
+    const clean = (str: string) =>
+      str
+        .toLowerCase()
+        .replace(/\\\[|\\\]|\$\$|\$/g, '')
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'’]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const userClean = clean(userText);
+    const expectedClean = clean(expectedText);
+
+    const userWords = userClean.split(' ').filter(Boolean);
+    const expectedWords = expectedClean.split(' ').filter(Boolean);
+
+    if (expectedWords.length === 0) {
+      return { score: 100, wordAnalysis: [], feedback: "Great effort!" };
+    }
+
+    const isMatch = (w1: string, userList: string[]) => {
+      return userList.some(w2 => w1 === w2 || (w1.length > 3 && (w2.includes(w1) || w1.includes(w2))));
+    };
+
+    let matchedCount = 0;
+    const wordAnalysis = expectedWords.map(word => {
+      const matched = isMatch(word, userWords);
+      if (matched) matchedCount++;
+      return { word, matched };
+    });
+
+    const score = Math.min(100, Math.round((matchedCount / expectedWords.length) * 100));
+
+    let feedback = "";
+    if (score >= 85) {
+      feedback = "Outstanding! You recalled almost the exact answer cleanly!";
+    } else if (score >= 65) {
+      feedback = "Good job! You captured most of the key concepts correctly.";
+    } else if (score >= 40) {
+      feedback = "Fair attempt. Review the missing key terms and try again.";
+    } else {
+      feedback = "Needs practice. Try reading the phrase a few more times.";
+    }
+
+    return {
+      score,
+      wordAnalysis,
+      feedback
+    };
+  };
 
   /* Original Fetch Questions
   useEffect(() => {
@@ -385,8 +513,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       setIsSpeakingFull(false);
       setRecordedAudioUrl(null);
       audioChunksRef.current = [];
+      setIsRecordingAnswerMode(false);
+      setRecordingAnswerState('idle');
+      setRecordedText('');
+      setFeedbackData(null);
       
-      speakQuestion();
+      speakQuestion(false);
     }
   }, [currentQuestionIdx, questions]);
 
@@ -400,14 +532,47 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     }
   }, [currentChunkIdx, chunks, autoPlayNext]);
 
-  const speakQuestion = () => {
+  const getQuestionText = (q: any) => {
+    if (!q) return "";
+    const rawText = 
+      q?.question_transcribe ||
+      q?.question_details?.question_transcribe ||
+      q?.question_details?.question_description ||
+      q?.question_details?.question_latex ||
+      q?.question_latex ||
+      q?.question_text ||
+      q?.question ||
+      "";
+    if (!rawText) return "";
+    return rawText
+      .replace(/\\\[|\\\]|\$\$|\$/g, '')
+      .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '$1 over $2')
+      .replace(/\\text\{([^}]+)\}/g, '$1')
+      .trim();
+  };
+
+  const speakQuestion = (autoPlayAnswer: boolean = false) => {
     if (questions.length === 0 || !synth) return;
     const q = questions[currentQuestionIdx];
-    // const details = q?.question_details;
     
-    // As per user request: question_transcribe for speech
-    const text = q?.question_transcribe || q.question_transcribe || "";
-    if (!text) return;
+    const text = getQuestionText(q);
+    if (!text) {
+      console.warn("No transcript text found for question", q);
+      toast.error("No audio transcript available for this question.");
+      return;
+    }
+
+    // Cancel any active speech or recognition before speaking question
+    if (synth) synth.cancel();
+    if (recognitionRef.current && isListening) {
+      try { recognitionRef.current.stop(); } catch(e){}
+    }
+    if (speechTimerRef.current) {
+      clearTimeout(speechTimerRef.current);
+      speechTimerRef.current = null;
+    }
+
+    setIsSpeakingFull(false);
 
     speakText(text, {
       rate: speechRate,
@@ -418,13 +583,17 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       onend: () => {
         setIsSpeakingQuestion(false);
         setIsPlaying(false);
-        // After question finishes, start first chunk
-        setAutoPlayNext(true);
+        if (autoPlayAnswer) {
+          setAutoPlayNext(true);
+        }
       },
-      onerror: () => {
+      onerror: (err) => {
+        console.error("Speech question error", err);
         setIsSpeakingQuestion(false);
         setIsPlaying(false);
-        setAutoPlayNext(true);
+        if (autoPlayAnswer) {
+          setAutoPlayNext(true);
+        }
       }
     });
   };
@@ -440,7 +609,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     }
     
     const q = questions[currentQuestionIdx];
-    const text = q?.answer_transcribe || "";
+    const text = q?.answer_transcribe || q?.question_details?.answer_description || q?.question_details?.answer_transcribe || "";
     if (!text || !synth) return;
     
     // Stop listening if we were listening
@@ -464,11 +633,13 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
         setIsSpeakingFull(false);
         setIsPlaying(false);
         setCurrentTokenIdx(-1);
+        setIsQuestionFinished(true);
       },
       onerror: () => {
         setIsSpeakingFull(false);
         setIsPlaying(false);
         setCurrentTokenIdx(-1);
+        setIsQuestionFinished(true);
       },
       onboundary: (event: any) => {
         if (event.name === 'word') {
@@ -507,6 +678,37 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       onerror: (e) => {
          console.error("TTS Error", e);
          setIsPlaying(false);
+      }
+    });
+  };
+
+  const speakChunkAtIndex = (idx: number) => {
+    if (synth) synth.cancel();
+    setIsPlaying(false);
+    setIsSpeakingQuestion(false);
+    setIsSpeakingFull(false);
+    setCurrentChunkIdx(idx);
+
+    const textToSpeak = speechChunks[idx] || chunks[idx];
+    if (!textToSpeak || !synth) return;
+
+    speakText(textToSpeak, {
+      rate: speechRate,
+      onstart: () => {
+        setIsPlaying(true);
+        aiSpeechStartTimeRef.current = Date.now();
+        if (recognitionRef.current && isListening) {
+          try { recognitionRef.current.stop(); } catch(e){}
+        }
+      },
+      onend: () => {
+        setIsPlaying(false);
+      },
+      onerror: (e: any) => {
+        if (e?.error !== 'interrupted' && e?.error !== 'canceled') {
+          console.warn("TTS Error", e);
+        }
+        setIsPlaying(false);
       }
     });
   };
@@ -675,6 +877,10 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     audioChunksRef.current = [];
     setCurrentChunkIdx(0);
     setUserTranscript('');
+    setIsRecordingAnswerMode(false);
+    setRecordingAnswerState('idle');
+    setRecordedText('');
+    setFeedbackData(null);
     speakQuestion();
   };
 
@@ -734,13 +940,23 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
           </div>
         </div>
         
-        {/* End Session Button */}
-        <button
-          onClick={handleEndSession}
-          className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-md shadow-red-600/20 cursor-pointer border border-red-500 shrink-0"
-        >
-          <span>End Session</span>
-        </button>
+        {/* Header Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setShowNotesPanel(true)}
+            className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer border border-indigo-500 shrink-0 active:scale-95"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>View Notes</span>
+          </button>
+
+          <button
+            onClick={handleEndSession}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-1.5 shadow-md shadow-red-600/20 cursor-pointer border border-red-500 shrink-0"
+          >
+            <span>End Session</span>
+          </button>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -749,7 +965,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-start">
             
             {/* Left Column: Question & Target */}
-            <div className="lg:col-span-8 flex flex-col gap-3 md:gap-4">
+            <div className="lg:col-span-12 flex flex-col gap-3 md:gap-4">
 
                 {/* Question Counter & AI Speed Control on Same Line */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -791,18 +1007,54 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                    <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
                       <BrainCircuit className="w-24 h-24 md:w-32 md:h-32 text-indigo-600" />
                    </div>
-                   <div className="flex items-center gap-3 mb-3 md:mb-6">
-                      <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em]">Active Question</span>
-                      {isSpeakingQuestion && (
-                         <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
-                            <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Speaking
-                         </span>
-                      )}
-                      {isPlaying && isSpeakingFull && (
-                         <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
-                            <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Reading Full
-                         </span>
-                      )}
+                   <div className="flex items-center justify-between gap-3 mb-3 md:mb-6">
+                      <div className="flex items-center gap-3">
+                        <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em]">Active Question</span>
+                        {isSpeakingQuestion && (
+                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
+                              <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Speaking
+                           </span>
+                        )}
+                        {isPlaying && isSpeakingFull && (
+                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
+                              <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Reading Full
+                           </span>
+                        )}
+                      </div>
+
+                      {/* Question Control Buttons */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowNotesPanel(true)}
+                          className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                        >
+                          <BookOpen className="w-4 h-4 text-purple-600" />
+                          <span>View Notes</span>
+                        </button>
+
+                        <button
+                           onClick={() => {
+                              if (isPlaying && isSpeakingQuestion) {
+                                 if (synth) synth.cancel();
+                                 setIsPlaying(false);
+                                 setIsSpeakingQuestion(false);
+                              } else {
+                                 if (synth) synth.cancel();
+                                 setIsPlaying(false);
+                                 setIsSpeakingFull(false);
+                                 speakQuestion(false);
+                              }
+                           }}
+                           className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                              isPlaying && isSpeakingQuestion
+                                 ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                 : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                           }`}
+                        >
+                           <Volume2 className="w-4 h-4" />
+                           <span>{isPlaying && isSpeakingQuestion ? 'Stop Question' : 'Read Question'}</span>
+                        </button>
+                      </div>
                    </div>
                    <div className={`text-base sm:text-2xl md:text-3xl font-bold transition-all duration-500 ${isSpeakingQuestion ? 'text-indigo-600 scale-[1.01]' : 'text-slate-800'} leading-[1.4]`}>
                      <QuestionMathJax content={question?.question_details?.question_latex} />
@@ -814,9 +1066,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-10">
                         <div className="flex flex-col gap-0.5">
                            <h3 className="text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em]">Practice Phrase</h3>
-                           <p className="text-xs md:text-sm font-bold text-slate-600">Listen carefully and repeat the highlighted part</p>
+                           {/* <p className="text-xs md:text-sm font-bold text-slate-600">Listen carefully and repeat the highlighted part</p> */}
                         </div>
-                        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto shrink-0">
                             {/* Segmented Control Practice Mode Selector */}
                             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/50 shrink-0">
                                <button
@@ -857,48 +1109,322 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                                   CHUNK {currentChunkIdx + 1} OF {chunks.length}
                                </div>
                             )}
+
+                            {/* Answer Speech Button */}
+                            <button
+                               onClick={() => {
+                                  if (isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))) {
+                                     if (synth) synth.cancel();
+                                     setIsPlaying(false);
+                                     setIsSpeakingFull(false);
+                                  } else {
+                                     if (synth) synth.cancel();
+                                     setIsPlaying(false);
+                                     setIsSpeakingQuestion(false);
+                                     if (practiceMode === 'full') {
+                                        speakFullAnswer();
+                                     } else {
+                                        speakCurrentChunk();
+                                     }
+                                  }
+                               }}
+                               className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                                  isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))
+                                     ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                     : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                               }`}
+                            >
+                               <Volume2 className="w-4 h-4" />
+                               <span>
+                                  {isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))
+                                     ? 'Stop Speech'
+                                     : practiceMode === 'full'
+                                        ? 'Read Answer'
+                                        : 'Read Answer'}
+                               </span>
+                            </button>
+
+                            {/* Next Chunk Navigation Button */}
+                            {practiceMode === 'chunks' && !isQuestionFinished && (
+                               <button
+                                  onClick={handleNextChunk}
+                                  className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-green-600 text-white hover:bg-slate-900 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                               >
+                                  <span>{currentChunkIdx >= chunks.length - 1 ? 'Finish Question' : 'Next Chunk'}</span>
+                                  <SkipForward className="w-4 h-4" />
+                               </button>
+                            )}
+
+                            {/* Question Completion Navigation */}
+                            {isQuestionFinished && (
+                               <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                     onClick={() => {
+                                        if (skipWarningForSession) {
+                                           setIsRecordingAnswerMode(true);
+                                           setRecordingAnswerState('idle');
+                                           setRecordedText('');
+                                           setFeedbackData(null);
+                                        } else {
+                                           setShowWarningModal(true);
+                                        }
+                                     }}
+                                     className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                                  >
+                                     <Mic className="w-4 h-4" />
+                                     <span>Record Answer</span>
+                                  </button>
+
+                                  <button
+                                     onClick={handleDiscard}
+                                     className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all cursor-pointer"
+                                  >
+                                     Retry
+                                  </button>
+
+                                  <button
+                                     onClick={proceedToNextQuestion}
+                                     className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
+                                  >
+                                     <span>{currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'End Session'}</span>
+                                     <SkipForward className="w-4 h-4" />
+                                  </button>
+                               </div>
+                            )}
                          </div>
                      </div>
 
-                     <div className="flex-1 min-h-[120px] md:min-h-[200px] flex flex-col justify-center">
-                        <div className="text-base sm:text-2xl md:text-4xl font-medium leading-[1.6] tracking-tight">
-                           {isSpeakingFull ? (
-                              fullAnswerTokens.map((token, idx) => (
-                                 <div
-                                    key={idx}
-                                    className={`inline transition-all duration-300 px-0.5 rounded ${
-                                       idx === currentTokenIdx
-                                          ? 'text-indigo-700 font-extrabold bg-indigo-100 shadow-[0_0_15px_rgba(79,70,229,0.25)] scale-[1.1] border border-indigo-200/50 relative z-10'
-                                          : 'text-indigo-600 font-bold bg-indigo-50/50 shadow-[0_0_20px_rgba(79,70,229,0.06)]'
-                                    }`}
-                                 >
-                                    <QuestionMathJax content={token} />
-                                    {' '}
+                     {isRecordingAnswerMode ? (
+                        <div className="flex flex-col gap-6 py-2">
+                           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                              <div className="flex items-center gap-2.5">
+                                 <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                                    <Mic className="w-5 h-5" />
                                  </div>
-                              ))
-                           ) : (
-                               chunks.map((chunk, idx) => {
-                                  const isHighlighted = (practiceMode === 'full' || idx === currentChunkIdx) && !isQuestionFinished && !isSpeakingQuestion;
-                                  const isDimmed = isQuestionFinished || (practiceMode !== 'full' && idx < currentChunkIdx);
-                                  return (
-                                     <div 
-                                        key={idx} 
-                                        className={`inline transition-all duration-500 px-1 rounded-lg ${
-                                           isHighlighted
-                                              ? 'text-indigo-600 font-bold bg-indigo-50/50 shadow-[0_0_20px_rgba(79,70,229,0.1)]' 
-                                              : isDimmed
-                                                 ? 'text-slate-400/60' 
-                                                 : 'text-slate-200'
-                                        }`}
-                                     >
-                                        <QuestionMathJax content={chunk} />
-                                        {' '}
-                                     </div>
-                                  );
-                               })
+                                 <div>
+                                    <h4 className="text-base font-bold text-slate-900">Record Your Answer from Memory</h4>
+                                    <p className="text-xs text-slate-400 font-medium">Answer phrase is hidden. Speak your answer clearly.</p>
+                                 </div>
+                              </div>
+                              <button
+                                 onClick={() => {
+                                    if (recognitionRef.current && isListening) {
+                                       try { recognitionRef.current.stop(); } catch(e){}
+                                    }
+                                    setIsRecordingAnswerMode(false);
+                                    setRecordingAnswerState('idle');
+                                 }}
+                                 className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                              >
+                                 Exit Recording
+                              </button>
+                           </div>
+
+                           {recordingAnswerState === 'idle' && (
+                              <div className="flex flex-col items-center justify-center py-8 gap-4 text-center">
+                                 <p className="text-sm font-medium text-slate-600 max-w-md">
+                                    Click the button below to start recording your answer.
+                                 </p>
+                                 <button
+                                    onClick={() => {
+                                       setUserTranscript('');
+                                       setRecordedText('');
+                                       setRecordingAnswerState('recording');
+                                       if (recognitionRef.current) {
+                                          try { recognitionRef.current.start(); } catch(e){}
+                                       }
+                                    }}
+                                    className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-2xl flex items-center gap-2.5 shadow-lg shadow-indigo-600/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                 >
+                                    <Mic className="w-5 h-5" />
+                                    <span>Start Recording</span>
+                                 </button>
+                              </div>
+                           )}
+
+                           {recordingAnswerState === 'recording' && (
+                              <div className="flex flex-col items-center gap-5 py-6">
+                                 <div className="flex items-center gap-2 text-rose-600 font-black text-xs uppercase tracking-widest animate-pulse">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Recording Live Audio...
+                                 </div>
+                                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 w-full min-h-[100px] flex items-center justify-center text-center">
+                                    <p className="text-base font-medium text-slate-700 italic">
+                                       {userTranscript ? `"${userTranscript}"` : "Listening... Speak your complete answer."}
+                                    </p>
+                                 </div>
+                                 <button
+                                    onClick={() => {
+                                       if (recognitionRef.current) {
+                                          try { recognitionRef.current.stop(); } catch(e){}
+                                       }
+                                       setRecordedText(userTranscript);
+                                       setRecordingAnswerState('recorded');
+                                    }}
+                                    className="px-6 py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm rounded-2xl flex items-center gap-2.5 shadow-lg shadow-rose-600/20 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                                 >
+                                    <Square className="w-5 h-5 fill-current" />
+                                    <span>Stop Recording</span>
+                                 </button>
+                              </div>
+                           )}
+
+                           {recordingAnswerState === 'recorded' && (
+                              <div className="flex flex-col gap-4">
+                                 <div className="flex flex-col gap-1">
+                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                       Your Transcribed Answer (Editable):
+                                    </label>
+                                    <p className="text-xs text-slate-400">
+                                       If any word was misheard or mispronounced, you can correct it below before submitting.
+                                    </p>
+                                 </div>
+
+                                 <textarea
+                                    value={recordedText}
+                                    onChange={(e) => setRecordedText(e.target.value)}
+                                    placeholder="Your recorded answer will appear here..."
+                                    className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 text-base font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-y"
+                                 />
+
+                                 <div className="flex items-center justify-end gap-3 pt-2">
+                                    <button
+                                       onClick={() => {
+                                          setIsRecordingAnswerMode(false);
+                                          setRecordingAnswerState('idle');
+                                       }}
+                                       className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-all cursor-pointer"
+                                    >
+                                       Cancel
+                                    </button>
+
+                                    <button
+                                       onClick={() => {
+                                          const expected = questions[currentQuestionIdx]?.answer_transcribe || questions[currentQuestionIdx]?.question_details?.answer_description || questions[currentQuestionIdx]?.question_details?.answer_transcribe || "";
+                                          const evalResult = evaluateAnswer(recordedText, expected);
+                                          setFeedbackData(evalResult);
+                                          setRecordingAnswerState('submitted');
+                                       }}
+                                       disabled={!recordedText.trim()}
+                                       className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-black text-xs uppercase tracking-wider hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md shadow-indigo-200 cursor-pointer active:scale-95 flex items-center gap-1.5"
+                                    >
+                                       <CheckCircle2 className="w-4 h-4" />
+                                       <span>Submit Answer</span>
+                                    </button>
+                                 </div>
+                              </div>
+                           )}
+
+                           {recordingAnswerState === 'submitted' && feedbackData && (
+                              <div className="flex flex-col gap-5 animate-in fade-in duration-300">
+                                 <div className="flex items-center justify-between bg-indigo-50/80 border border-indigo-100 p-4 rounded-2xl">
+                                    <div>
+                                       <h4 className="text-sm font-extrabold text-indigo-950">Evaluation Summary</h4>
+                                       <p className="text-xs text-indigo-600 font-bold mt-0.5">{feedbackData.feedback}</p>
+                                    </div>
+                                    <div className="px-4 py-2 bg-indigo-600 text-white font-black text-lg rounded-xl shadow-md">
+                                       {feedbackData.score}%
+                                    </div>
+                                 </div>
+
+                                 <div className="flex flex-col gap-2">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                       Expected Answer Coverage:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                                       {feedbackData.wordAnalysis.map((item, idx) => (
+                                          <span
+                                             key={idx}
+                                             className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                                                item.matched
+                                                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                                   : 'bg-rose-50 text-rose-700 border-rose-200 opacity-70'
+                                             }`}
+                                          >
+                                             {item.word}
+                                          </span>
+                                       ))}
+                                    </div>
+                                 </div>
+
+                                 <div className="flex flex-col gap-1 text-xs">
+                                    <span className="font-bold text-slate-500 uppercase tracking-wider">Your Submitted Answer:</span>
+                                    <p className="p-3 bg-white border border-slate-200 rounded-xl text-slate-700 italic">
+                                       "{recordedText}"
+                                    </p>
+                                 </div>
+
+                                 <div className="flex items-center justify-end gap-3 pt-2">
+                                    <button
+                                       onClick={() => {
+                                          setRecordingAnswerState('idle');
+                                          setRecordedText('');
+                                          setFeedbackData(null);
+                                       }}
+                                       className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-all cursor-pointer"
+                                    >
+                                       Try Again
+                                    </button>
+                                    <button
+                                       onClick={() => {
+                                          setIsRecordingAnswerMode(false);
+                                          setRecordingAnswerState('idle');
+                                       }}
+                                       className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs uppercase tracking-wider hover:bg-slate-800 transition-all cursor-pointer"
+                                    >
+                                       Back to Answer View
+                                    </button>
+                                 </div>
+                              </div>
                            )}
                         </div>
-                     </div>
+                     ) : (
+                        <div className="flex-1 min-h-[120px] md:min-h-[200px] flex flex-col justify-center">
+                           <div className="text-base sm:text-2xl md:text-4xl font-medium leading-[1.6] tracking-tight">
+                              {isSpeakingFull ? (
+                                 fullAnswerTokens.map((token, idx) => (
+                                    <div
+                                       key={idx}
+                                       className={`inline transition-all duration-300 px-0.5 rounded ${
+                                          idx === currentTokenIdx
+                                             ? 'text-indigo-700 font-extrabold bg-indigo-100 shadow-[0_0_15px_rgba(79,70,229,0.25)] scale-[1.1] border border-indigo-200/50 relative z-10'
+                                             : 'text-indigo-600 font-bold bg-indigo-50/50 shadow-[0_0_20px_rgba(79,70,229,0.06)]'
+                                       }`}
+                                    >
+                                       <QuestionMathJax content={token} />
+                                       {' '}
+                                    </div>
+                                 ))
+                              ) : (
+                                   chunks.map((chunk, idx) => {
+                                      const isSelectedChunk = practiceMode === 'chunks' && idx === currentChunkIdx;
+                                      const isHighlighted = practiceMode === 'full'
+                                         ? (!isQuestionFinished && !isSpeakingQuestion)
+                                         : isSelectedChunk;
+                                      const isDimmed = isQuestionFinished || (practiceMode === 'chunks' && idx < currentChunkIdx);
+                                      return (
+                                         <div 
+                                            key={idx}
+                                            onClick={() => {
+                                               speakChunkAtIndex(idx);
+                                            }}
+                                            className={`inline transition-all duration-300 px-1.5 py-0.5 rounded-lg cursor-pointer select-none ${
+                                               isHighlighted
+                                                  ? 'text-indigo-700 font-bold bg-indigo-100/80 shadow-[0_0_15px_rgba(79,70,229,0.2)] border border-indigo-200' 
+                                                  : isDimmed
+                                                     ? 'text-slate-400/70 hover:text-slate-600 hover:bg-slate-100' 
+                                                     : 'text-slate-700 hover:text-indigo-600 hover:bg-indigo-50'
+                                            }`}
+                                            title={`Click to read Chunk ${idx + 1}`}
+                                         >
+                                            <QuestionMathJax content={chunk} />
+                                            {' '}
+                                         </div>
+                                      );
+                                   })
+                              )}
+                           </div>
+                        </div>
+                     )}
                 </div>
 
                 {/* User Feedback */}
@@ -914,10 +1440,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                 )}
             </div>
 
-            {/* Right Column: Interaction & Feedback - Hidden on Mobile, Sticky on Desktop */}
+            {/* Right Column: Interaction & Feedback - Session Control (Commented Out) */}
+            {/* 
             <div className="hidden lg:flex lg:col-span-4 flex-col gap-6 sticky top-28">
-                
-                {/* Control Center */}
                 <div className="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-[0_20px_40px_rgba(79,70,229,0.3)] relative overflow-hidden">
                     <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
                     <div className="absolute -top-10 -left-10 w-40 h-40 bg-indigo-400/20 rounded-full blur-3xl"></div>
@@ -981,6 +1506,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                     </div>
                 </div>
             </div>
+            */}
         </div>
       </main>
 
@@ -1038,6 +1564,220 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
             <span>{currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'End Session'}</span>
             <SkipForward className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* Warning Popup Modal for Record Answer Mode */}
+      {showWarningModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Record Answer Mode</h3>
+                <p className="text-xs text-slate-500 font-medium">Memory Recall Challenge</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-4 text-amber-900 text-sm font-medium leading-relaxed">
+              Do you memorize the complete answer? During recording, the answer text will be hidden.
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <input 
+                type="checkbox" 
+                checked={skipWarningForSession}
+                onChange={(e) => setSkipWarningForSession(e.target.checked)}
+                className="mt-0.5 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 accent-indigo-600 cursor-pointer"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">
+                  Remember my choice for this session
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Don't show this popup again until a new session is started.
+                </span>
+              </div>
+            </label>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => setShowWarningModal(false)}
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowWarningModal(false);
+                  setIsRecordingAnswerMode(true);
+                  setRecordingAnswerState('idle');
+                  setRecordedText('');
+                  setFeedbackData(null);
+                }}
+                className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white font-black text-xs uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 cursor-pointer active:scale-95"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Right-Side Slide-Over Notes Panel */}
+      {showNotesPanel && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          {/* Backdrop Overlay */}
+          <div 
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-300"
+            onClick={() => setShowNotesPanel(false)}
+          />
+
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+            <div className="w-screen max-w-md sm:max-w-lg md:max-w-xl bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300">
+              
+              {/* Panel Header */}
+              <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shadow-md shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                    <BookOpen className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base tracking-tight text-white flex items-center gap-2">
+                      Study Notes & Diagrams
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium">Question {currentQuestionIdx + 1} of {questions.length}</p>
+                  </div>
+                </div>
+
+                {/* Hide Notes Button */}
+                <button
+                  onClick={() => setShowNotesPanel(false)}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Hide Notes</span>
+                </button>
+              </div>
+
+              {/* Panel Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-slate-50">
+                {/* Question context summary */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">
+                    Question Summary
+                  </span>
+                  <p className="mt-2 text-sm font-semibold text-slate-800 leading-relaxed">
+                    <QuestionMathJax content={question?.question_details?.question_latex} />
+                  </p>
+                </div>
+
+                {/* Note Images Gallery */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-indigo-600" />
+                      <span>Note Images ({getNoteImages().length})</span>
+                    </h4>
+                  </div>
+
+                  {getNoteImages().length > 0 ? (
+                    <div className="grid grid-cols-1 gap-4">
+                      {getNoteImages().map((imgUrl, idx) => (
+                        <div key={idx} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                          <div className="p-2 bg-slate-100 flex items-center justify-center">
+                            <img 
+                              src={imgUrl} 
+                              alt={`Note diagram ${idx + 1}`} 
+                              className="w-full h-auto object-contain max-h-[350px] rounded-lg"
+                              onError={(e) => {
+                                // Fallback image layout if network fails to fetch
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                          <div className="p-3 bg-white border-t border-slate-100 flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-700">Note Image {idx + 1}</span>
+                            <button
+                              onClick={() => setSelectedNoteImage(imgUrl)}
+                              className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Maximize2 className="w-3.5 h-3.5" />
+                              <span>Enlarge Note</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
+                      <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/60 text-xs font-semibold">
+                        <Sparkles className="w-4 h-4 shrink-0 text-indigo-600" />
+                        <span>Visual Study Note & Concept Reference</span>
+                      </div>
+
+                      {/* Styled Visual Concept Card */}
+                      <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-2xl p-5 shadow-md space-y-3 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                          <FileText className="w-28 h-28 text-white" />
+                        </div>
+                        <h5 className="font-extrabold text-xs text-indigo-300 uppercase tracking-widest">Key Concept & Formula Notes</h5>
+                        <div className="text-sm text-slate-100 leading-relaxed font-medium bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
+                          <QuestionMathJax content={question?.question_details?.answer_latex || question?.answer || "Study the formula breakdown and key definitions for this topic."} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Answer Explanation Card */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-purple-600" />
+                    <span>Full Explanation & Target Answer</span>
+                  </h4>
+                  <div className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
+                    <QuestionMathJax content={question?.question_details?.answer_latex} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Panel Footer */}
+              <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
+                <p className="text-xs text-slate-400 font-medium">Click Hide Notes or press Esc to close</p>
+                <button
+                  onClick={() => setShowNotesPanel(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span>Hide Notes</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Note Image Zoom Modal */}
+      {selectedNoteImage && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute top-4 right-4 flex items-center gap-3">
+            <button
+              onClick={() => setSelectedNoteImage(null)}
+              className="p-2.5 rounded-full bg-white/20 hover:bg-white/30 text-white transition-colors cursor-pointer flex items-center gap-1.5 px-4 font-bold text-sm"
+            >
+              <X className="w-5 h-5" />
+              <span>Close</span>
+            </button>
+          </div>
+          <img 
+            src={selectedNoteImage} 
+            alt="Enlarged note image" 
+            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
+          />
         </div>
       )}
 

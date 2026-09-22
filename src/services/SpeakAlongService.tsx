@@ -40,7 +40,7 @@ export const SpeakAlongService = {
     getSpeakAlongQuestions: async (payload: any) => {
         console.log("SpeakAlong Payload", payload);
         try{
-            const response = await axiosClient.get(`http://187.127.141.24:8001/api/v1/viva/questions/fetch`, { params: payload });
+            const response = await axiosClient.get(`${import.meta.env.VITE_MINDSHAALA_API_URL}/api/v1/viva/questions/fetch`, { params: payload });
             console.log("Viva questions", response.data);
             return response.data;
         }catch(error){
