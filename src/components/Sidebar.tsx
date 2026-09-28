@@ -24,6 +24,8 @@ import {
   ChevronRight,
   ChevronDown,
   CreditCard,
+  Compass,
+  Target,
   FolderKanban,
   Brain,
   HelpCircle,
@@ -90,6 +92,13 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const learningResources = [
     { id: 'courses', label: 'Study Material', icon: BookMarked },
     { id: 'smart-notes', label: 'Smart Notes', icon: Brain, badge: 'NEW' },
+  ];
+
+  const mapPracticeItems = [
+    { id: 'map-practice-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'map-practice-selection', label: 'Assessment', icon: Compass },
+    // { id: 'map-practice-assessment', label: 'Assessment', icon: MapPin },
+    { id: 'map-practice-result', label: 'Result', icon: Award },
   ];
 
   const activityHub = [
@@ -180,6 +189,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const [isChemistryExpanded, setIsChemistryExpanded] = useState(isChemistryActive);
 
   const isCompetitionActive = isGroupActive(competitionSubmodules) || currentPage === 'competition';
+  const isMapPracticeActive = isGroupActive(mapPracticeItems) || currentPage === 'mappractice';
 
   // Group expansion states - Auto expand if active
   const [isLearningResourcesExpanded, setIsLearningResourcesExpanded] = useState(isGroupActive(learningResources));
@@ -190,6 +200,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
   const [isConceptualVivaExpanded, setIsConceptualVivaExpanded] = useState(isGroupActive(conceptualVivaItems));
   const [isAITutorExpanded, setIsAITutorExpanded] = useState(isGroupActive(aiTutorItems));
   const [isSpeakAlongVivaExpanded, setIsSpeakAlongVivaExpanded] = useState(isGroupActive(speakAlongVivaItems));
+  const [isMapPracticeExpanded, setIsMapPracticeExpanded] = useState(isMapPracticeActive);
   const [isDoubtSupportExpanded, setIsDoubtSupportExpanded] = useState(isGroupActive(doubtSupport));
   const [isOthersExpanded, setIsOthersExpanded] = useState(isGroupActive(bottomMenuItems));
   // Expanded states for Viva, Exam, and Competition groups
@@ -206,6 +217,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     if (isGroupActive(conceptualVivaItems)) setIsConceptualVivaExpanded(true);
     if (isGroupActive(aiTutorItems)) setIsAITutorExpanded(true);
     if (isGroupActive(speakAlongVivaItems)) setIsSpeakAlongVivaExpanded(true);
+    if (isGroupActive(mapPracticeItems) || currentPage === 'mappractice') setIsMapPracticeExpanded(true);
     if (isGroupActive(doubtSupport)) setIsDoubtSupportExpanded(true);
     if (isGroupActive(bottomMenuItems)) setIsOthersExpanded(true);
     if (isComputersActive) setIsComputersExpanded(true);
@@ -280,6 +292,23 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
     }
   };
 
+  const toggleMapPractice = () => {
+    if (isMapPracticeExpanded) {
+      setIsMapPracticeExpanded(false);
+    } else {
+      setIsMapPracticeExpanded(true);
+      setIsCompetitionExpanded(false);
+      setIsVivaPrepExpanded(false);
+      setIsConceptualVivaExpanded(false);
+      setIsSpeakAlongVivaExpanded(false);
+      setIsExamZoneExpanded(false);
+      setIsAITutorExpanded(false);
+      setIsGeneralKnowledgeExpanded(false);
+      setIsDoubtSupportExpanded(false);
+      handleMobileNavigate('map-practice-dashboard');
+    }
+  };
+
   const toggleSpeakAlongViva = () => {
     if (isSpeakAlongVivaExpanded) {
       setIsSpeakAlongVivaExpanded(false);
@@ -292,6 +321,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsMapPracticeExpanded(false);
       handleMobileNavigate('speakalong-dashboard');
     }
   };
@@ -308,6 +338,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsMapPracticeExpanded(false);
       handleMobileNavigate('take-test');
     }
   };
@@ -324,6 +355,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsMapPracticeExpanded(false);
       handleMobileNavigate('ai-tutor-dashboard');
     }
   };
@@ -340,6 +372,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
       setIsAITutorExpanded(false);
       setIsDoubtSupportExpanded(false);
+      setIsMapPracticeExpanded(false);
       handleMobileNavigate('gk-dashboard');
     }
   };
@@ -356,6 +389,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
+      setIsMapPracticeExpanded(false);
       handleMobileNavigate('doubt-hub');
     }
   };
@@ -373,6 +407,7 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
       setIsExamZoneExpanded(false);
       setIsAITutorExpanded(false);
       setIsGeneralKnowledgeExpanded(false);
+      setIsMapPracticeExpanded(false);
       handleMobileNavigate('leaderboard'); // By default leaderboard is selected and opened!
     }
   };
@@ -498,6 +533,34 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
               {competitionSubmodules.map((item: any) => {
                 const Icon = item.icon;
                 const isActive = currentPage === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleMobileNavigate(item.id)}
+                    className={childMenuClass(isActive)}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="flex-1 text-left">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Map Practice Accordion */}
+          <button
+            onClick={toggleMapPractice}
+            className={parentMenuClass(false, isMapPracticeExpanded || isGroupActive(mapPracticeItems))}
+          >
+            <MapPin className={`w-5 h-5 ${(isMapPracticeExpanded || isGroupActive(mapPracticeItems)) ? 'text-teal-600' : 'text-slate-400'}`} />
+            <span className="flex-1 text-left">Map Practice</span>
+            {isMapPracticeExpanded ? <ChevronDown className="w-4 h-4 opacity-50" /> : <ChevronRight className="w-4 h-4 opacity-50" />}
+          </button>
+          {isMapPracticeExpanded && (
+            <div className="mt-1 mb-2 space-y-1">
+              {mapPracticeItems.map((item: any) => {
+                const Icon = item.icon;
+                const isActive = currentPage === item.id || (currentPage === 'mappractice' && item.id === 'map-practice-assessment');
                 return (
                   <button
                     key={item.id}

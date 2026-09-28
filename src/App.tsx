@@ -13,7 +13,11 @@ import { PerformanceAnalyticsAdvanced } from "./components/PerformanceAnalyticsA
 import { MyCourses } from "./components/MyCourses";
 import { CoursesAndMaterials } from "./components/CoursesAndMaterials";
 import { StudyMaterial } from "./components/StudyMaterial";
-import { MapPractice } from "./components/MapPractice";
+import { MapPractice } from "./components/map-practice/MapPractice";
+import MapPracticeDashboard from "./components/map-practice/MapPracticeDashboard";
+import MapPracticeSelection from "./components/map-practice/MapPracticeSelection";
+import MapPracticeAssessment from "./components/map-practice/MapPracticeAssessment";
+import MapPracticeResult from "./components/map-practice/MapPracticeResult";
 import PhysicsPhenomenon from "./components/activity-hub/PhysicsPhenomenon";
 import ExplainBiology from "./components/activity-hub/ExplainBiology";
 import EngineeringConcept from "./components/activity-hub/EngineeringConcept";
@@ -425,7 +429,24 @@ export default function App() {
     setActivePage("dashboard");
   };
 
-  const handleNavigate = (page: string) => {
+  const [mapPracticeParams, setMapPracticeParams] = useState<any>(() => {
+    try {
+      const saved = sessionStorage.getItem('mapPracticeParams');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleNavigate = (page: string, params?: any) => {
+    if (params) {
+      setMapPracticeParams(params);
+      try {
+        sessionStorage.setItem('mapPracticeParams', JSON.stringify(params));
+      } catch (e) {
+        console.warn('Could not save mapPracticeParams to sessionStorage', e);
+      }
+    }
     setActivePage(page as any);
     navigate("/"); // Reset URL when navigating via sidebar/state
   };
@@ -570,7 +591,7 @@ export default function App() {
 
         {currentStep === "main" && (
           <div className="min-h-screen bg-gray-50 flex">
-            {activePage !== "conceptual-tutor-session" && activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && activePage !== "theorytest" && (
+            {activePage !== "conceptual-tutor-session" && activePage !== "conceptual-viva-session" && activePage !== "speakalong-session" && activePage !== "gk-exam-runner" && activePage !== "ai-tutor-session" && activePage !== "theorytest" && activePage !== "map-practice-assessment" && activePage !== "mappractice" && (
               <Sidebar
                   activePage={activePage}
                   onNavigate={handleNavigate}
@@ -583,7 +604,7 @@ export default function App() {
                     <Navbar activePage={activePage} onNavigate={handleNavigate} />
                 )}
                 
-                <div className={`flex-1 overflow-y-auto ${(!['dashboard', 'my-courses', 'courses', 'wishlist', 'cart', 'notifications'].includes(activePage) && !['conceptual-tutor-session', 'conceptual-viva-session', 'speakalong-session', 'ai-tutor-session', 'gk-exam-runner', 'theorytest'].includes(activePage)) ? 'pt-[60px] md:pt-0' : ''}`}>
+                <div className={`flex-1 overflow-y-auto ${(!['dashboard', 'my-courses', 'courses', 'wishlist', 'cart', 'notifications'].includes(activePage) && !['conceptual-tutor-session', 'conceptual-viva-session', 'speakalong-session', 'ai-tutor-session', 'gk-exam-runner', 'theorytest', 'map-practice-assessment', 'mappractice'].includes(activePage)) ? 'pt-[60px] md:pt-0' : ''}`}>
                     {activePage === "dashboard" && (
                     <Dashboard
                     profileData={profileData}
@@ -649,7 +670,24 @@ export default function App() {
                 }
                 />
                 )}
-                {activePage === "mappractice" && <MapPractice />}
+                {activePage === "map-practice-dashboard" && (
+                  <MapPracticeDashboard onNavigate={handleNavigate} />
+                )}
+                {activePage === "map-practice-selection" && (
+                  <MapPracticeSelection onNavigate={handleNavigate} />
+                )}
+                {(activePage === "map-practice-assessment" || activePage === "mappractice") && (
+                  <MapPracticeAssessment 
+                    params={mapPracticeParams}
+                    onNavigate={handleNavigate} 
+                  />
+                )}
+                {activePage === "map-practice-result" && (
+                  <MapPracticeResult 
+                    params={mapPracticeParams}
+                    onNavigate={handleNavigate} 
+                  />
+                )}
                 {activePage === "physics-phenomenon" && <PhysicsPhenomenon onNavigate={handleNavigate} />}
                 {activePage === "explain-biology" && <ExplainBiology onNavigate={handleNavigate} />}
                 {activePage === "engineering-concept" && <EngineeringConcept onNavigate={handleNavigate} />}
