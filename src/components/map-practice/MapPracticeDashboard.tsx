@@ -121,22 +121,22 @@ export default function MapPracticeDashboard({ onNavigate }: MapPracticeDashboar
             </p>
           </div>
 
-          {/* <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
               onClick={() => onNavigate?.('map-practice-selection')}
-              className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-sm shadow-xl shadow-blue-900/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer"
+              className="px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold text-xs shadow-lg shadow-blue-900/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer"
             >
-              <Compass className="w-5 h-5" />
-              <span>Explore Maps</span>
+              <Compass className="w-4 h-4" />
+              <span>Explore Assessments</span>
             </button>
             <button
-              onClick={() => onNavigate?.('map-practice-assessment')}
-              className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-extrabold text-sm border border-white/20 transition-all active:scale-95 flex items-center gap-2 cursor-pointer backdrop-blur-md"
+              onClick={() => onNavigate?.('map-practice-attempts')}
+              className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs border border-white/20 transition-all active:scale-95 flex items-center gap-2 cursor-pointer backdrop-blur-md"
             >
-              <Play className="w-5 h-5 fill-current text-blue-400" />
-              <span>Take Assessment</span>
+              <BarChart3 className="w-4 h-4 text-blue-400" />
+              <span>Attempt History</span>
             </button>
-          </div> */}
+          </div>
         </div>
       </div>
 

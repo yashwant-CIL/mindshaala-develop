@@ -76,9 +76,9 @@ export const MapPracticeService = {
     }
   },
 
-    getListAttempts: async (user_id: string | number, assessment_id: number) => {
+    getListAttempts: async (user_id: string | number) => {
     try {
-      const response = await axiosMindShaalaClient.get(API_ENDPOINT.MAP_PRACTICE.GET_LIST_ATTEMPTS(user_id, assessment_id));
+      const response = await axiosMindShaalaClient.get(API_ENDPOINT.MAP_PRACTICE.GET_LIST_ATTEMPTS(user_id));
       console.log("List of attempts:",response.data);
       return response.data;
     } catch (error) {
@@ -87,16 +87,16 @@ export const MapPracticeService = {
     }
   },
 
-    getResultMapAssessment: async (attempt_id: number) => {
-    try {
-      const response = await axiosMindShaalaClient.get(API_ENDPOINT.MAP_PRACTICE.GET_RESULT_MAP_ASSESSMENT(attempt_id));
-      console.log("Result of map assessment:",response.data);
-      return response.data;
-    } catch (error) {
-      console.error('Error getting result map assessment:', error);
-      throw error;
-    }
-  },
+  //   getResultMapAssessment: async (attempt_id: number) => {
+  //   try {
+  //     const response = await axiosMindShaalaClient.get(API_ENDPOINT.MAP_PRACTICE.GET_RESULT_MAP_ASSESSMENT(attempt_id));
+  //     console.log("Result of map assessment:",response.data);
+  //     return response.data;
+  //   } catch (error) {
+  //     console.error('Error getting result map assessment:', error);
+  //     throw error;
+  //   }
+  // },
 
     getAttemptedQuestionsByAttemptId: async (attempt_id: number) => {
     try {

@@ -18,6 +18,7 @@ import MapPracticeDashboard from "./components/map-practice/MapPracticeDashboard
 import MapPracticeSelection from "./components/map-practice/MapPracticeSelection";
 import MapPracticeAssessment from "./components/map-practice/MapPracticeAssessment";
 import MapPracticeResult from "./components/map-practice/MapPracticeResult";
+import MapPracticeAttemptList from "./components/map-practice/MapPracticeAttemptList";
 import PhysicsPhenomenon from "./components/activity-hub/PhysicsPhenomenon";
 import ExplainBiology from "./components/activity-hub/ExplainBiology";
 import EngineeringConcept from "./components/activity-hub/EngineeringConcept";
@@ -683,8 +684,20 @@ export default function App() {
                   />
                 )}
                 {activePage === "map-practice-result" && (
-                  <MapPracticeResult 
-                    params={mapPracticeParams}
+                  mapPracticeParams?.attemptId ? (
+                    <MapPracticeResult 
+                      params={mapPracticeParams}
+                      onNavigate={handleNavigate} 
+                    />
+                  ) : (
+                    <MapPracticeAttemptList 
+                      onNavigate={handleNavigate} 
+                    />
+                  )
+                )}
+                {(activePage === "map-practice-attempts" || activePage === "map-practice-attempt-list") && (
+                  <MapPracticeAttemptList 
+                    initialAttemptId={mapPracticeParams?.attemptId}
                     onNavigate={handleNavigate} 
                   />
                 )}

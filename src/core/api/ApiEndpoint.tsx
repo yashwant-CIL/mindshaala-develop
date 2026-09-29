@@ -257,8 +257,8 @@ export const API_ENDPOINT = {
         SUBMIT_USER_ANSWER:  `/api/v3/mindshaala/map/map-assessment/submit-answer`,
         END_MAP_ASSESSMENT:  `/api/v3/mindshaala/map/map-assessment/end`,
 
-        GET_LIST_ATTEMPTS: (user_id: string | number, assessment_id: number) => `/api/v3/mindshaala/map/assessment/student/attempts?user_id=${user_id}&assessment_id=${assessment_id}`,
-        GET_RESULT_MAP_ASSESSMENT: (attempt_id: number) => `/api/v3/mindshaala/map/map-assessment/results?attempt_id=${attempt_id}`,
+        GET_LIST_ATTEMPTS: (user_id: string | number) => `/api/v3/mindshaala/map/map-assessment/user-results?user_id=${user_id}`,
+        // GET_RESULT_MAP_ASSESSMENT: (attempt_id: number) => `/api/v3/mindshaala/map/map-assessment/results?attempt_id=${attempt_id}`,
         // GET_ATTEMPTED_QUESTIONS_BY_ATTEMPTE_ID: (attempt_id: number) => `/api/v3/mindshaala/map/assessment/student/attempts/${attempt_id}/questions?attempt_id=${attempt_id}`,
         GET_ATTEMPTED_QUESTIONS_BY_ATTEMPTE_ID: (attempt_id: number) => `/api/v3/mindshaala/map/map-assessment/results?attempt_id=${attempt_id}`
     }
