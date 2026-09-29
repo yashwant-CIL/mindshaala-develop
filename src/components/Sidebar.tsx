@@ -684,6 +684,16 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
             </div>
           )}
 
+          {/* Notes Section */}
+          <button
+            onClick={() => handleMobileNavigate('notes-selection')}
+            className={parentMenuClass(currentPage === 'notes-selection' || currentPage === 'notes-viewer', false)}
+          >
+            <FileText className={`w-5 h-5 ${(currentPage === 'notes-selection' || currentPage === 'notes-viewer') ? 'text-blue-600' : 'text-slate-400'}`} />
+            <span className="flex-1 text-left">Notes</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-700">PDF</span>
+          </button>
+
           {/* Learning Zone */}
           <button
             onClick={() => setIsLearningResourcesExpanded(!isLearningResourcesExpanded)}
