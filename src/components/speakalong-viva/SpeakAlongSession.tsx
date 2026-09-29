@@ -16,25 +16,30 @@ import {
   Maximize2,
   FileText,
   Image as ImageIcon,
-  Sparkles
+  Sparkles,
+  RotateCcw,
+  Send
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import Cookies from 'js-cookie';
 import { SpeakAlongService } from '../../services/SpeakAlongService';
 import QuestionMathJax from '../../shared/mathjaxconfig/QuestionMathJax';
 import { speakText } from '../../utils/ttsHelper';
 
 
 interface SpeakAlongSessionProps {
-  courseId: number;
-  subjectId: number;
-  chapterId?: number;
+  courseId: number | string;
+  subjectId: number | string;
+  chapterIds?: (number | string)[];
+  chapterId?: number | string;
   subjectName: string;
   onExit: () => void;
   onFinish: () => void;
 }
 
-export default function SpeakAlongSession({ courseId, subjectId, chapterId, subjectName, onExit, onFinish }: SpeakAlongSessionProps) {
+export default function SpeakAlongSession({ courseId, subjectId, chapterIds, chapterId, subjectName, onExit, onFinish }: SpeakAlongSessionProps) {
   const [questions, setQuestions] = useState<any[]>([]);
+  const [sessionId, setSessionId] = useState<number | string | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [chunks, setChunks] = useState<string[]>([]);
@@ -53,6 +58,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const [isQuestionFinished, setIsQuestionFinished] = useState(false);
   const [isSpeakingFull, setIsSpeakingFull] = useState(false);
   const [autoPlayNext, setAutoPlayNext] = useState(false);
@@ -65,20 +71,148 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   const aiSpeechStartTimeRef = useRef<number>(0);
   const speechTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // View Notes Side Panel States
+  // View Notes API & Security States
   const [showNotesPanel, setShowNotesPanel] = useState(false);
+  const [notesData, setNotesData] = useState<any>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [notesText, setNotesText] = useState<string>('');
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const [fetchingNotes, setFetchingNotes] = useState(false);
+  const [isSpeakingNotes, setIsSpeakingNotes] = useState(false);
+  const [isPrivacyBlurred, setIsPrivacyBlurred] = useState(false);
   const [selectedNoteImage, setSelectedNoteImage] = useState<string | null>(null);
 
-  // Keyboard shortcut: close notes panel on Esc
+  // Anti-Screenshot & DRM Security Handlers
   useEffect(() => {
+    if (!showNotesPanel) {
+      setIsPrivacyBlurred(false);
+      return;
+    }
+
+    const handleBlur = () => {
+      setIsPrivacyBlurred(true);
+    };
+
+    const handleFocus = () => {
+      setIsPrivacyBlurred(false);
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showNotesPanel) {
+      if (e.key === 'Escape') {
         setShowNotesPanel(false);
+        setIsPrivacyBlurred(false);
+      }
+      if (
+        e.key === 'PrintScreen' ||
+        (e.ctrlKey && e.key === 'p') ||
+        (e.metaKey && e.key === 'p') ||
+        (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5'))
+      ) {
+        setIsPrivacyBlurred(true);
+        toast.error("Screenshots and printing are disabled for security reasons.", { id: 'screenshot-warn' });
+        setTimeout(() => setIsPrivacyBlurred(false), 3000);
       }
     };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [showNotesPanel]);
+
+  const handleOpenNotes = async () => {
+    setShowNotesPanel(true);
+    const q = questions?.[currentQuestionIdx];
+    const vivaQId = q?.viva_q_id || q?.question_id || q?.id;
+    if (!vivaQId) {
+      console.warn("No viva_q_id found for current question", q);
+      setNotesError("No notes available for this question");
+      return;
+    }
+
+    setFetchingNotes(true);
+    setNotesData(null);
+    setPdfUrl(null);
+    setNotesText('');
+    setNotesError(null);
+
+    try {
+      console.log("Fetching Speak Along notes for viva_q_id:", vivaQId);
+      const data = await SpeakAlongService.GET_SPEAK_ALONG_NOTES(vivaQId);
+      console.log("Speak Along Notes response data:", data);
+      setNotesData(data);
+
+      const responseMessage = data?.message || data?.data?.message || data?.detail || (typeof data === 'string' ? data : '');
+      if (responseMessage && String(responseMessage).toLowerCase().includes("no notes")) {
+        setNotesError("No notes available for this question");
+      }
+
+      const urlCandidate = 
+        data?.pdf_url || 
+        data?.notes_pdf || 
+        data?.pdf || 
+        data?.notes_url || 
+        data?.url || 
+        data?.data?.pdf_url || 
+        data?.data?.notes_pdf || 
+        data?.data?.url || 
+        (typeof data === 'string' && (data.includes('.pdf') || data.startsWith('http')) ? data : null);
+
+      if (urlCandidate) {
+        let fullPdfUrl = String(urlCandidate).trim();
+        if (!fullPdfUrl.startsWith('http://') && !fullPdfUrl.startsWith('https://') && !fullPdfUrl.startsWith('data:')) {
+          const baseUrl = import.meta.env.VITE_MINDSHAALA_API_URL || import.meta.env.VITE_API_URL || '';
+          fullPdfUrl = `${baseUrl}/api/v1/cil/images/${fullPdfUrl.replace(/^\/+/, '')}`;
+        }
+        setPdfUrl(fullPdfUrl);
+      }
+
+      const textCandidate = 
+        data?.note_text || 
+        data?.notes_text || 
+        data?.text || 
+        data?.description || 
+        data?.content || 
+        data?.data?.note_text || 
+        '';
+
+      setNotesText(textCandidate);
+
+      if (!urlCandidate && !textCandidate && getNoteImages().length === 0) {
+        setNotesError("No notes available for this question");
+      }
+    } catch (error: any) {
+      console.error("Error fetching notes:", error);
+      setNotesError("No notes available for this question");
+    } finally {
+      setFetchingNotes(false);
+    }
+  };
+
+  const handleSpeakNotes = () => {
+    if (isSpeakingNotes) {
+      stopAllSpeech();
+      setIsSpeakingNotes(false);
+      return;
+    }
+
+    const currentQ = questions?.[currentQuestionIdx];
+    const textToSpeak = notesText || currentQ?.question_details?.answer_description || currentQ?.answer || "Study notes content";
+    if (!textToSpeak) return;
+
+    stopAllSpeech();
+    speakText(textToSpeak, {
+      rate: speechRate,
+      onstart: () => setIsSpeakingNotes(true),
+      onend: () => setIsSpeakingNotes(false),
+      onerror: () => setIsSpeakingNotes(false)
+    });
+  };
 
   // Helper to extract note images from current question object
   const getNoteImages = (): string[] => {
@@ -131,18 +265,34 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   const [isRecordingAnswerMode, setIsRecordingAnswerMode] = useState(false);
   const [recordingAnswerState, setRecordingAnswerState] = useState<'idle' | 'recording' | 'recorded' | 'submitted'>('idle');
   const [recordedText, setRecordedText] = useState('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [feedbackData, setFeedbackData] = useState<{
-    score: number;
+    stage: 'poor' | 'good' | 'excellent';
+    text: string;
     wordAnalysis: { word: string; matched: boolean }[];
-    feedback: string;
   } | null>(null);
+
+  const stopAllSpeech = () => {
+    if (synth) synth.cancel();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsPlaying(false);
+    setIsSpeakingQuestion(false);
+    setIsSpeakingFull(false);
+    if (speechTimerRef.current) {
+      clearTimeout(speechTimerRef.current);
+      speechTimerRef.current = null;
+    }
+  };
 
   const evaluateAnswer = (userText: string, expectedText: string) => {
     const clean = (str: string) =>
       str
+        .replace(/\\begin\{[\s\S]*?\\end\{.*?\}|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\(.*?\\\)|\\text\{.*?\}|\$.*?\$/g, ' ')
         .toLowerCase()
-        .replace(/\\\[|\\\]|\$\$|\$/g, '')
-        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"'’]/g, '')
+        .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’“”—\u0964\u0965]/g, ' ')
+        .replace(/\b(um|uh|like|ah|er|hmm|you know)\b/gi, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
@@ -153,7 +303,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     const expectedWords = expectedClean.split(' ').filter(Boolean);
 
     if (expectedWords.length === 0) {
-      return { score: 100, wordAnalysis: [], feedback: "Great effort!" };
+      return { stage: 'excellent' as const, text: "Excellent!", wordAnalysis: [] };
     }
 
     const isMatch = (w1: string, userList: string[]) => {
@@ -167,133 +317,199 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       return { word, matched };
     });
 
-    const score = Math.min(100, Math.round((matchedCount / expectedWords.length) * 100));
+    const ratio = matchedCount / expectedWords.length;
 
-    let feedback = "";
-    if (score >= 85) {
-      feedback = "Outstanding! You recalled almost the exact answer cleanly!";
-    } else if (score >= 65) {
-      feedback = "Good job! You captured most of the key concepts correctly.";
-    } else if (score >= 40) {
-      feedback = "Fair attempt. Review the missing key terms and try again.";
+    let stage: 'poor' | 'good' | 'excellent' = 'poor';
+    let text = "Needs Practice";
+
+    if (ratio >= 0.75) {
+      stage = 'excellent';
+      text = "Excellent!";
+    } else if (ratio >= 0.40) {
+      stage = 'good';
+      text = "Good Effort!";
     } else {
-      feedback = "Needs practice. Try reading the phrase a few more times.";
+      stage = 'poor';
+      text = "Needs Practice";
     }
 
     return {
-      score,
-      wordAnalysis,
-      feedback
+      stage,
+      text,
+      wordAnalysis
     };
   };
 
-  /* Original Fetch Questions
-  useEffect(() => {
-    const fetchQuestions = async () => {
-      setLoading(true);
-      try {
-        const payload = {
-          course_id: courseId,
-          subject_id: subjectId,
-          chapter_id: chapterId
-        };
-        const data = await SpeakAlongService.getSpeakAlongQuestions(payload);
-        if (data && data.length > 0) {
-          setQuestions(data);
-        } else {
-          toast.error("No questions found for this selection.");
-          onExit();
-        }
-      } catch (error) {
-        toast.error("Failed to fetch questions.");
-        onExit();
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchQuestions();
-  }, [courseId, subjectId, chapterId]);
-  */
-
-  // NEW: Persistent Fetch Questions & BeforeUnload Protection
-  useEffect(() => {
-    const sessionKey = `speakalong_session_${courseId}_${subjectId}_${chapterId}`;
-    
-    const fetchQuestions = async () => {
-      // Try to load from localStorage first
-      const savedSession = localStorage.getItem(sessionKey);
-      if (savedSession) {
-        try {
-          const parsed = JSON.parse(savedSession);
-          if (parsed.questions && parsed.questions.length > 0) {
-            setQuestions(parsed.questions);
-            setCurrentQuestionIdx(parsed.currentQuestionIdx || 0);
-            setCurrentChunkIdx(parsed.currentChunkIdx || 0);
-            setSpeechRate(parsed.speechRate || 1.0);
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.error("Failed to parse saved session", e);
-        }
-      }
-
-      setLoading(true);
-      try {
-        const payload = {
-          course_id: courseId,
-          subject_id: subjectId,
-          chapter_id: chapterId
-        };
-        const data = await SpeakAlongService.getSpeakAlongQuestions(payload);
-        if (data && data.length > 0) {
-          setQuestions(data);
-          // Save initial session
-          localStorage.setItem(sessionKey, JSON.stringify({
-            questions: data,
-            currentQuestionIdx: 0,
-            currentChunkIdx: 0,
-            speechRate: 1.0
-          }));
-        } else {
-          toast.error("No questions found for this selection.");
-          onExit();
-        }
-      } catch (error) {
-        toast.error("Failed to fetch questions.");
-        onExit();
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchQuestions();
-
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [courseId, subjectId, chapterId]);
-
-  // NEW: Persist state changes
-  useEffect(() => {
-    if (questions.length > 0) {
-      const sessionKey = `speakalong_session_${courseId}_${subjectId}_${chapterId}`;
-      const sessionData = {
-        questions,
-        currentQuestionIdx,
-        currentChunkIdx,
-        speechRate
-      };
-      localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+  const handleTranscribeAudio = async (blobToSubmit?: Blob) => {
+    const targetBlob = blobToSubmit || recordedAudioBlob;
+    if (!targetBlob || targetBlob.size === 0) {
+      toast.error("No recorded audio available to submit.");
+      return;
     }
-  }, [questions, currentQuestionIdx, currentChunkIdx, speechRate]);
+    setIsTranscribing(true);
+    setFeedbackData(null);
+    try {
+      console.log("Audio Blob received for STT:", { size: targetBlob.size, type: targetBlob.type });
+      const audioFile = new File([targetBlob], 'recording.mp3', { type: 'audio/mp3' });
+      
+      const currentQ = questions?.[currentQuestionIdx];
+      const qId = currentQ?.question_id || currentQ?.id || 0;
 
-  // NEW: Handle Fullscreen Mode and hide layout decorations (sidebar, floating tools)
+      const formData = new FormData();
+      formData.append('session_id', String(sessionId || 0));
+      formData.append('question_id', String(qId));
+      formData.append('file', audioFile, 'recording.mp3');
+
+      console.log("Submitting Speak Along Audio (FormData entries):", Array.from(formData.entries()));
+      const data = await SpeakAlongService.SUBMIT_SPEAK_ALONG_AUDIO(formData);
+      console.log("Submit Audio Response data:", data);
+
+      const transcribedText = 
+        data?.user_transcription || 
+        data?.data?.user_transcription || 
+        data?.transcribe || 
+        data?.data?.transcribe || 
+        data?.text || 
+        data?.data?.text || 
+        data?.transcribed_text || 
+        (typeof data === 'string' ? data : '');
+
+      if (transcribedText) {
+        setUserTranscript(transcribedText);
+        setRecordedText(transcribedText);
+
+        let expectedText = currentQ?.answer_transcribe || currentQ?.question_details?.answer_description || currentQ?.question_details?.answer_transcribe || currentQ?.answer || '';
+        if (practiceMode === 'chunks' && chunks?.[currentChunkIdx]) {
+           expectedText = chunks[currentChunkIdx];
+        }
+
+        const evalResult = evaluateAnswer(transcribedText, expectedText);
+        setFeedbackData(evalResult);
+        if (isRecordingAnswerMode) {
+          setRecordingAnswerState('submitted');
+        }
+      } else {
+        toast.error("Could not process audio answer. Please try again.");
+        setRecordingAnswerState('recorded');
+      }
+    } catch (error) {
+      console.error("Submit audio error:", error);
+      toast.error("Failed to submit audio answer.");
+      setRecordingAnswerState('recorded');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  // Start Session API call on mount (restored from cache on refresh)
+  useEffect(() => {
+    const initSession = async () => {
+      setLoading(true);
+      try {
+        const userIdRaw = localStorage.getItem('user_id') || Cookies.get('user_id') || '0';
+        const userId = Number(userIdRaw) || 0;
+
+        let parsedChapterIds: number[] = [];
+        if (Array.isArray(chapterIds) && chapterIds.length > 0) {
+          parsedChapterIds = chapterIds.map(id => Number(id));
+        } else if (chapterId) {
+          parsedChapterIds = [Number(chapterId)];
+        }
+
+        const currentCourseId = Number(courseId) || 0;
+        const currentSubjectId = Number(subjectId) || 0;
+
+        // Check if an active session is already cached in localStorage
+        const cachedSessionRaw = localStorage.getItem('speakalong_active_session');
+        if (cachedSessionRaw) {
+          try {
+            const cachedSession = JSON.parse(cachedSessionRaw);
+            const cachedChapters = cachedSession?.chapter_ids || [];
+            
+            const isMatch = 
+              cachedSession?.session_id &&
+              Array.isArray(cachedSession?.questions) &&
+              cachedSession.questions.length > 0 &&
+              cachedSession.course_id === currentCourseId &&
+              cachedSession.subject_id === currentSubjectId &&
+              JSON.stringify(cachedChapters) === JSON.stringify(parsedChapterIds);
+
+            if (isMatch) {
+              console.log("Restoring active Speak Along session from cache (session_id:", cachedSession.session_id, ")");
+              setSessionId(cachedSession.session_id);
+              setQuestions(cachedSession.questions);
+              if (typeof cachedSession.currentQuestionIdx === 'number' && cachedSession.currentQuestionIdx < cachedSession.questions.length) {
+                setCurrentQuestionIdx(cachedSession.currentQuestionIdx);
+              }
+              setLoading(false);
+              return;
+            }
+          } catch (e) {
+            console.error("Error parsing cached Speak Along session:", e);
+          }
+        }
+
+        const payload = {
+          user_id: userId,
+          course_id: currentCourseId,
+          subject_id: currentSubjectId,
+          chapter_ids: parsedChapterIds
+        };
+
+        console.log("Starting Speak Along Session with payload:", payload);
+        const data = await SpeakAlongService.START_SPEAK_ALONG_SESSION(payload);
+        console.log("Start Speak Along Session Response:", data);
+
+        const fetchedSessionId = data?.session_id || data?.data?.session_id || data?.id || data?.data?.id || null;
+        const fetchedQuestions = data?.questions || data?.data?.questions || data?.viva_questions || (Array.isArray(data) ? data : []);
+
+        if (fetchedSessionId) {
+          setSessionId(fetchedSessionId);
+        }
+
+        if (fetchedQuestions && fetchedQuestions.length > 0) {
+          setQuestions(fetchedQuestions);
+          const sessionToCache = {
+            session_id: fetchedSessionId,
+            questions: fetchedQuestions,
+            course_id: currentCourseId,
+            subject_id: currentSubjectId,
+            chapter_ids: parsedChapterIds,
+            currentQuestionIdx: 0
+          };
+          localStorage.setItem('speakalong_active_session', JSON.stringify(sessionToCache));
+        } else {
+          toast.error("No questions found for this session.");
+          onExit();
+        }
+      } catch (error) {
+        console.error("Error starting session:", error);
+        toast.error("Failed to start session.");
+        onExit();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initSession();
+  }, [courseId, subjectId, JSON.stringify(chapterIds)]);
+
+  // Sync currentQuestionIdx to active session cache
+  useEffect(() => {
+    if (!sessionId) return;
+    const cachedRaw = localStorage.getItem('speakalong_active_session');
+    if (cachedRaw) {
+      try {
+        const cached = JSON.parse(cachedRaw);
+        if (cached.session_id === sessionId) {
+          cached.currentQuestionIdx = currentQuestionIdx;
+          localStorage.setItem('speakalong_active_session', JSON.stringify(cached));
+        }
+      } catch (e) {}
+    }
+  }, [currentQuestionIdx, sessionId]);
+
+  // Fullscreen Mode handler
   useEffect(() => {
     const enterFullscreen = async () => {
       const elem = document.documentElement;
@@ -312,7 +528,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
     enterFullscreen();
 
-    // Hide Sidebar and Floating Actions dynamically for true screen takeover
     const sidebar = document.querySelector('[data-sidebar]') as HTMLElement;
     const floatingActions = document.getElementById('floating-actions-container');
     
@@ -337,7 +552,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       };
       exitFullscreen();
 
-      // Restore Sidebar and Floating Actions
       if (sidebar) sidebar.style.display = '';
       if (floatingActions) floatingActions.style.display = '';
     };
@@ -345,7 +559,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
   // Initialize Speech Recognition & Media Recorder
   useEffect(() => {
-    // Request microphone for media recorder
     navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
       const mediaRecorder = new MediaRecorder(stream);
       
@@ -356,9 +569,13 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setRecordedAudioUrl(audioUrl);
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          setRecordedAudioUrl(audioUrl);
+          setRecordedAudioBlob(audioBlob);
+          setRecordingAnswerState('recorded');
+        }
       };
 
       mediaRecorderRef.current = mediaRecorder;
@@ -404,7 +621,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       };
 
       recognition.onend = () => {
-        // If our recording timer is still active, restart recognition to keep listening!
         if (speechTimerRef.current) {
           try {
             recognition.start();
@@ -422,13 +638,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     }
 
     return () => {
-      if (synth) synth.cancel();
+      stopAllSpeech();
       if (recognitionRef.current) {
         try {
             recognitionRef.current.stop();
         } catch(e) {}
       }
-      if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
     };
   }, []);
 
@@ -438,11 +653,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       const q = questions[currentQuestionIdx];
       const details = q?.question_details;
       
-      // const displayText = details?.answer_description || "";
-      const displayText = q?.answer_transcribe || "";
+      const displayText = q?.answer_transcribe || details?.answer_description || details?.answer_transcribe || q?.answer || "";
       const speechText = q?.answer_transcribe || displayText;
       
-      // Helper to identify LaTeX blocks vs normal text
       const getTokens = (text: string) => {
         const latexRegex = /(\\begin\{[\s\S]*?\\end\{.*?\}|\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\(.*?\\\)|\\text\{.*?\}|\$.*?\$)/g;
         const tokens: string[] = [];
@@ -468,14 +681,10 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       let currentDisplay: string[] = [];
       let currentSpeech: string[] = [];
       
-      // Group tokens into chunks
       for (let i = 0; i < displayTokens.length; i++) {
         currentDisplay.push(displayTokens[i]);
-        // Simple mapping for speech: try to take one word from speechWords for each token
-        // This is imperfect but usually better than nothing
         if (speechWords[i]) currentSpeech.push(speechWords[i]);
         
-        // Chunk triggers: LaTeX block, punctuation (comma, semicolon, full stops for all languages), or safety length limit
         const isLatex = displayTokens[i].startsWith('\\');
         const isSentenceEnd = displayTokens[i].match(/[.,!?;\u0964\u0965\u06D4\u061F\u3002\uFF01\uFF1F|\uFF0C\u3001\u060C\uFF1B]["')\]}”’]*$/);
         if (isLatex || isSentenceEnd || currentDisplay.length >= 100 || i === displayTokens.length - 1) {
@@ -486,7 +695,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
         }
       }
       
-      // Final cleanup of any remaining
       if (currentDisplay.length > 0) {
         newDisplayChunks.push(currentDisplay.join(' '));
         newSpeechChunks.push(currentSpeech.join(' '));
@@ -502,7 +710,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       tokenRangesRef.current = tokensList.map((token) => {
         const start = sum;
         const end = sum + token.length;
-        sum = end + 1; // plus 1 for space
+        sum = end + 1;
         return { start, end };
       });
       setCurrentTokenIdx(-1);
@@ -524,7 +732,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
   const [speechChunks, setSpeechChunks] = useState<string[]>([]);
 
-  // Handle Auto-Play Chunks
   useEffect(() => {
     if (autoPlayNext && chunks.length > 0) {
       speakCurrentChunk();
@@ -562,14 +769,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       return;
     }
 
-    // Cancel any active speech or recognition before speaking question
-    if (synth) synth.cancel();
+    stopAllSpeech();
     if (recognitionRef.current && isListening) {
       try { recognitionRef.current.stop(); } catch(e){}
-    }
-    if (speechTimerRef.current) {
-      clearTimeout(speechTimerRef.current);
-      speechTimerRef.current = null;
     }
 
     setIsSpeakingFull(false);
@@ -600,25 +802,17 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
   const speakFullAnswer = () => {
     if (isPlaying && isSpeakingFull) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      setIsPlaying(false);
-      setIsSpeakingFull(false);
+      stopAllSpeech();
       return;
     }
     
     const q = questions[currentQuestionIdx];
-    const text = q?.answer_transcribe || q?.question_details?.answer_description || q?.question_details?.answer_transcribe || "";
+    const text = q?.answer_transcribe || q?.question_details?.answer_description || q?.question_details?.answer_transcribe || q?.answer || "";
     if (!text || !synth) return;
     
-    // Stop listening if we were listening
+    stopAllSpeech();
     if (recognitionRef.current && isListening) {
       try { recognitionRef.current.stop(); } catch(e){}
-    }
-    if (speechTimerRef.current) {
-      clearTimeout(speechTimerRef.current);
-      speechTimerRef.current = null;
     }
     
     speakText(text, {
@@ -658,7 +852,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     const textToSpeak = speechChunks[currentChunkIdx] || chunks[currentChunkIdx];
     if (!textToSpeak || !synth) return;
     
-    // Pause MediaRecorder if it was recording
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
        mediaRecorderRef.current.pause();
     }
@@ -674,19 +867,22 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       },
       onend: () => {
         setIsPlaying(false);
+        if (currentChunkIdx >= chunks.length - 1) {
+          setIsQuestionFinished(true);
+        }
       },
       onerror: (e) => {
          console.error("TTS Error", e);
          setIsPlaying(false);
+         if (currentChunkIdx >= chunks.length - 1) {
+           setIsQuestionFinished(true);
+         }
       }
     });
   };
 
   const speakChunkAtIndex = (idx: number) => {
-    if (synth) synth.cancel();
-    setIsPlaying(false);
-    setIsSpeakingQuestion(false);
-    setIsSpeakingFull(false);
+    stopAllSpeech();
     setCurrentChunkIdx(idx);
 
     const textToSpeak = speechChunks[idx] || chunks[idx];
@@ -703,19 +899,25 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       },
       onend: () => {
         setIsPlaying(false);
+        if (idx >= chunks.length - 1) {
+          setIsQuestionFinished(true);
+        }
       },
       onerror: (e: any) => {
         if (e?.error !== 'interrupted' && e?.error !== 'canceled') {
           console.warn("TTS Error", e);
         }
         setIsPlaying(false);
+        if (idx >= chunks.length - 1) {
+          setIsQuestionFinished(true);
+        }
       }
     });
   };
 
-
-  /* Original startListening
   const startListening = (duration: number = 3000) => {
+    stopAllSpeech();
+    setIsListening(true);
     if (recognitionRef.current) {
       setUserTranscript('');
       try {
@@ -725,69 +927,24 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       }
     }
     
-    // Start or resume MediaRecorder
     if (mediaRecorderRef.current) {
       if (mediaRecorderRef.current.state === 'inactive') {
-        audioChunksRef.current = []; // Reset chunks
+        audioChunksRef.current = [];
         mediaRecorderRef.current.start(200); 
       } else if (mediaRecorderRef.current.state === 'paused') {
         mediaRecorderRef.current.resume();
       }
     }
 
-    // Set auto-advance timer strictly based on AI speech duration
     if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
     
-    // Add a tiny 500ms buffer just for comfort, otherwise it cuts off too abruptly
-    speechTimerRef.current = setTimeout(() => {
-       handleNextChunk();
-    }, duration + 500);
-  };
-  */
-
-  // NEW: Updated startListening with dynamic comfortable duration
-  const startListening = (duration: number = 3000) => {
-    setIsListening(true); // Force listening state to true immediately
-    if (recognitionRef.current) {
-      setUserTranscript('');
-      try {
-        recognitionRef.current.start();
-      } catch (e) {
-        console.error("Failed to start recognition", e);
-      }
-    }
-    
-    // Start or resume MediaRecorder
-    if (mediaRecorderRef.current) {
-      if (mediaRecorderRef.current.state === 'inactive') {
-        audioChunksRef.current = []; // Reset chunks
-        mediaRecorderRef.current.start(200); 
-      } else if (mediaRecorderRef.current.state === 'paused') {
-        mediaRecorderRef.current.resume();
-      }
-    }
-
-    // Set auto-advance timer strictly based on AI speech duration
-    if (speechTimerRef.current) clearTimeout(speechTimerRef.current);
-    
-    // PER USER REQUEST: The recording duration is exactly 2x the time taken by the speech, with a safe 5-second minimum
     const recordingDuration = Math.max(duration , 2000);
-    
-    /* 
-    // AUTO-NEXT FUNCTIONALITY: Commented out as per user request.
-    // To reactivate, simply uncomment this block.
-    speechTimerRef.current = setTimeout(() => {
-       handleNextChunk();
-    }, recordingDuration); 
-    */
 
-    // Since auto-next is disabled, we automatically stop recognition/recording after the calculated duration
     speechTimerRef.current = setTimeout(() => {
        speechTimerRef.current = null;
        if (recognitionRef.current && isListening) {
          try { recognitionRef.current.stop(); } catch(e){}
        }
-       // If it's the last chunk or practice mode is full, we stop the media recorder to finalize the audio
        if (practiceMode === 'full' || currentChunkIdx === chunks.length - 1) {
          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
             mediaRecorderRef.current.stop();
@@ -798,12 +955,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   };
 
   const handleNextChunk = () => {
-    if (speechTimerRef.current) {
-      clearTimeout(speechTimerRef.current);
-      speechTimerRef.current = null;
-    }
-
-    if (synth) synth.cancel();
+    stopAllSpeech();
     if (recognitionRef.current && isListening) {
       try { recognitionRef.current.stop(); } catch(e){}
     }
@@ -811,9 +963,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     if (currentChunkIdx < chunks.length - 1 && practiceMode === 'chunks') {
       setCurrentChunkIdx(prev => prev + 1);
       setUserTranscript('');
-      setAutoPlayNext(true); // Trigger auto-play
+      setAutoPlayNext(true);
     } else {
-      // Question is fully finished, stop recording
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
          mediaRecorderRef.current.stop();
       }
@@ -821,19 +972,50 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     }
   };
 
-  const proceedToNextQuestion = () => {
+  const handleEndSession = async () => {
+    stopAllSpeech();
+    localStorage.removeItem('speakalong_active_session');
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch (e) {}
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+
+    if (sessionId) {
+      try {
+        console.log("Ending Speak Along session:", sessionId);
+        await SpeakAlongService.END_SPEAK_ALONG_SESSION({ session_id: Number(sessionId) });
+      } catch (error) {
+        console.error("Error ending session on backend:", error);
+      }
+    }
+
+    onExit();
+  };
+
+  const proceedToNextQuestion = async () => {
     if (currentQuestionIdx < questions.length - 1) {
       setCurrentQuestionIdx(prev => prev + 1);
     } else {
-      // Clear session on finish
-      const sessionKey = `speakalong_session_${courseId}_${subjectId}_${chapterId}`;
-      localStorage.removeItem(sessionKey);
-      onFinish();
+      await handleEndSession();
+    }
+  };
+
+  const proceedToPreviousQuestion = () => {
+    if (currentQuestionIdx > 0) {
+      stopAllSpeech();
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch(e){}
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try { mediaRecorderRef.current.stop(); } catch(e){}
+      }
+      setCurrentQuestionIdx(prev => prev - 1);
     }
   };
 
   const handlePlayPause = () => {
-    // Request fullscreen on user interaction to bypass browser gesture security constraints
     const elem = document.documentElement;
     if (!document.fullscreenElement) {
       try {
@@ -848,10 +1030,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     }
 
     if (isPlaying) {
-      synth.cancel();
-      setIsPlaying(false);
-      setIsSpeakingQuestion(false);
-      setIsSpeakingFull(false);
+      stopAllSpeech();
     } else {
       if (isQuestionFinished) return;
       if (practiceMode === 'full') {
@@ -867,10 +1046,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
   };
 
   const handleDiscard = () => {
-    if (speechTimerRef.current) {
-      clearTimeout(speechTimerRef.current);
-      speechTimerRef.current = null;
-    }
+    stopAllSpeech();
     setIsQuestionFinished(false);
     setIsSpeakingFull(false);
     setRecordedAudioUrl(null);
@@ -884,53 +1060,22 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
     speakQuestion();
   };
 
-  const handleEndSession = () => {
-    if (speechTimerRef.current) {
-      clearTimeout(speechTimerRef.current);
-      speechTimerRef.current = null;
-    }
-    if (synth) synth.cancel();
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (e) {}
-    }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try { mediaRecorderRef.current.stop(); } catch (e) {}
-    }
-
-    const sessionKey = `speakalong_session_${courseId}_${subjectId}_${chapterId}`;
-    localStorage.removeItem(sessionKey);
-    onExit();
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-12 h-12 text-indigo-600 animate-spin" />
-        <p className="text-slate-500 font-bold">Preparing your session...</p>
+        <p className="text-slate-500 font-bold">Starting your SpeakAlong Session...</p>
       </div>
     );
   }
 
   const question = questions?.[currentQuestionIdx];
-  const question_text = question?.question_details?.question_latex;
-  console.log("question_text", question_text);
-  
-  // NEW: Revamped Premium Light Theme UI
+  const question_text = question?.question_transcribe || question?.question_details?.question_transcribe || question?.question_details?.question_description || question?.question_details?.question_latex || question?.question_latex || question?.question_text || question?.question || "";
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex flex-col font-sans selection:bg-indigo-100">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-3 py-2.5 sm:px-6 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 sticky top-0 z-50 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          {/* Back arrow button - commented out as requested so user uses explicit End Session */}
-          {/*
-          <button 
-            onClick={onExit}
-            className="group w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all active:scale-90"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 group-hover:-translate-x-1 transition-transform" />
-          </button>
-          <div className="h-5 sm:h-6 md:h-10 w-[1px] bg-slate-200"></div>
-          */}
           <div>
             <h2 className="font-extrabold text-slate-900 text-sm sm:text-base md:text-xl tracking-tight">SpeakAlong <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Viva</span></h2>
             <div className="flex items-center gap-1.5 mt-0.5">
@@ -942,13 +1087,13 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
         
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
+          {/* <button
             onClick={() => setShowNotesPanel(true)}
             className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer border border-indigo-500 shrink-0 active:scale-95"
           >
             <BookOpen className="w-4 h-4" />
             <span>View Notes</span>
-          </button>
+          </button> */}
 
           <button
             onClick={handleEndSession}
@@ -960,7 +1105,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-3 md:p-8 flex flex-col  pb-24 lg:pb-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-3 md:p-8 flex flex-col pb-24 lg:pb-8">
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-start">
             
@@ -968,10 +1113,21 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
             <div className="lg:col-span-12 flex flex-col gap-3 md:gap-4">
 
                 {/* Question Counter & AI Speed Control on Same Line */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <p className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider">
-                    Question {currentQuestionIdx + 1} of {questions.length}
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {currentQuestionIdx > 0 && (
+                      <button
+                        onClick={proceedToPreviousQuestion}
+                        className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Previous Question</span>
+                      </button>
+                    )}
+                    <p className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider shrink-0 whitespace-nowrap">
+                      Question {currentQuestionIdx + 1} of {questions.length}
+                    </p>
+                  </div>
 
                   {/* AI Speed Control */}
                   <div className="flex items-center gap-1.5 sm:gap-2.5 bg-white/90 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 shadow-sm shrink-0">
@@ -994,7 +1150,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                   </div>
                 </div>
 
-                {/* Progress Bar (Aligned with Question Section Width on Desktop) */}
+                {/* Progress Bar */}
                 <div className="w-full bg-slate-200 h-1.5 md:h-2 rounded-full overflow-hidden shadow-inner">
                     <div 
                         className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(79,70,229,0.4)]"
@@ -1004,29 +1160,29 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                 
                 {/* Question Card */}
                 <div className="bg-white rounded-2xl md:rounded-[2rem] p-4 md:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] relative overflow-hidden group">
-                   <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
+                   {/* <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
                       <BrainCircuit className="w-24 h-24 md:w-32 md:h-32 text-indigo-600" />
-                   </div>
-                   <div className="flex items-center justify-between gap-3 mb-3 md:mb-6">
-                      <div className="flex items-center gap-3">
-                        <span className="px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em]">Active Question</span>
+                   </div> */}
+                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 md:mb-6">
+                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
+                        <span className="px-2.5 py-1 sm:px-3 sm:py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] whitespace-nowrap">Active Question</span>
                         {isSpeakingQuestion && (
-                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
+                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase whitespace-nowrap">
                               <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Speaking
                            </span>
                         )}
                         {isPlaying && isSpeakingFull && (
-                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase">
+                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase whitespace-nowrap">
                               <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Reading Full
                            </span>
                         )}
                       </div>
 
                       {/* Question Control Buttons */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-start sm:justify-end shrink-0">
                         <button
-                          onClick={() => setShowNotesPanel(true)}
-                          className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                          onClick={handleOpenNotes}
+                          className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 whitespace-nowrap"
                         >
                           <BookOpen className="w-4 h-4 text-purple-600" />
                           <span>View Notes</span>
@@ -1035,17 +1191,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                         <button
                            onClick={() => {
                               if (isPlaying && isSpeakingQuestion) {
-                                 if (synth) synth.cancel();
-                                 setIsPlaying(false);
-                                 setIsSpeakingQuestion(false);
+                                 stopAllSpeech();
                               } else {
-                                 if (synth) synth.cancel();
-                                 setIsPlaying(false);
-                                 setIsSpeakingFull(false);
                                  speakQuestion(false);
                               }
                            }}
-                           className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                           className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm shrink-0 whitespace-nowrap ${
                               isPlaying && isSpeakingQuestion
                                  ? 'bg-amber-500 text-white hover:bg-amber-600'
                                  : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
@@ -1057,7 +1208,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                       </div>
                    </div>
                    <div className={`text-base sm:text-2xl md:text-3xl font-bold transition-all duration-500 ${isSpeakingQuestion ? 'text-indigo-600 scale-[1.01]' : 'text-slate-800'} leading-[1.4]`}>
-                     <QuestionMathJax content={question?.question_details?.question_latex} />
+                     {/* <QuestionMathJax content={question_text} /> */}
+                           <QuestionMathJax content={question_text} />
                    </div>
                 </div>
 
@@ -1066,16 +1218,13 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-10">
                         <div className="flex flex-col gap-0.5">
                            <h3 className="text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em]">Practice Phrase</h3>
-                           {/* <p className="text-xs md:text-sm font-bold text-slate-600">Listen carefully and repeat the highlighted part</p> */}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto shrink-0">
                             {/* Segmented Control Practice Mode Selector */}
                             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/50 shrink-0">
                                <button
                                  onClick={() => {
-                                   synth.cancel();
-                                   setIsPlaying(false);
-                                   setIsSpeakingFull(false);
+                                   stopAllSpeech();
                                    setPracticeMode('chunks');
                                  }}
                                  disabled={isSpeakingQuestion}
@@ -1089,8 +1238,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                                </button>
                                <button
                                  onClick={() => {
-                                   synth.cancel();
-                                   setIsPlaying(false);
+                                   stopAllSpeech();
                                    setPracticeMode('full');
                                  }}
                                  disabled={isSpeakingQuestion}
@@ -1114,13 +1262,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                             <button
                                onClick={() => {
                                   if (isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))) {
-                                     if (synth) synth.cancel();
-                                     setIsPlaying(false);
-                                     setIsSpeakingFull(false);
+                                     stopAllSpeech();
                                   } else {
-                                     if (synth) synth.cancel();
-                                     setIsPlaying(false);
-                                     setIsSpeakingQuestion(false);
                                      if (practiceMode === 'full') {
                                         speakFullAnswer();
                                      } else {
@@ -1145,21 +1288,22 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                             </button>
 
                             {/* Next Chunk Navigation Button */}
-                            {practiceMode === 'chunks' && !isQuestionFinished && (
+                            {practiceMode === 'chunks' && !isQuestionFinished && currentChunkIdx < chunks.length - 1 && (
                                <button
                                   onClick={handleNextChunk}
                                   className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-green-600 text-white hover:bg-slate-900 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
                                >
-                                  <span>{currentChunkIdx >= chunks.length - 1 ? 'Finish Question' : 'Next Chunk'}</span>
+                                  <span>Next Chunk</span>
                                   <SkipForward className="w-4 h-4" />
                                </button>
                             )}
 
-                            {/* Question Completion Navigation */}
-                            {isQuestionFinished && (
+                            {/* Question Completion & Record Answer Navigation */}
+                            {(isQuestionFinished || (practiceMode === 'chunks' && currentChunkIdx >= chunks.length - 1)) && (
                                <div className="flex items-center gap-2 flex-wrap">
                                   <button
                                      onClick={() => {
+                                        stopAllSpeech();
                                         if (skipWarningForSession) {
                                            setIsRecordingAnswerMode(true);
                                            setRecordingAnswerState('idle');
@@ -1192,9 +1336,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                                </div>
                             )}
                          </div>
-                     </div>
+                      </div>
 
-                     {isRecordingAnswerMode ? (
+                      {isRecordingAnswerMode ? (
                         <div className="flex flex-col gap-6 py-2">
                            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                               <div className="flex items-center gap-2.5">
@@ -1208,8 +1352,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                               </div>
                               <button
                                  onClick={() => {
-                                    if (recognitionRef.current && isListening) {
-                                       try { recognitionRef.current.stop(); } catch(e){}
+                                    stopAllSpeech();
+                                    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+                                       try { mediaRecorderRef.current.stop(); } catch(e){}
                                     }
                                     setIsRecordingAnswerMode(false);
                                     setRecordingAnswerState('idle');
@@ -1220,18 +1365,34 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                               </button>
                            </div>
 
-                           {recordingAnswerState === 'idle' && (
+                           {isTranscribing && (
+                              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+                                 <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                                 <p className="text-sm font-semibold text-slate-700">Submitting audio & evaluating answer...</p>
+                                 <p className="text-xs text-slate-400">Please wait while your recording is transcribed and processed.</p>
+                              </div>
+                           )}
+
+                           {!isTranscribing && recordingAnswerState === 'idle' && (
                               <div className="flex flex-col items-center justify-center py-8 gap-4 text-center">
                                  <p className="text-sm font-medium text-slate-600 max-w-md">
                                     Click the button below to start recording your answer.
                                  </p>
                                  <button
                                     onClick={() => {
+                                       stopAllSpeech();
                                        setUserTranscript('');
                                        setRecordedText('');
+                                       audioChunksRef.current = [];
                                        setRecordingAnswerState('recording');
-                                       if (recognitionRef.current) {
-                                          try { recognitionRef.current.start(); } catch(e){}
+                                       if (mediaRecorderRef.current) {
+                                          try {
+                                             if (mediaRecorderRef.current.state === 'inactive') {
+                                                mediaRecorderRef.current.start(200);
+                                             }
+                                          } catch(e) {
+                                             console.error("Failed to start media recorder", e);
+                                          }
                                        }
                                     }}
                                     className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-2xl flex items-center gap-2.5 shadow-lg shadow-indigo-600/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"
@@ -1242,23 +1403,27 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                               </div>
                            )}
 
-                           {recordingAnswerState === 'recording' && (
+                           {!isTranscribing && recordingAnswerState === 'recording' && (
                               <div className="flex flex-col items-center gap-5 py-6">
                                  <div className="flex items-center gap-2 text-rose-600 font-black text-xs uppercase tracking-widest animate-pulse">
                                     <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span> Recording Live Audio...
                                  </div>
                                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 w-full min-h-[100px] flex items-center justify-center text-center">
                                     <p className="text-base font-medium text-slate-700 italic">
-                                       {userTranscript ? `"${userTranscript}"` : "Listening... Speak your complete answer."}
+                                       Recording your audio... Speak your complete answer clearly and click Stop Recording when finished.
                                     </p>
                                  </div>
                                  <button
                                     onClick={() => {
-                                       if (recognitionRef.current) {
-                                          try { recognitionRef.current.stop(); } catch(e){}
+                                       if (mediaRecorderRef.current) {
+                                          try {
+                                             if (mediaRecorderRef.current.state === 'recording') {
+                                                mediaRecorderRef.current.stop();
+                                             }
+                                          } catch(e) {
+                                             console.error("Failed to stop media recorder", e);
+                                          }
                                        }
-                                       setRecordedText(userTranscript);
-                                       setRecordingAnswerState('recorded');
                                     }}
                                     className="px-6 py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-sm rounded-2xl flex items-center gap-2.5 shadow-lg shadow-rose-600/20 transition-all hover:scale-105 active:scale-95 cursor-pointer"
                                  >
@@ -1268,62 +1433,90 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                               </div>
                            )}
 
-                           {recordingAnswerState === 'recorded' && (
-                              <div className="flex flex-col gap-4">
-                                 <div className="flex flex-col gap-1">
-                                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                                       Your Transcribed Answer (Editable):
-                                    </label>
-                                    <p className="text-xs text-slate-400">
-                                       If any word was misheard or mispronounced, you can correct it below before submitting.
-                                    </p>
+                           {!isTranscribing && recordingAnswerState === 'recorded' && recordedAudioUrl && (
+                              <div className="flex flex-col items-center gap-6 py-6 animate-in fade-in duration-300">
+                                 <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-5 w-full flex flex-col gap-3 text-center">
+                                    <div className="flex items-center justify-between">
+                                       <span className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-2">
+                                          <Volume2 className="w-4 h-4 text-indigo-600" /> Listen to Your Recorded Audio
+                                       </span>
+                                       <span className="text-[10px] bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full">
+                                          Ready for Review
+                                       </span>
+                                    </div>
+                                    <audio src={recordedAudioUrl} controls className="w-full h-11 rounded-xl outline-none" />
                                  </div>
 
-                                 <textarea
-                                    value={recordedText}
-                                    onChange={(e) => setRecordedText(e.target.value)}
-                                    placeholder="Your recorded answer will appear here..."
-                                    className="w-full min-h-[120px] p-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 text-base font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-y"
-                                 />
-
-                                 <div className="flex items-center justify-end gap-3 pt-2">
+                                 <div className="flex items-center gap-3 w-full max-w-md pt-2">
                                     <button
                                        onClick={() => {
-                                          setIsRecordingAnswerMode(false);
+                                          stopAllSpeech();
+                                          setRecordedAudioUrl(null);
+                                          setRecordedAudioBlob(null);
+                                          audioChunksRef.current = [];
                                           setRecordingAnswerState('idle');
                                        }}
-                                       className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-all cursor-pointer"
+                                       className="flex-1 py-3.5 px-4 rounded-xl border border-rose-200 text-rose-600 font-bold text-xs uppercase tracking-wider hover:bg-rose-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
                                     >
-                                       Cancel
+                                       <RotateCcw className="w-4 h-4" />
+                                       <span>Record Again</span>
                                     </button>
 
                                     <button
                                        onClick={() => {
-                                          const expected = questions[currentQuestionIdx]?.answer_transcribe || questions[currentQuestionIdx]?.question_details?.answer_description || questions[currentQuestionIdx]?.question_details?.answer_transcribe || "";
-                                          const evalResult = evaluateAnswer(recordedText, expected);
-                                          setFeedbackData(evalResult);
-                                          setRecordingAnswerState('submitted');
+                                          if (recordedAudioBlob) {
+                                             handleTranscribeAudio(recordedAudioBlob);
+                                          }
                                        }}
-                                       disabled={!recordedText.trim()}
-                                       className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-black text-xs uppercase tracking-wider hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md shadow-indigo-200 cursor-pointer active:scale-95 flex items-center gap-1.5"
+                                       className="flex-1 py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs uppercase tracking-wider transition-all shadow-md shadow-indigo-200 flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                                     >
-                                       <CheckCircle2 className="w-4 h-4" />
-                                       <span>Submit Answer</span>
+                                       <Send className="w-4 h-4" />
+                                       <span>Submit Audio</span>
                                     </button>
                                  </div>
                               </div>
                            )}
 
-                           {recordingAnswerState === 'submitted' && feedbackData && (
+                           {!isTranscribing && recordingAnswerState === 'submitted' && feedbackData && (
                               <div className="flex flex-col gap-5 animate-in fade-in duration-300">
-                                 <div className="flex items-center justify-between bg-indigo-50/80 border border-indigo-100 p-4 rounded-2xl">
-                                    <div>
-                                       <h4 className="text-sm font-extrabold text-indigo-950">Evaluation Summary</h4>
-                                       <p className="text-xs text-indigo-600 font-bold mt-0.5">{feedbackData.feedback}</p>
+                                 <div className={`p-4 md:p-5 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-sm ${
+                                    feedbackData.stage === 'excellent'
+                                       ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                                       : feedbackData.stage === 'good'
+                                         ? 'bg-indigo-50 border-indigo-200 text-indigo-800'
+                                         : 'bg-amber-50 border-amber-200 text-amber-800'
+                                 }`}>
+                                    <div className="flex items-center gap-3">
+                                       {feedbackData.stage === 'excellent' && (
+                                          <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+                                             <CheckCircle2 className="w-6 h-6" />
+                                          </div>
+                                       )}
+                                       {feedbackData.stage === 'good' && (
+                                          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
+                                             <CheckCircle2 className="w-6 h-6" />
+                                          </div>
+                                       )}
+                                       {feedbackData.stage === 'poor' && (
+                                          <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                             <AlertCircle className="w-6 h-6" />
+                                          </div>
+                                       )}
+                                       <div>
+                                          <span className="text-[10px] font-black uppercase tracking-widest opacity-75">Feedback</span>
+                                          <h5 className="text-base font-extrabold capitalize">{feedbackData.text}</h5>
+                                       </div>
                                     </div>
-                                    <div className="px-4 py-2 bg-indigo-600 text-white font-black text-lg rounded-xl shadow-md">
-                                       {feedbackData.score}%
-                                    </div>
+                                    
+                                    <span className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${
+                                       feedbackData.stage === 'excellent'
+                                          ? 'bg-emerald-200/70 text-emerald-900'
+                                          : feedbackData.stage === 'good'
+                                            ? 'bg-indigo-200/70 text-indigo-900'
+                                            : 'bg-amber-200/70 text-amber-900'
+                                    }`}>
+                                       {feedbackData.stage}
+                                    </span>
                                  </div>
 
                                  <div className="flex flex-col gap-2">
@@ -1347,8 +1540,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                                  </div>
 
                                  <div className="flex flex-col gap-1 text-xs">
-                                    <span className="font-bold text-slate-500 uppercase tracking-wider">Your Submitted Answer:</span>
-                                    <p className="p-3 bg-white border border-slate-200 rounded-xl text-slate-700 italic">
+                                    <span className="font-bold text-slate-500 uppercase tracking-wider">Your Transcribed Answer:</span>
+                                    <p className="p-3 bg-white border border-slate-200 rounded-xl text-slate-700 italic font-medium">
                                        "{recordedText}"
                                     </p>
                                  </div>
@@ -1356,6 +1549,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                                  <div className="flex items-center justify-end gap-3 pt-2">
                                     <button
                                        onClick={() => {
+                                          stopAllSpeech();
                                           setRecordingAnswerState('idle');
                                           setRecordedText('');
                                           setFeedbackData(null);
@@ -1366,6 +1560,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                                     </button>
                                     <button
                                        onClick={() => {
+                                          stopAllSpeech();
                                           setIsRecordingAnswerMode(false);
                                           setRecordingAnswerState('idle');
                                        }}
@@ -1377,7 +1572,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                               </div>
                            )}
                         </div>
-                     ) : (
+                      ) : (
                         <div className="flex-1 min-h-[120px] md:min-h-[200px] flex flex-col justify-center">
                            <div className="text-base sm:text-2xl md:text-4xl font-medium leading-[1.6] tracking-tight">
                               {isSpeakingFull ? (
@@ -1424,89 +1619,73 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
                               )}
                            </div>
                         </div>
-                     )}
+                      )}
                 </div>
 
+                {/* Loading state during Speech to Text API request */}
+                {isTranscribing && (
+                   <div className="bg-indigo-50/80 p-5 rounded-2xl border border-indigo-200/60 text-center mx-auto max-w-2xl w-full flex items-center justify-center gap-3 my-4">
+                      <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+                      <span className="text-sm font-bold text-indigo-700">Submitting audio & processing response...</span>
+                   </div>
+                )}
+
                 {/* User Feedback */}
-                {userTranscript && !isQuestionFinished && (
-                   <div className="bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200 text-center mx-auto max-w-2xl w-full">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
-                         <Mic className="w-3 h-3 text-rose-500" /> You said:
-                      </p>
-                      <p className="text-base md:text-lg font-medium text-slate-700 italic">
-                         "{userTranscript}"
-                      </p>
+                {userTranscript && !isTranscribing && (
+                   <div className="flex flex-col gap-3 max-w-2xl w-full mx-auto my-4">
+                      <div className="bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200 text-center">
+                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
+                            <Mic className="w-3.5 h-3.5 text-rose-500" /> Transcribed Speech:
+                         </p>
+                         <p className="text-base md:text-lg font-medium text-slate-700 italic">
+                            "{userTranscript}"
+                         </p>
+                      </div>
+
+                      {feedbackData && !isRecordingAnswerMode && (
+                         <div className={`p-4 md:p-5 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-sm ${
+                            feedbackData.stage === 'excellent'
+                               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                               : feedbackData.stage === 'good'
+                                 ? 'bg-indigo-50 border-indigo-200 text-indigo-800'
+                                 : 'bg-amber-50 border-amber-200 text-amber-800'
+                         }`}>
+                            <div className="flex items-center gap-3">
+                               {feedbackData.stage === 'excellent' && (
+                                  <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+                                     <CheckCircle2 className="w-6 h-6" />
+                                  </div>
+                               )}
+                               {feedbackData.stage === 'good' && (
+                                  <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
+                                     <CheckCircle2 className="w-6 h-6" />
+                                  </div>
+                               )}
+                               {feedbackData.stage === 'poor' && (
+                                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
+                                     <AlertCircle className="w-6 h-6" />
+                                  </div>
+                               )}
+                               <div>
+                                  <span className="text-[10px] font-black uppercase tracking-widest opacity-75">Feedback</span>
+                                  <h5 className="text-base font-extrabold capitalize">{feedbackData.text}</h5>
+                               </div>
+                            </div>
+                            
+                            <span className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${
+                               feedbackData.stage === 'excellent'
+                                  ? 'bg-emerald-200/70 text-emerald-900'
+                                  : feedbackData.stage === 'good'
+                                    ? 'bg-indigo-200/70 text-indigo-900'
+                                    : 'bg-amber-200/70 text-amber-900'
+                            }`}>
+                               {feedbackData.stage}
+                            </span>
+                         </div>
+                      )}
                    </div>
                 )}
             </div>
-
-            {/* Right Column: Interaction & Feedback - Session Control (Commented Out) */}
-            {/* 
-            <div className="hidden lg:flex lg:col-span-4 flex-col gap-6 sticky top-28">
-                <div className="bg-indigo-600 rounded-[2rem] p-8 text-white shadow-[0_20px_40px_rgba(79,70,229,0.3)] relative overflow-hidden">
-                    <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-                    <div className="absolute -top-10 -left-10 w-40 h-40 bg-indigo-400/20 rounded-full blur-3xl"></div>
-                    
-                    <div className="relative z-10 flex flex-col items-center text-center gap-6">
-                        <div className="flex flex-col gap-1">
-                           <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Session Control</span>
-                           <h4 className="text-xl font-bold">Interactive Hub</h4>
-                        </div>
-
-                        {!isQuestionFinished ? (
-                           <div className="flex flex-col items-center gap-4 w-full">
-                              <button
-                                onClick={handlePlayPause}
-                                disabled={isListening}
-                                className={`group w-24 h-24 rounded-[2rem] flex items-center justify-center transition-all shadow-2xl relative overflow-hidden ${
-                                  isPlaying
-                                    ? 'bg-white text-indigo-600' 
-                                    : isListening 
-                                       ? 'bg-indigo-500/50 text-indigo-300 cursor-not-allowed border-2 border-indigo-400/20'
-                                       : 'bg-white text-indigo-600 hover:scale-110 active:scale-95'
-                                }`}
-                              >
-                                {isPlaying ? (
-                                    <Square className="w-8 h-8 fill-current" />
-                                ) : (
-                                    <Play className="w-10 h-10 fill-current ml-1" />
-                                )}
-                              </button>
-                              
-                              <p className="text-xs font-medium text-indigo-100 h-4">
-                                 {isPlaying ? "Tap to Pause" : isListening ? "Listening to you..." : "Tap to Start AI Speech"}
-                              </p>
-
-                              <button
-                                onClick={handleNextChunk}
-                                className="w-full py-4.5 bg-white/10 backdrop-blur-md border border-white/20 text-white font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-white/20 transition-all flex items-center justify-center gap-3 group"
-                              >
-                                 <span>{(practiceMode === 'full' || currentChunkIdx >= chunks.length - 1) ? 'Finish Question' : 'Next Chunk'}</span>
-                                 <SkipForward className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                              </button>
-                           </div>
-                        ) : (
-                           <div className="flex flex-col gap-4 w-full">
-                              <button
-                                onClick={proceedToNextQuestion}
-                                className="w-full py-5 bg-white text-indigo-600 font-black text-sm uppercase tracking-widest rounded-[1.5rem] hover:bg-slate-50 transition-all shadow-xl shadow-indigo-900/20 flex items-center justify-center gap-3 hover:-translate-y-1"
-                              >
-                                 <span>{currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'End Session'}</span>
-                                 <SkipForward className="w-5 h-5" />
-                              </button>
-
-                              <button
-                                onClick={handleDiscard}
-                                className="w-full py-3.5 bg-transparent border border-white/30 text-white font-bold text-xs rounded-2xl hover:bg-white/10 transition-all"
-                              >
-                                 Retry This Question
-                              </button>
-                           </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-            */}
         </div>
       </main>
 
@@ -1611,6 +1790,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
               </button>
               <button
                 onClick={() => {
+                  stopAllSpeech();
                   setShowWarningModal(false);
                   setIsRecordingAnswerMode(true);
                   setRecordingAnswerState('idle');
@@ -1628,131 +1808,197 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
 
       {/* Right-Side Slide-Over Notes Panel */}
       {showNotesPanel && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <div 
+          className="fixed inset-0 z-50 overflow-hidden select-none"
+          onContextMenu={(e) => e.preventDefault()}
+          onCopy={(e) => e.preventDefault()}
+        >
           {/* Backdrop Overlay */}
           <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-300"
-            onClick={() => setShowNotesPanel(false)}
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
+            onClick={() => {
+              stopAllSpeech();
+              setIsSpeakingNotes(false);
+              setShowNotesPanel(false);
+            }}
           />
 
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md sm:max-w-lg md:max-w-xl bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300">
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
+            <div className="w-screen max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300 relative">
               
+              {/* Anti-Screenshot Overlay Blur */}
+              {isPrivacyBlurred && (
+                <div className="absolute inset-0 z-50 bg-slate-900/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                    <AlertCircle className="w-8 h-8" />
+                  </div>
+                  <h4 className="text-xl font-bold">Content Protected</h4>
+                  <p className="text-sm text-slate-300 max-w-sm">
+                    Screenshots, text selection, and screen capturing are prohibited for copyright and study material security.
+                  </p>
+                  <button
+                    onClick={() => setIsPrivacyBlurred(false)}
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                  >
+                    Resume Viewing
+                  </button>
+                </div>
+              )}
+
               {/* Panel Header */}
-              <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shadow-md shrink-0">
+              <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-slate-900 text-white flex items-center justify-between shadow-md shrink-0">
                 <div className="flex items-center gap-2.5">
                   <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
                     <BookOpen className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-base tracking-tight text-white flex items-center gap-2">
-                      Study Notes & Diagrams
+                    <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
+                      Study Notes & PDF Reference
                     </h3>
-                    <p className="text-xs text-slate-400 font-medium">Question {currentQuestionIdx + 1} of {questions.length}</p>
+                    <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Question {currentQuestionIdx + 1} of {questions.length}</p>
                   </div>
                 </div>
 
-                {/* Hide Notes Button */}
-                <button
-                  onClick={() => setShowNotesPanel(false)}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer active:scale-95"
-                >
-                  <X className="w-4 h-4" />
-                  <span>Hide Notes</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* Speaker TTS Button */}
+                  <button
+                    onClick={handleSpeakNotes}
+                    title={isSpeakingNotes ? "Stop Reading Notes" : "Read Notes Aloud"}
+                    className={`px-3 py-1.5 sm:px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border cursor-pointer active:scale-95 ${
+                      isSpeakingNotes
+                        ? 'bg-amber-500 text-white border-amber-400 animate-pulse'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-500'
+                    }`}
+                  >
+                    <Volume2 className="w-4 h-4" />
+                    <span>{isSpeakingNotes ? 'Stop Speech' : 'Read Notes'}</span>
+                  </button>
+
+                  {/* Hide Notes Button */}
+                  <button
+                    onClick={() => {
+                      stopAllSpeech();
+                      setIsSpeakingNotes(false);
+                      setShowNotesPanel(false);
+                    }}
+                    className="px-3 py-1.5 sm:px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer active:scale-95"
+                  >
+                    <X className="w-4 h-4" />
+                    <span className="hidden sm:inline">Close</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Panel Scrollable Content */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-slate-50">
-                {/* Question context summary */}
-                <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md">
-                    Question Summary
-                  </span>
-                  <p className="mt-2 text-sm font-semibold text-slate-800 leading-relaxed">
-                    <QuestionMathJax content={question?.question_details?.question_latex} />
-                  </p>
-                </div>
-
-                {/* Note Images Gallery */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                      <ImageIcon className="w-4 h-4 text-indigo-600" />
-                      <span>Note Images ({getNoteImages().length})</span>
-                    </h4>
+              {/* Panel Content Body */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50 relative select-none">
+                {fetchingNotes ? (
+                  <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+                    <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+                    <p className="text-sm font-bold text-slate-600">Loading protected study notes PDF...</p>
                   </div>
-
-                  {getNoteImages().length > 0 ? (
-                    <div className="grid grid-cols-1 gap-4">
-                      {getNoteImages().map((imgUrl, idx) => (
-                        <div key={idx} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-all">
-                          <div className="p-2 bg-slate-100 flex items-center justify-center">
-                            <img 
-                              src={imgUrl} 
-                              alt={`Note diagram ${idx + 1}`} 
-                              className="w-full h-auto object-contain max-h-[350px] rounded-lg"
-                              onError={(e) => {
-                                // Fallback image layout if network fails to fetch
-                                (e.target as HTMLElement).style.display = 'none';
-                              }}
-                            />
-                          </div>
-                          <div className="p-3 bg-white border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700">Note Image {idx + 1}</span>
-                            <button
-                              onClick={() => setSelectedNoteImage(imgUrl)}
-                              className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                            >
-                              <Maximize2 className="w-3.5 h-3.5" />
-                              <span>Enlarge Note</span>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                ) : notesError || (!pdfUrl && !notesText && getNoteImages().length === 0) ? (
+                  <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center my-auto space-y-4 animate-in fade-in duration-300">
+                    <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
+                      <BookOpen className="w-8 h-8" />
                     </div>
-                  ) : (
-                    <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-4">
-                      <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/60 text-xs font-semibold">
-                        <Sparkles className="w-4 h-4 shrink-0 text-indigo-600" />
-                        <span>Visual Study Note & Concept Reference</span>
-                      </div>
+                    
+                    <div className="space-y-1.5 max-w-sm">
+                      <span className="text-[10px] font-black uppercase tracking-widest bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 inline-block">
+                        Content Under Preparation
+                      </span>
+                      <h4 className="text-lg font-bold text-slate-800 pt-2">No Notes Available For This Question</h4>
+                      <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                        Our academic team is currently preparing study notes and visual references for this question. We are working on it, and it will be available soon.
+                      </p>
+                    </div>
 
-                      {/* Styled Visual Concept Card */}
-                      <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-2xl p-5 shadow-md space-y-3 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                          <FileText className="w-28 h-28 text-white" />
+                    <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl w-full text-xs text-slate-600 font-medium flex items-center gap-2.5 justify-center">
+                      <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span>Thank you for your patience as we enhance our learning resources.</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* PDF Protected Viewer Section */}
+                    {pdfUrl ? (
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col relative">
+                        <div className="bg-slate-100 p-3 border-b border-slate-200 flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-indigo-600" /> Secure PDF Notes Viewer
+                          </span>
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-0.5 rounded-full">
+                            DRM Protected
+                          </span>
                         </div>
-                        <h5 className="font-extrabold text-xs text-indigo-300 uppercase tracking-widest">Key Concept & Formula Notes</h5>
-                        <div className="text-sm text-slate-100 leading-relaxed font-medium bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/50">
-                          <QuestionMathJax content={question?.question_details?.answer_latex || question?.answer || "Study the formula breakdown and key definitions for this topic."} />
+
+                        <div className="relative w-full h-[60vh] sm:h-[70vh] bg-slate-900 overflow-hidden">
+                          {/* Transparent Security Shield Overlay over PDF */}
+                          <div 
+                            className="absolute inset-0 z-10 bg-transparent cursor-default"
+                            onContextMenu={(e) => e.preventDefault()}
+                            onDragStart={(e) => e.preventDefault()}
+                          />
+                          
+                          {/* Embedded PDF iframe with toolbar disabled */}
+                          <iframe
+                            src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                            className="w-full h-full border-none pointer-events-auto"
+                            title="Study Notes PDF"
+                          />
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                        <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/60 text-xs font-semibold">
+                          <Sparkles className="w-4 h-4 shrink-0 text-indigo-600" />
+                          <span>Study Notes & Concept Breakdown</span>
+                        </div>
+                        <div className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
+                          <QuestionMathJax content={notesText} />
+                        </div>
+                      </div>
+                    )}
 
-                {/* Answer Explanation Card */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-purple-600" />
-                    <span>Full Explanation & Target Answer</span>
-                  </h4>
-                  <div className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
-                    <QuestionMathJax content={question?.question_details?.answer_latex} />
-                  </div>
-                </div>
+                    {/* Note Images if available */}
+                    {getNoteImages().length > 0 && (
+                      <div className="space-y-3 pt-2">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                          <ImageIcon className="w-4 h-4 text-indigo-600" />
+                          <span>Note Diagrams & Images</span>
+                        </h4>
+                        <div className="grid grid-cols-1 gap-4">
+                          {getNoteImages().map((imgUrl, idx) => (
+                            <div key={idx} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                              <div className="p-2 bg-slate-100 flex items-center justify-center relative">
+                                <div className="absolute inset-0 bg-transparent z-10" />
+                                <img 
+                                  src={imgUrl} 
+                                  alt={`Note diagram ${idx + 1}`} 
+                                  className="w-full h-auto object-contain max-h-[350px] rounded-lg"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* Panel Footer */}
-              <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
-                <p className="text-xs text-slate-400 font-medium">Click Hide Notes or press Esc to close</p>
+              <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
+                <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Protected Content • Downloading and text copy disabled</p>
                 <button
-                  onClick={() => setShowNotesPanel(false)}
+                  onClick={() => {
+                    stopAllSpeech();
+                    setIsSpeakingNotes(false);
+                    setShowNotesPanel(false);
+                  }}
                   className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
                 >
                   <X className="w-3.5 h-3.5" />
-                  <span>Hide Notes</span>
+                  <span>Close</span>
                 </button>
               </div>
 
@@ -1781,8 +2027,13 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterId, subj
         </div>
       )}
 
-      {/* Global CSS for Voice Animation */}
+      {/* Global CSS for Anti-Print & Voice Animation */}
       <style>{`
+        @media print {
+          body {
+            display: none !important;
+          }
+        }
         @keyframes voice-bar {
           0%, 100% { height: 20%; opacity: 0.5; }
           50% { height: 100%; opacity: 1; }
