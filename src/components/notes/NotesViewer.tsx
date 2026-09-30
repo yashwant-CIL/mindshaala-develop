@@ -324,16 +324,12 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
         <div className="absolute inset-0 z-20 pointer-events-none opacity-[0.03] bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:16px_16px]" />
 
         {/* ========================================================================= */}
-        {/* DRM LAYER 2: TRANSPARENT SECURITY SHIELD OVERLAY (Blocks Clicks & Context Menu) */}
+        {/* DRM LAYER 2: TRANSPARENT SECURITY SHIELD OVERLAY */}
         {/* ========================================================================= */}
         <div 
-          className="absolute inset-0 z-30 bg-transparent cursor-default pointer-events-auto"
+          className="absolute inset-0 z-30 bg-transparent pointer-events-none"
           onContextMenu={(e) => e.preventDefault()}
           onDragStart={(e) => e.preventDefault()}
-          onMouseDown={(e) => {
-            // Block middle/right click on iframe
-            if (e.button !== 0) e.preventDefault();
-          }}
         />
 
         {/* ========================================================================= */}
