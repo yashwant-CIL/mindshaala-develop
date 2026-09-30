@@ -263,8 +263,6 @@ export const API_ENDPOINT = {
 
     NOTES: {
         FETCH_NOTES: (user_id: number | string , subject_id: number | string , chapter_id: number | string) =>`/api/v3/mindshaala/notes/fetch?user_id=${user_id}&subject_id=${subject_id}&chapter_id=${chapter_id}`,
-
-        
     }
 
 
