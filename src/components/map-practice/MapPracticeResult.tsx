@@ -20,6 +20,20 @@ import {
 import { MapPracticeService } from '../../services/MapPracticeService';
 import DrawingCanvas, { pointsToShapes, CanvasShape } from './DrawingCanvas';
 
+const TOOL_META: Record<string, { icon: string; name: string; color: string }> = {
+  POINT:     { icon: '📍', name: 'Point', color: '#3b82f6' },
+  LINE:      { icon: '📏', name: 'Line', color: '#6366f1' },
+  POLYLINE:  { icon: '〰️', name: 'Polyline', color: '#2563eb' },
+  ARROW:     { icon: '➡️', name: 'Arrow', color: '#f59e0b' },
+  AREA:      { icon: '🟦', name: 'Area', color: '#3b82f6' },
+  POLYGON:   { icon: '⬡', name: 'Polygon', color: '#6366f1' },
+  LABEL:     { icon: '🏷️', name: 'Label', color: '#2563eb' },
+  FREEHAND:  { icon: '✍️', name: 'Freehand', color: '#f59e0b' },
+  SYMBOL:    { icon: '⭐', name: 'Symbol', color: '#ef4444' },
+  CIRCLE:    { icon: '⭕', name: 'Circle', color: '#3b82f6' },
+  RECTANGLE: { icon: '▭', name: 'Rectangle', color: '#6366f1' }
+};
+
 interface MapPracticeResultProps {
   onNavigate?: (pageId: string, params?: any) => void;
   params?: any;
@@ -196,7 +210,7 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
   const resultShapes = useMemo(() => {
     const shapes: CanvasShape[] = [];
 
-    // 1. Student Answers Layer
+    // 1. Student Answers Layer (User's Marked Positions - Same tools used during exam)
     if (showStudentAnswers && currentQuestion?.evaluations && Array.isArray(currentQuestion.evaluations)) {
       currentQuestion.evaluations.forEach((ev: any, idx: number) => {
         const ans = ev.student_answer;
@@ -205,45 +219,64 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
         const isCorrect = ev.is_correct === 1 || ev.is_correct === true;
         const prefix = isCorrect ? '✓ ' : '✗ ';
 
-        const toolType = (ans.tool_type || ans.type || 'POINT').toUpperCase();
+        const toolType = (ans.tool_type || ans.type || ev.tool_type || 'POINT').toUpperCase();
         const geom = ans.geometry_data || ans;
-        const labelText = prefix + (geom.label || ans.label || `Response #${idx + 1}`);
+        const meta = TOOL_META[toolType] || { icon: '📍', name: toolType, color: '#3b82f6' };
 
-        const studentStroke = isCorrect ? '#2563eb' : '#dc2626';
-        const studentFill = isCorrect ? 'rgba(37, 99, 235, 0.25)' : 'rgba(220, 38, 38, 0.25)';
+        const rawLabel = geom.label || ans.label || geom.text || `Response #${idx + 1}`;
+        const labelText = `${prefix}${meta.icon} ${rawLabel}`;
 
-        const parsed = pointsToShapes(Array.isArray(ans) ? ans : [ans], toolType);
+        const isPointLike = ['POINT', 'SYMBOL', 'LABEL'].includes(toolType);
+        const studentStroke = isPointLike ? '#ffffff' : (isCorrect ? '#2563eb' : '#dc2626');
+        const studentFill = isPointLike ? (isCorrect ? '#2563eb' : '#dc2626') : (isCorrect ? 'rgba(37, 99, 235, 0.25)' : 'rgba(220, 38, 38, 0.25)');
+
+        const rawArray = Array.isArray(ans) ? ans : [ans];
+        const parsed = pointsToShapes(rawArray, toolType);
         parsed.forEach(s => {
+          const sType = (s.type || toolType).toUpperCase();
+          const sIsPoint = ['POINT', 'SYMBOL', 'LABEL'].includes(sType);
           shapes.push({
             ...s,
+            type: sType, // Preserve exact tool representation
             id: `student_${idx}_${s.id}`,
             label: labelText,
-            stroke: studentStroke,
-            fill: studentFill,
+            stroke: sIsPoint ? '#ffffff' : studentStroke,
+            fill: sIsPoint ? (isCorrect ? '#2563eb' : '#dc2626') : studentFill,
             dash: []
           });
         });
       });
     }
 
-    // 2. Official Answer Keys Layer (Emerald Green with Dashed Lines)
+    // 2. Official Answer Keys Layer (Actual Answer - Same tools, distinct Purple/Violet color & dashed stroke)
     if (showAnswerKeys && currentQuestion?.answer_keys && Array.isArray(currentQuestion.answer_keys)) {
       currentQuestion.answer_keys.forEach((keyItem: any, idx: number) => {
         if (!keyItem) return;
 
         const toolType = (keyItem.tool_type || keyItem.type || 'POINT').toUpperCase();
         const geom = keyItem.geometry_data || keyItem;
-        const labelText = (geom.label || keyItem.label || `Key #${idx + 1}`);
+        const meta = TOOL_META[toolType] || { icon: '🔑', name: toolType, color: '#8b5cf6' };
 
-        const parsed = pointsToShapes(Array.isArray(keyItem) ? keyItem : [keyItem], toolType);
+        const rawLabel = geom.label || keyItem.label || geom.text || `Key #${idx + 1}`;
+        const labelText = `🔑 ${meta.icon} ${rawLabel}`;
+
+        const isPointLike = ['POINT', 'SYMBOL', 'LABEL'].includes(toolType);
+        const keyStroke = isPointLike ? '#ffffff' : '#8b5cf6';
+        const keyFill = isPointLike ? '#8b5cf6' : 'rgba(139, 92, 246, 0.25)';
+
+        const rawArray = Array.isArray(keyItem) ? keyItem : [keyItem];
+        const parsed = pointsToShapes(rawArray, toolType);
         parsed.forEach(s => {
+          const sType = (s.type || toolType).toUpperCase();
+          const sIsPoint = ['POINT', 'SYMBOL', 'LABEL'].includes(sType);
           shapes.push({
             ...s,
+            type: sType, // Preserve exact tool representation for Answer Key
             id: `key_${idx}_${s.id}`,
             label: labelText,
-            stroke: '#059669',
-            fill: 'rgba(5, 150, 105, 0.2)',
-            dash: [6, 4]
+            stroke: sIsPoint ? '#ffffff' : keyStroke,
+            fill: sIsPoint ? '#8b5cf6' : keyFill,
+            dash: sIsPoint ? [] : [6, 4] // Solid border for point dot, dashed stroke for shapes
           });
         });
       });
@@ -371,10 +404,10 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
                       type="checkbox" 
                       checked={showAnswerKeys}
                       onChange={(e) => setShowAnswerKeys(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded text-emerald-600 accent-emerald-600"
+                      className="w-3.5 h-3.5 rounded text-purple-600 accent-purple-600"
                     />
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 border border-dashed border-white"></span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-purple-600 border border-dashed border-white"></span>
                       Official Answer Key
                     </span>
                   </label>
@@ -464,21 +497,24 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
                   
                   {/* 1. Official Answer Keys List */}
                   <div className="space-y-1.5">
-                    <div className="text-[11px] font-black uppercase tracking-wider text-emerald-700 flex items-center justify-between">
+                    <div className="text-[11px] font-black uppercase tracking-wider text-purple-700 flex items-center justify-between">
                       <span>🔑 Official Answer Keys</span>
-                      <span className="text-[10px] text-emerald-800 font-bold">({currentQuestion?.answer_keys?.length || 0})</span>
+                      <span className="text-[10px] text-purple-800 font-bold">({currentQuestion?.answer_keys?.length || 0})</span>
                     </div>
                     
                     {(currentQuestion?.answer_keys || []).map((keyItem: any, idx: number) => {
+                      const toolType = (keyItem.tool_type || keyItem.type || 'POINT').toUpperCase();
+                      const meta = TOOL_META[toolType] || { icon: '🔑', name: toolType, color: '#8b5cf6' };
                       const geom = keyItem.geometry_data || keyItem;
-                      const labelText = geom.label || keyItem.label || `Key #${idx + 1}`;
+                      const labelText = geom.label || keyItem.label || geom.text || `Key #${idx + 1}`;
                       return (
-                        <div key={`key-card-${idx}`} className="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/90 flex items-center justify-between text-xs font-bold text-emerald-900 shadow-2xs">
+                        <div key={`key-card-${idx}`} className="p-2.5 rounded-xl border border-purple-200 bg-purple-50/90 flex items-center justify-between text-xs font-bold text-purple-950 shadow-2xs">
                           <span className="flex items-center gap-1.5">
-                            <span className="text-emerald-600">🔑</span>
+                            <span className="text-purple-600 text-sm">{meta.icon}</span>
+                            <span className="text-[10px] uppercase font-black px-1.5 py-0.5 rounded bg-purple-200/70 text-purple-800">{meta.name}</span>
                             <span>{labelText}</span>
                           </span>
-                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-emerald-200/70 text-emerald-800">
+                          <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-purple-200/70 text-purple-800">
                             Answer Key
                           </span>
                         </div>
@@ -501,11 +537,17 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
 
                     {(currentQuestion?.evaluations || []).map((ev: any, idx: number) => {
                       const isCorrect = ev.is_correct === 1 || ev.is_correct === true;
-                      const labelText = ev.student_answer?.label || `Response #${idx + 1}`;
+                      const ans = ev.student_answer || {};
+                      const toolType = (ans.tool_type || ans.type || ev.tool_type || 'POINT').toUpperCase();
+                      const meta = TOOL_META[toolType] || { icon: '📍', name: toolType, color: '#3b82f6' };
+                      const geom = ans.geometry_data || ans;
+                      const labelText = geom.label || ans.label || geom.text || `Response #${idx + 1}`;
                       return (
                         <div key={`student-card-${idx}`} className={`p-2.5 rounded-xl border flex items-center justify-between text-xs font-bold shadow-2xs ${isCorrect ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900' : 'bg-rose-50/70 border-rose-200 text-rose-900'}`}>
                           <span className="flex items-center gap-1.5">
                             <span>{isCorrect ? '✓' : '✗'}</span>
+                            <span className="text-sm">{meta.icon}</span>
+                            <span className={`text-[10px] uppercase font-black px-1.5 py-0.5 rounded ${isCorrect ? 'bg-emerald-200/60 text-emerald-800' : 'bg-rose-200/60 text-rose-800'}`}>{meta.name}</span>
                             <span>{labelText}</span>
                           </span>
                           <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md ${isCorrect ? 'bg-emerald-200/60 text-emerald-800' : 'bg-rose-200/60 text-rose-800'}`}>

@@ -261,7 +261,7 @@ export const API_ENDPOINT = {
         // GET_RESULT_MAP_ASSESSMENT: (attempt_id: number) => `/api/v3/mindshaala/map/map-assessment/results?attempt_id=${attempt_id}`,
         // GET_ATTEMPTED_QUESTIONS_BY_ATTEMPTE_ID: (attempt_id: number) => `/api/v3/mindshaala/map/assessment/student/attempts/${attempt_id}/questions?attempt_id=${attempt_id}`,
         GET_ATTEMPTED_QUESTIONS_BY_ATTEMPTE_ID: (attempt_id: number) => `/api/v3/mindshaala/map/map-assessment/results?attempt_id=${attempt_id}`
-    }
+    },
 
 
 

@@ -302,7 +302,7 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
 
     const shapes: CanvasShape[] = [];
 
-    // 1. Student Markings Layer
+    // 1. Student Markings Layer (User's Marked Positions - Same tools used during exam)
     if (showStudentAnswers && currentQuestionDetail.evaluations && Array.isArray(currentQuestionDetail.evaluations)) {
       currentQuestionDetail.evaluations.forEach((ev: any, idx: number) => {
         const ans = ev.student_answer;
@@ -312,43 +312,61 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
         const prefix = isCorrect ? '✓ ' : '✗ ';
 
         const toolType = (ev.tool_type || ans.tool_type || ans.type || 'POINT').toUpperCase();
-        const labelText = prefix + (ans.label || ev.label || `Response #${idx + 1}`);
+        const geom = ans.geometry_data || ans;
+        const meta = TOOL_META[toolType] || { icon: '📍', name: toolType, studentColor: '#3b82f6' };
 
-        const studentStroke = isCorrect ? '#2563eb' : '#dc2626';
-        const studentFill = isCorrect ? 'rgba(37, 99, 235, 0.25)' : 'rgba(220, 38, 38, 0.25)';
+        const rawLabel = geom.label || ans.label || ev.label || `Response #${idx + 1}`;
+        const labelText = `${prefix}${meta.icon} ${rawLabel}`;
+
+        const isPointLike = ['POINT', 'SYMBOL', 'LABEL'].includes(toolType);
+        const studentStroke = isPointLike ? '#ffffff' : (isCorrect ? '#2563eb' : '#dc2626');
+        const studentFill = isPointLike ? (isCorrect ? '#2563eb' : '#dc2626') : (isCorrect ? 'rgba(37, 99, 235, 0.25)' : 'rgba(220, 38, 38, 0.25)');
 
         const parsed = pointsToShapes(Array.isArray(ans) ? ans : [ans], toolType);
         parsed.forEach(s => {
+          const sType = (s.type || toolType).toUpperCase();
+          const sIsPoint = ['POINT', 'SYMBOL', 'LABEL'].includes(sType);
           shapes.push({
             ...s,
+            type: sType, // Preserve exact tool representation
             id: `student_${idx}_${s.id}`,
             label: labelText,
-            stroke: studentStroke,
-            fill: studentFill,
+            stroke: sIsPoint ? '#ffffff' : studentStroke,
+            fill: sIsPoint ? (isCorrect ? '#2563eb' : '#dc2626') : studentFill,
             dash: []
           });
         });
       });
     }
 
-    // 2. Official Answer Keys Layer (Emerald Green with Dashed Lines)
+    // 2. Official Answer Keys Layer (Actual Answer - Same tools, distinct Purple/Violet color & dashed stroke)
     if (showAnswerKeys && currentQuestionDetail.answer_keys && Array.isArray(currentQuestionDetail.answer_keys)) {
       currentQuestionDetail.answer_keys.forEach((keyItem: any, idx: number) => {
         if (!keyItem) return;
 
         const toolType = (keyItem.tool_type || keyItem.type || 'POINT').toUpperCase();
         const geom = keyItem.geometry_data || keyItem;
-        const labelText = '🔑 ' + (geom.label || keyItem.label || `Key #${idx + 1}`);
+        const meta = TOOL_META[toolType] || { icon: '🔑', name: toolType, studentColor: '#8b5cf6' };
+
+        const rawLabel = geom.label || keyItem.label || geom.text || `Key #${idx + 1}`;
+        const labelText = `🔑 ${meta.icon} ${rawLabel}`;
+
+        const isPointLike = ['POINT', 'SYMBOL', 'LABEL'].includes(toolType);
+        const keyStroke = isPointLike ? '#ffffff' : '#8b5cf6';
+        const keyFill = isPointLike ? '#8b5cf6' : 'rgba(139, 92, 246, 0.25)';
 
         const parsed = pointsToShapes(Array.isArray(keyItem) ? keyItem : [keyItem], toolType);
         parsed.forEach(s => {
+          const sType = (s.type || toolType).toUpperCase();
+          const sIsPoint = ['POINT', 'SYMBOL', 'LABEL'].includes(sType);
           shapes.push({
             ...s,
+            type: sType, // Preserve exact tool representation
             id: `key_${idx}_${s.id}`,
             label: labelText,
-            stroke: '#059669',
-            fill: 'rgba(5, 150, 105, 0.2)',
-            dash: [6, 4]
+            stroke: sIsPoint ? '#ffffff' : keyStroke,
+            fill: sIsPoint ? '#8b5cf6' : keyFill,
+            dash: sIsPoint ? [] : [6, 4] // Solid border for point dot, dashed stroke for shapes
           });
         });
       });

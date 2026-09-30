@@ -154,8 +154,51 @@ export default function MapPracticeAssessment({ onNavigate, params }: MapPractic
       const savedTime = sessionStorage.getItem(`map_timer_${attemptId}`);
       if (savedTime !== null && !isNaN(Number(savedTime))) return Number(savedTime);
     }
-    return 600;
+    // return 600;
+    
+    // Extract duration_seconds passed from selection page assessment module
+    const assessmentDuration = 
+      params?.assessment?.duration_seconds || 
+      params?.attemptData?.duration_seconds ||
+      params?.attemptData?.duration ||
+      params?.attemptData?.data?.duration_seconds;
+
+    if (assessmentDuration && !isNaN(Number(assessmentDuration))) {
+      return Number(assessmentDuration);
+    }
+
+    try {
+      const savedParams = sessionStorage.getItem('mapPracticeParams');
+      if (savedParams) {
+        const parsed = JSON.parse(savedParams);
+        const savedDuration = 
+          parsed?.assessment?.duration_seconds || 
+          parsed?.attemptData?.duration_seconds || 
+          parsed?.attemptData?.duration ||
+          parsed?.attemptData?.data?.duration_seconds;
+        if (savedDuration && !isNaN(Number(savedDuration))) return Number(savedDuration);
+      }
+    } catch {}
+
+    return 3600;
   });
+
+  // Sync duration from params if refreshed or initialized without active timer
+  useEffect(() => {
+    const duration = 
+      params?.assessment?.duration_seconds || 
+      params?.attemptData?.duration_seconds ||
+      params?.attemptData?.duration;
+    if (duration && !isNaN(Number(duration))) {
+      if (attemptId) {
+        const savedTime = sessionStorage.getItem(`map_timer_${attemptId}`);
+        if (!savedTime) setTimerSeconds(Number(duration));
+      } else {
+        setTimerSeconds(Number(duration));
+      }
+    }
+  }, [params, attemptId]);
+
 
   // Active canvas state for current question
   const [activeTool, setActiveTool] = useState<string>('POINT');
@@ -554,7 +597,8 @@ export default function MapPracticeAssessment({ onNavigate, params }: MapPractic
     } finally {
       setIsSubmittingAnswer(false);
       setIsEndingAssessment(false);
-      onNavigate?.('map-practice-result', {
+      // onNavigate?.('map-practice-result', {
+      onNavigate?.('map-practice-attempts', {
         attemptId: attemptId,
         assessmentId: params?.assessmentId,
         score: score,
@@ -656,58 +700,64 @@ export default function MapPracticeAssessment({ onNavigate, params }: MapPractic
   return (
     <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col h-screen w-screen overflow-hidden font-sans select-none">
       {/* Exam Mode Top Header */}
-      <header className="h-14 shrink-0 bg-white border-b border-slate-200 px-4 md:px-6 flex items-center justify-between gap-4 z-40 shadow-xs">
-        <div className="flex items-center gap-3">
+      <header className="min-h-[3.5rem] py-1.5 shrink-0 bg-white border-b border-slate-200 px-2.5 sm:px-4 md:px-6 flex items-center justify-between gap-2 sm:gap-4 z-40 shadow-xs select-none">
+        {/* Left Side: Back button & Title info */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <button
             onClick={() => onNavigate?.('map-practice-selection')}
-            className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 transition-colors cursor-pointer shrink-0"
             title="Exit Exam"
+            aria-label="Exit Exam"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
-          <div>
-            <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider bg-blue-50 px-2 py-0.5 rounded-md">
-              {currentQuestion?.map_name || 'Map Assessment Exam'}
-            </span>
-            <h2 className="font-extrabold text-slate-900 text-xs md:text-sm tracking-tight leading-tight">
-              Attempt #{attemptId || '1'} — Question {currentQuestionIdx + 1} of {questions.length}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] sm:text-[10px] font-black uppercase text-blue-600 tracking-wider bg-blue-50 px-1.5 sm:px-2 py-0.5 rounded-md truncate max-w-[120px] xs:max-w-[180px] sm:max-w-xs md:max-w-none inline-block">
+                {currentQuestion?.map_name || 'Map Assessment Exam'}
+              </span>
+            </div>
+            <h2 className="font-extrabold text-slate-900 text-[11px] sm:text-xs md:text-sm tracking-tight leading-tight truncate">
+              Attempt #{attemptId || '1'} <span className="hidden xs:inline">— Question {currentQuestionIdx + 1} of {questions.length}</span>
             </h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        {/* Right Side: Tools, Timer, Question Counter & End Exam */}
+        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 shrink-0">
           {/* Fullscreen Toggle Button */}
-          <button
+          {/* <button
             onClick={toggleFullscreen}
-            className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+            className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
             title={isFullscreen ? "Exit Full Screen" : "Enter Full Screen"}
+            aria-label={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
           >
-            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 shrink-0" /> : <Maximize2 className="w-3.5 h-3.5 shrink-0" />}
             <span className="hidden md:inline">{isFullscreen ? "Exit Fullscreen" : "Full Screen"}</span>
-          </button>
+          </button> */}
 
           {/* Live Timer */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black">
-            <Clock className="w-3.5 h-3.5 text-amber-500" />
-            <span>{formatTimer(timerSeconds)}</span>
+          <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-[11px] sm:text-xs font-black shrink-0">
+            <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span className="tabular-nums">{formatTimer(timerSeconds)}</span>
           </div>
 
           {/* Question Counter */}
-          <div className="px-3 py-1 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-black">
+          <div className="hidden xs:flex items-center px-2 sm:px-3 py-1 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-[11px] sm:text-xs font-black shrink-0">
             Q {currentQuestionIdx + 1} / {questions.length}
           </div>
 
           {/* Score Badge */}
-          <div className="hidden sm:flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-black">
-            <Award className="w-3.5 h-3.5 text-indigo-600" />
+          {/* <div className="hidden lg:flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-black shrink-0">
+            <Award className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <span>Score: {score}</span>
-          </div>
+          </div> */}
 
           {/* End Assessment Button */}
           <button
             onClick={handleEndAssessmentManual}
             disabled={isEndingAssessment}
-            className="px-3 py-1 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 text-xs font-extrabold transition-colors cursor-pointer"
+            className="px-2.5 sm:px-3 py-1 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 text-[11px] sm:text-xs font-extrabold transition-colors cursor-pointer shrink-0 shadow-xs"
           >
             End Exam
           </button>
@@ -1094,7 +1144,7 @@ export default function MapPracticeAssessment({ onNavigate, params }: MapPractic
           </div>
 
           {/* Live Payload Inspector Toggle */}
-          <div className="shrink-0 bg-white rounded-xl border border-slate-200/80 p-2 shadow-xs">
+          {/* <div className="shrink-0 bg-white rounded-xl border border-slate-200/80 p-2 shadow-xs">
             <button
               onClick={() => setShowPayloadPreview(!showPayloadPreview)}
               className="w-full flex items-center justify-between text-[11px] font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
@@ -1111,7 +1161,7 @@ export default function MapPracticeAssessment({ onNavigate, params }: MapPractic
                 {JSON.stringify(samplePayload, null, 2)}
               </pre>
             )}
-          </div>
+          </div> */}
 
         </div>
       </main>
