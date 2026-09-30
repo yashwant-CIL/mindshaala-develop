@@ -313,8 +313,8 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
         <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden select-none opacity-20 sm:opacity-25 flex flex-wrap content-between justify-between p-4 rotate-[-12deg] scale-110">
           {Array.from({ length: 28 }).map((_, i) => (
             <div key={i} className="p-6 text-center space-y-0.5 transform tracking-widest text-[11px] font-black text-indigo-300 uppercase whitespace-nowrap">
-              <p>MINDSHAALA DIGITAL DRM • {userName}</p>
-              <p>USER #{userId} • {timestamp}</p>
+              <p>MINDSHAALA DIGITAL DRM • </p>
+              <p>USER #{userName} • {timestamp}</p>
               <p>CONFIDENTIAL NOTE - DO NOT COPY</p>
             </div>
           ))}
