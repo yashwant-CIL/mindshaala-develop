@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ArrowLeft, 
   Clock, 
@@ -19,9 +19,11 @@ import {
   Compass,
   Calendar,
   Tag,
-  Target
+  Target,
+  Move
 } from 'lucide-react';
 import { MapPracticeService } from '../../services/MapPracticeService';
+import DrawingCanvas, { pointsToShapes, CanvasShape } from './DrawingCanvas';
 
 // Standard tool icons and colors from Tools.tsx
 const TOOL_META: Record<string, { icon: string; studentColor: string; name: string }> = {
@@ -96,6 +98,8 @@ export interface AnswerKeyItem {
 export interface QuestionAttemptDetail {
   question_id: number;
   map_image_url?: string;
+  canvas_width_px?: number;
+  canvas_height_px?: number;
   evaluations: EvaluationItem[];
   answer_keys: AnswerKeyItem[];
 }
@@ -132,6 +136,52 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
   const [showAnswerKeys, setShowAnswerKeys] = useState<boolean>(true);
   const [selectedToolFilter, setSelectedToolFilter] = useState<string>('ALL');
   const [zoomLevel, setZoomLevel] = useState<number>(1.0);
+
+  // Drag Panning state
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Mouse & Touch Pan Handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomLevel <= 1.0) return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || zoomLevel <= 1.0) return;
+    e.preventDefault();
+    setPanOffset({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (zoomLevel <= 1.0 || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setDragStart({ x: touch.clientX - panOffset.x, y: touch.clientY - panOffset.y });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || zoomLevel <= 1.0 || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setPanOffset({
+      x: touch.clientX - dragStart.x,
+      y: touch.clientY - dragStart.y
+    });
+  };
+
+  const resetZoomAndPan = () => {
+    setZoomLevel(1.0);
+    setPanOffset({ x: 0, y: 0 });
+  };
 
   // Determine user_id
   const userId = propUserId || localStorage.getItem('user_id') || '100117';
@@ -170,6 +220,28 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
     }
   }, [initialAttemptId]);
 
+  // Map blob image URLs dictionary indexed by map_image_url
+  const [mapImageBlobUrls, setMapImageBlobUrls] = useState<Record<string, string>>({});
+
+  const fetchMapImage = async (imgUrl: string) => {
+    if (!imgUrl || mapImageBlobUrls[imgUrl]) return;
+    if (imgUrl.startsWith('data:') || imgUrl.startsWith('http://') || imgUrl.startsWith('https://') || imgUrl.startsWith('blob:')) {
+      setMapImageBlobUrls(prev => ({ ...prev, [imgUrl]: imgUrl }));
+      return;
+    }
+    try {
+      console.log("Fetching map image blob for URL parameter:", imgUrl);
+      const resBlob = await MapPracticeService.getMapImage(imgUrl);
+      if (resBlob) {
+        const blob = resBlob instanceof Blob ? resBlob : new Blob([resBlob], { type: 'image/png' });
+        const objectUrl = URL.createObjectURL(blob);
+        setMapImageBlobUrls(prev => ({ ...prev, [imgUrl]: objectUrl }));
+      }
+    } catch (err) {
+      console.error("Error fetching map image blob:", imgUrl, err);
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Fetch Attempt Details when clicking an attempt
   // ---------------------------------------------------------------------------
@@ -187,6 +259,12 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
 
       if (data) {
         setAttemptDetail(data);
+        const qList = data.questions || (Array.isArray(data) ? data : []);
+        if (Array.isArray(qList)) {
+          qList.forEach((q: any) => {
+            if (q.map_image_url) fetchMapImage(q.map_image_url);
+          });
+        }
       } else {
         setDetailError("No detailed evaluation available for this attempt.");
       }
@@ -218,40 +296,70 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
   // Current active question item in detailed view
   const currentQuestionDetail = attemptDetail?.questions?.[activeQuestionIdx];
 
-  // Helper to extract geometry points for SVG rendering
-  const getPointsFromStudentAnswer = (evalItem: EvaluationItem) => {
-    const ans = evalItem.student_answer;
-    if (!ans) return [];
-    
-    if (ans.points && Array.isArray(ans.points) && ans.points.length > 0) {
-      return ans.points;
-    }
-    if (ans.x !== undefined && ans.y !== undefined) {
-      return [{ x: ans.x, y: ans.y }];
-    }
-    if (ans.start && ans.end) {
-      return [ans.start, ans.end];
-    }
-    if (ans.x1 !== undefined && ans.y1 !== undefined && ans.x2 !== undefined && ans.y2 !== undefined) {
-      return [{ x: ans.x1, y: ans.y1 }, { x: ans.x2, y: ans.y2 }];
-    }
-    return [];
-  };
+  // Result shapes computed for DrawingCanvas (matching MapPracticeAssessment 1:1 positioning)
+  const resultShapes = useMemo(() => {
+    if (!currentQuestionDetail) return [];
 
-  const getPointsFromAnswerKey = (keyItem: AnswerKeyItem) => {
-    const pts = keyItem.geometry_data?.points;
-    if (pts && Array.isArray(pts)) return pts;
-    return [];
-  };
+    const shapes: CanvasShape[] = [];
 
-  // Filter evaluations & answer keys based on tool filter
-  const filteredEvaluations = (currentQuestionDetail?.evaluations || []).filter(e => 
-    selectedToolFilter === 'ALL' || e.tool_type?.toUpperCase() === selectedToolFilter
-  );
+    // 1. Student Markings Layer
+    if (showStudentAnswers && currentQuestionDetail.evaluations && Array.isArray(currentQuestionDetail.evaluations)) {
+      currentQuestionDetail.evaluations.forEach((ev: any, idx: number) => {
+        const ans = ev.student_answer;
+        if (!ans) return;
 
-  const filteredAnswerKeys = (currentQuestionDetail?.answer_keys || []).filter(k => 
-    selectedToolFilter === 'ALL' || k.tool_type?.toUpperCase() === selectedToolFilter
-  );
+        const isCorrect = ev.is_correct === 1 || ev.is_correct === true;
+        const prefix = isCorrect ? '✓ ' : '✗ ';
+
+        const toolType = (ev.tool_type || ans.tool_type || ans.type || 'POINT').toUpperCase();
+        const labelText = prefix + (ans.label || ev.label || `Response #${idx + 1}`);
+
+        const studentStroke = isCorrect ? '#2563eb' : '#dc2626';
+        const studentFill = isCorrect ? 'rgba(37, 99, 235, 0.25)' : 'rgba(220, 38, 38, 0.25)';
+
+        const parsed = pointsToShapes(Array.isArray(ans) ? ans : [ans], toolType);
+        parsed.forEach(s => {
+          shapes.push({
+            ...s,
+            id: `student_${idx}_${s.id}`,
+            label: labelText,
+            stroke: studentStroke,
+            fill: studentFill,
+            dash: []
+          });
+        });
+      });
+    }
+
+    // 2. Official Answer Keys Layer (Emerald Green with Dashed Lines)
+    if (showAnswerKeys && currentQuestionDetail.answer_keys && Array.isArray(currentQuestionDetail.answer_keys)) {
+      currentQuestionDetail.answer_keys.forEach((keyItem: any, idx: number) => {
+        if (!keyItem) return;
+
+        const toolType = (keyItem.tool_type || keyItem.type || 'POINT').toUpperCase();
+        const geom = keyItem.geometry_data || keyItem;
+        const labelText = '🔑 ' + (geom.label || keyItem.label || `Key #${idx + 1}`);
+
+        const parsed = pointsToShapes(Array.isArray(keyItem) ? keyItem : [keyItem], toolType);
+        parsed.forEach(s => {
+          shapes.push({
+            ...s,
+            id: `key_${idx}_${s.id}`,
+            label: labelText,
+            stroke: '#059669',
+            fill: 'rgba(5, 150, 105, 0.2)',
+            dash: [6, 4]
+          });
+        });
+      });
+    }
+
+    return shapes;
+  }, [currentQuestionDetail, showStudentAnswers, showAnswerKeys]);
+
+  // Image URL computation without fallback dummy image
+  const rawUrl = currentQuestionDetail?.map_image_url;
+  const displayMapImageUrl = (rawUrl && mapImageBlobUrls[rawUrl]) || (rawUrl?.startsWith('http') || rawUrl?.startsWith('/') || rawUrl?.startsWith('data:') ? rawUrl : '');
 
   // Calculate statistics for active attempt
   const totalScore = attemptDetail?.attempt?.total_score ?? 0;
@@ -271,38 +379,39 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
   // ---------------------------------------------------------------------------
   if (selectedAttemptId !== null) {
     return (
-      <div className="p-3 sm:p-6 max-w-7xl mx-auto min-h-screen bg-slate-50/50 space-y-6 font-sans">
+      <div className="p-3 md:p-5 max-w-7xl mx-auto min-h-screen bg-slate-50/50 space-y-3 font-sans">
         
-        {/* Header Navigation */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200 shadow-xs">
+        {/* Compact Header Navigation & Total Score */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 md:p-4 rounded-2xl border border-slate-200 shadow-xs">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
                 setSelectedAttemptId(null);
                 setAttemptDetail(null);
+                resetZoomAndPan();
               }}
-              className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center gap-2 font-bold text-xs cursor-pointer active:scale-95"
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all flex items-center gap-1.5 font-extrabold text-xs cursor-pointer active:scale-95"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Attempts</span>
             </button>
 
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                Attempt #{selectedAttemptId} Review
+              <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                Attempt #{selectedAttemptId} Evaluation Review
               </h1>
-              <p className="text-xs text-slate-500 font-medium">
-                {attemptDetail?.attempt?.assessment_title || `Assessment #${attemptDetail?.attempt?.assessment_id || ''}`} • Started: {formatDate(attemptDetail?.attempt?.start_time)}
+              <p className="text-[11px] text-slate-500 font-medium">
+                {attemptDetail?.attempt?.assessment_title || `Assessment #${attemptDetail?.attempt?.assessment_id || ''}`} • {formatDate(attemptDetail?.attempt?.start_time)}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            <div className="px-4 py-2 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center gap-2">
-              <Award className="w-5 h-5 text-indigo-600" />
+            <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center gap-2">
+              <Award className="w-4 h-4 text-indigo-600" />
               <div>
-                <span className="text-[10px] font-black uppercase text-indigo-400 block tracking-wider">Total Score</span>
-                <span className="text-base font-black text-indigo-900">{totalScore.toFixed(1)} Marks</span>
+                <span className="text-[9px] font-black uppercase text-indigo-400 block tracking-wider">Total Score</span>
+                <span className="text-sm font-black text-indigo-900">{totalScore.toFixed(1)} Marks</span>
               </div>
             </div>
           </div>
@@ -310,23 +419,23 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
 
         {/* Loading state for details */}
         {isLoadingDetail && (
-          <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-4 shadow-sm">
-            <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mx-auto" />
-            <p className="text-sm font-bold text-slate-700">Loading attempt map evaluations & answer keys...</p>
+          <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-3 shadow-xs">
+            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto" />
+            <p className="text-xs font-bold text-slate-700">Loading attempt map evaluations & answer keys...</p>
           </div>
         )}
 
         {/* Error state for details */}
         {detailError && !isLoadingDetail && (
-          <div className="bg-rose-50 border border-rose-200 p-6 rounded-3xl text-rose-800 space-y-3">
-            <div className="flex items-center gap-2 font-bold">
-              <AlertCircle className="w-5 h-5 text-rose-600" />
+          <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl text-rose-800 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-xs">
+              <AlertCircle className="w-4 h-4 text-rose-600" />
               <span>Could not load evaluation details</span>
             </div>
             <p className="text-xs">{detailError}</p>
             <button
               onClick={() => handleSelectAttempt(selectedAttemptId)}
-              className="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition-all cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-rose-600 text-white font-bold text-xs hover:bg-rose-700 transition-all cursor-pointer"
             >
               Try Again
             </button>
@@ -335,504 +444,254 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
 
         {/* Main Content when Detail is Loaded */}
         {attemptDetail && !isLoadingDetail && (
-          <div className="space-y-6">
-
-            {/* Question Tabs Selector */}
-            {questionsCount > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                {attemptDetail.questions.map((q, idx) => (
-                  <button
-                    key={q.question_id || idx}
-                    onClick={() => setActiveQuestionIdx(idx)}
-                    className={`px-4 py-2.5 rounded-2xl font-bold text-xs transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
-                      activeQuestionIdx === idx
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-                    }`}
-                  >
-                    <span>Question #{idx + 1}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                      activeQuestionIdx === idx ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      QID #{q.question_id}
-                    </span>
-                  </button>
-                ))}
+          <div className="bg-white p-3 md:p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
+            
+            {/* Question Selector Tabs Bar */}
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
+                  Interactive Map & Answer Key Review
+                </h3>
               </div>
-            )}
 
-            {/* Main Map & Breakdown Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {questionsCount > 1 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  {attemptDetail.questions.map((q, idx) => (
+                    <button
+                      key={q.question_id || idx}
+                      onClick={() => {
+                        setActiveQuestionIdx(idx);
+                        resetZoomAndPan();
+                      }}
+                      className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                        activeQuestionIdx === idx
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      Question #{idx + 1}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Side-by-Side Grid: Left Map Canvas (7 cols), Right Answer Key & Student Markings Comparison (5 cols) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
               
-              {/* Left Column: Interactive Map Canvas View (8 cols) */}
-              <div className="lg:col-span-8 bg-white p-4 sm:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+              {/* Left Column: Interactive Map Canvas View (7 cols) */}
+              <div className="lg:col-span-7 space-y-2">
                 
-                {/* Map Control Bar & Toggles */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
-                  
-                  {/* Layer Visibility Toggles */}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                {/* Map Layer Controls Bar */}
+                <div className="flex items-center justify-between gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200/80">
+                  <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
                       <input 
                         type="checkbox" 
                         checked={showStudentAnswers}
                         onChange={(e) => setShowStudentAnswers(e.target.checked)}
-                        className="w-4 h-4 rounded text-blue-600 accent-blue-600 cursor-pointer"
+                        className="w-3.5 h-3.5 rounded text-blue-600 accent-blue-600"
                       />
-                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span className="flex items-center gap-1">
                         <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                        Student Answers
+                        Student Marking
                       </span>
                     </label>
 
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
                       <input 
                         type="checkbox" 
                         checked={showAnswerKeys}
                         onChange={(e) => setShowAnswerKeys(e.target.checked)}
-                        className="w-4 h-4 rounded text-emerald-600 accent-emerald-600 cursor-pointer"
+                        className="w-3.5 h-3.5 rounded text-emerald-600 accent-emerald-600"
                       />
-                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span className="flex items-center gap-1">
                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 border border-dashed border-white"></span>
-                        Answer Keys (Official)
+                        Official Answer Key
                       </span>
                     </label>
                   </div>
 
-                  {/* Zoom Controls */}
-                  <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  {/* Zoom & Reset Controls */}
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => setZoomLevel(prev => Math.max(1.0, prev - 0.25))}
                       disabled={zoomLevel <= 1.0}
-                      className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
                       title="Zoom Out"
+                      className="p-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
                     >
-                      <Minimize2 className="w-4 h-4" />
+                      <Minimize2 className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-xs font-black text-slate-600 w-10 text-center">
-                      {Math.round(zoomLevel * 100)}%
-                    </span>
+                    <span className="text-xs font-bold text-slate-600 w-8 text-center">{Math.round(zoomLevel * 100)}%</span>
                     <button
                       onClick={() => setZoomLevel(prev => Math.min(2.5, prev + 0.25))}
                       disabled={zoomLevel >= 2.5}
-                      className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
                       title="Zoom In"
+                      className="p-1 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
                     >
-                      <Maximize2 className="w-4 h-4" />
+                      <Maximize2 className="w-3.5 h-3.5" />
                     </button>
+
                     <button
-                      onClick={() => setZoomLevel(1.0)}
-                      className="px-2 py-1 text-[10px] font-bold rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-slate-100 cursor-pointer"
+                      onClick={resetZoomAndPan}
+                      disabled={zoomLevel === 1.0 && panOffset.x === 0 && panOffset.y === 0}
+                      title="Reset Map Zoom & Position"
+                      className="ml-1 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40 font-extrabold text-xs flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
                     >
-                      Reset
+                      <RefreshCw className="w-3 h-3 text-indigo-600" />
+                      <span>Reset</span>
                     </button>
                   </div>
-
                 </div>
 
-                {/* Map Display Container with SVG Drawing Overlay */}
-                <div className="relative w-full rounded-2xl overflow-hidden bg-slate-900 border border-slate-200 shadow-inner group min-h-[350px] sm:min-h-[500px]">
-                  
-                  {/* Scroll Container for Zoom */}
-                  <div 
-                    className="w-full h-full overflow-auto transition-transform duration-200 origin-top-left"
-                    style={{ transform: `scale(${zoomLevel})`, width: `${100 / zoomLevel}%` }}
-                  >
-                    <div className="relative w-full aspect-video min-h-[400px]">
-                      
-                      {/* Base Map Image */}
-                      <img 
-                        src={currentQuestionDetail?.map_image_url || defaultMapImage}
-                        alt="Map Review"
-                        className="w-full h-full object-contain select-none pointer-events-none"
-                      />
-
-                      {/* SVG Overlay layer for student markings & answer keys */}
-                      <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                        
-                        {/* ------------------------------------------------------------- */}
-                        {/* LAYER 1: STUDENT ANSWERS (evaluations) */}
-                        {/* ------------------------------------------------------------- */}
-                        {showStudentAnswers && filteredEvaluations.map((ev, idx) => {
-                          const pts = getPointsFromStudentAnswer(ev);
-                          if (pts.length === 0) return null;
-
-                          const toolType = ev.tool_type?.toUpperCase() || 'POINT';
-                          const isCorrect = ev.is_correct === 1;
-                          const strokeColor = isCorrect ? '#22c55e' : '#ef4444'; // Green for correct, Red for incorrect
-                          const labelText = ev.student_answer?.label || `Response #${idx + 1}`;
-
-                          if (toolType === 'POINT' || toolType === 'SYMBOL' || toolType === 'CIRCLE') {
-                            const p = pts[0];
-                            return (
-                              <g key={`student-pt-${idx}`}>
-                                {/* Outer Pulse Ring */}
-                                <circle 
-                                  cx={`${p.x * 100}%`} 
-                                  cy={`${p.y * 100}%`} 
-                                  r="14" 
-                                  fill={strokeColor} 
-                                  fillOpacity="0.25" 
-                                  stroke={strokeColor}
-                                  strokeWidth="1.5"
-                                />
-                                {/* Inner Marker Pin */}
-                                <circle 
-                                  cx={`${p.x * 100}%`} 
-                                  cy={`${p.y * 100}%`} 
-                                  r="6" 
-                                  fill={strokeColor} 
-                                  stroke="#ffffff"
-                                  strokeWidth="2"
-                                />
-                                {/* Label Text Tag */}
-                                <g transform={`translate(${p.x * 100}%, ${p.y * 100}%)`}>
-                                  <rect 
-                                    x="10" 
-                                    y="-12" 
-                                    width={labelText.length * 7 + 34} 
-                                    height="20" 
-                                    rx="6" 
-                                    fill="#1e293b" 
-                                    fillOpacity="0.9"
-                                    stroke={strokeColor}
-                                    strokeWidth="1"
-                                  />
-                                  <text 
-                                    x="18" 
-                                    y="2" 
-                                    fill="#ffffff" 
-                                    fontSize="10" 
-                                    fontWeight="bold" 
-                                    fontFamily="sans-serif"
-                                  >
-                                    {isCorrect ? '✓ ' : '✗ '}{labelText}
-                                  </text>
-                                </g>
-                              </g>
-                            );
-                          }
-
-                          if (toolType === 'ARROW' || toolType === 'LINE') {
-                            if (pts.length < 2) return null;
-                            const p1 = pts[0];
-                            const p2 = pts[1];
-                            return (
-                              <g key={`student-line-${idx}`}>
-                                <line 
-                                  x1={`${p1.x * 100}%`} 
-                                  y1={`${p1.y * 100}%`} 
-                                  x2={`${p2.x * 100}%`} 
-                                  y2={`${p2.y * 100}%`} 
-                                  stroke={strokeColor} 
-                                  strokeWidth="3.5" 
-                                  strokeLinecap="round"
-                                />
-                                <circle cx={`${p1.x * 100}%`} cy={`${p1.y * 100}%`} r="4" fill={strokeColor} />
-                                <circle cx={`${p2.x * 100}%`} cy={`${p2.y * 100}%`} r="4" fill={strokeColor} />
-                              </g>
-                            );
-                          }
-
-                          if (toolType === 'RECTANGLE' && pts.length >= 2) {
-                            const p1 = pts[0];
-                            const p2 = pts[1];
-                            const minX = Math.min(p1.x, p2.x);
-                            const minY = Math.min(p1.y, p2.y);
-                            const width = Math.abs(p2.x - p1.x);
-                            const height = Math.abs(p2.y - p1.y);
-                            return (
-                              <g key={`student-rect-${idx}`}>
-                                <rect 
-                                  x={`${minX * 100}%`} 
-                                  y={`${minY * 100}%`} 
-                                  width={`${width * 100}%`} 
-                                  height={`${height * 100}%`} 
-                                  fill={strokeColor}
-                                  fillOpacity="0.15"
-                                  stroke={strokeColor} 
-                                  strokeWidth="2.5" 
-                                  rx="4"
-                                />
-                              </g>
-                            );
-                          }
-
-                          // Default Polyline / Polygon / Area
-                          if (pts.length >= 2) {
-                            const pointsString = pts.map(pt => `${pt.x * 100}%,${pt.y * 100}%`).join(' ');
-                            return (
-                              <polyline 
-                                key={`student-poly-${idx}`}
-                                points={pointsString} 
-                                fill="none" 
-                                stroke={strokeColor} 
-                                strokeWidth="3" 
-                              />
-                            );
-                          }
-
-                          return null;
-                        })}
-
-                        {/* ------------------------------------------------------------- */}
-                        {/* LAYER 2: ANSWER KEYS (Official correct answers - Emerald green dashed) */}
-                        {/* ------------------------------------------------------------- */}
-                        {showAnswerKeys && filteredAnswerKeys.map((keyItem, idx) => {
-                          const pts = getPointsFromAnswerKey(keyItem);
-                          if (pts.length === 0) return null;
-
-                          const toolType = keyItem.tool_type?.toUpperCase() || 'POINT';
-                          const labelText = keyItem.geometry_data?.label || `Key #${idx + 1}`;
-                          const marks = keyItem.geometry_data?.marks;
-
-                          if (toolType === 'POINT' || toolType === 'SYMBOL' || toolType === 'CIRCLE') {
-                            const p = pts[0];
-                            return (
-                              <g key={`key-pt-${idx}`}>
-                                {/* Dashed Target Outer Circle */}
-                                <circle 
-                                  cx={`${p.x * 100}%`} 
-                                  cy={`${p.y * 100}%`} 
-                                  r="16" 
-                                  fill="none" 
-                                  stroke={ANSWER_KEY_COLOR}
-                                  strokeWidth="2.5"
-                                  strokeDasharray={ANSWER_KEY_STROKE_DASH}
-                                />
-                                {/* Center Star Marker */}
-                                <circle 
-                                  cx={`${p.x * 100}%`} 
-                                  cy={`${p.y * 100}%`} 
-                                  r="5" 
-                                  fill={ANSWER_KEY_COLOR} 
-                                  stroke="#ffffff"
-                                  strokeWidth="2"
-                                />
-                                {/* Answer Key Label Tag */}
-                                <g transform={`translate(${p.x * 100}%, ${p.y * 100}%)`}>
-                                  <rect 
-                                    x="-10" 
-                                    y="-32" 
-                                    width={labelText.length * 7 + 45} 
-                                    height="20" 
-                                    rx="6" 
-                                    fill="#064e3b" 
-                                    fillOpacity="0.95"
-                                    stroke={ANSWER_KEY_COLOR}
-                                    strokeWidth="1.5"
-                                  />
-                                  <text 
-                                    x="-2" 
-                                    y="-18" 
-                                    fill="#34d399" 
-                                    fontSize="10" 
-                                    fontWeight="extrabold" 
-                                    fontFamily="sans-serif"
-                                  >
-                                    🔑 {labelText} {marks ? `(${marks}m)` : ''}
-                                  </text>
-                                </g>
-                              </g>
-                            );
-                          }
-
-                          if (toolType === 'ARROW' || toolType === 'LINE') {
-                            if (pts.length < 2) return null;
-                            const p1 = pts[0];
-                            const p2 = pts[1];
-                            return (
-                              <g key={`key-line-${idx}`}>
-                                <line 
-                                  x1={`${p1.x * 100}%`} 
-                                  y1={`${p1.y * 100}%`} 
-                                  x2={`${p2.x * 100}%`} 
-                                  y2={`${p2.y * 100}%`} 
-                                  stroke={ANSWER_KEY_COLOR} 
-                                  strokeWidth="3.5" 
-                                  strokeDasharray={ANSWER_KEY_STROKE_DASH}
-                                  strokeLinecap="round"
-                                />
-                                <circle cx={`${p1.x * 100}%`} cy={`${p1.y * 100}%`} r="5" fill={ANSWER_KEY_COLOR} />
-                                <circle cx={`${p2.x * 100}%`} cy={`${p2.y * 100}%`} r="5" fill={ANSWER_KEY_COLOR} />
-                              </g>
-                            );
-                          }
-
-                          if (toolType === 'RECTANGLE' && pts.length >= 2) {
-                            const p1 = pts[0];
-                            const p2 = pts[1];
-                            const minX = Math.min(p1.x, p2.x);
-                            const minY = Math.min(p1.y, p2.y);
-                            const width = Math.abs(p2.x - p1.x);
-                            const height = Math.abs(p2.y - p1.y);
-                            return (
-                              <g key={`key-rect-${idx}`}>
-                                <rect 
-                                  x={`${minX * 100}%`} 
-                                  y={`${minY * 100}%`} 
-                                  width={`${width * 100}%`} 
-                                  height={`${height * 100}%`} 
-                                  fill={ANSWER_KEY_COLOR}
-                                  fillOpacity="0.2"
-                                  stroke={ANSWER_KEY_COLOR} 
-                                  strokeWidth="3" 
-                                  strokeDasharray={ANSWER_KEY_STROKE_DASH}
-                                  rx="4"
-                                />
-                              </g>
-                            );
-                          }
-
-                          return null;
-                        })}
-
-                      </svg>
+                {/* Map Viewport Container matching MapPracticeAssessment */}
+                <div 
+                  className="w-full relative bg-slate-900 rounded-xl overflow-hidden shadow-inner flex items-center justify-center h-[52vh] min-h-[280px] max-h-[460px] p-2 select-none"
+                >
+                  {!displayMapImageUrl ? (
+                    <div className="flex flex-col items-center gap-2 text-white p-6">
+                      <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                      <span className="text-xs font-bold">Loading map canvas image...</span>
                     </div>
-                  </div>
-
+                  ) : (
+                    <div 
+                      className="w-full flex items-center justify-center transition-transform duration-200"
+                      style={{ 
+                        transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`, 
+                        transformOrigin: 'center center',
+                        cursor: zoomLevel > 1.0 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+                      }}
+                      onMouseDown={handleMouseDown}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUpOrLeave}
+                      onMouseLeave={handleMouseUpOrLeave}
+                      onTouchStart={handleTouchStart}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={handleMouseUpOrLeave}
+                    >
+                      <DrawingCanvas
+                        imageUrl={displayMapImageUrl}
+                        shapes={resultShapes}
+                        readOnly={true}
+                        canvasWidthPx={currentQuestionDetail?.canvas_width_px || 1000}
+                        canvasHeightPx={currentQuestionDetail?.canvas_height_px || 1000}
+                      />
+                    </div>
+                  )}
                 </div>
-
-                {/* Map Legend Footer */}
-                <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs font-medium text-slate-600">
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                      Correct User Mark
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-rose-500"></span>
-                      Incorrect User Mark
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded-full bg-emerald-600 border border-dashed stroke-emerald-600"></span>
-                      Official Answer Key
-                    </span>
-                  </div>
-                </div>
-
               </div>
 
-              {/* Right Column: Evaluations & Answer Keys Comparison Breakdown (4 cols) */}
-              <div className="lg:col-span-4 space-y-6">
-                
-                {/* Summary Score Card */}
-                <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs space-y-4">
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">
-                    Question Evaluation Summary
-                  </h3>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                      <span className="text-[10px] font-black uppercase text-emerald-600 block">Correct Marks</span>
-                      <span className="text-2xl font-black text-emerald-900">{totalCorrect}</span>
+              {/* Right Column: Side-by-Side Comparison Panel for Official Answer Keys vs Student Markings (5 cols) */}
+              <div className="lg:col-span-5 space-y-3">
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      <span>Question #{activeQuestionIdx + 1} Comparison</span>
+                    </h4>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                      Q#{activeQuestionIdx + 1}
+                    </span>
+                  </div>
+
+                  {/* 🔑 Official Answer Keys Section */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                        <span>🔑 Official Answer Keys</span>
+                        <span className="px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-900 text-[10px]">
+                          {currentQuestionDetail?.answer_keys?.length || 0}
+                        </span>
+                      </span>
                     </div>
 
-                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] font-black uppercase text-slate-500 block">Total Items</span>
-                      <span className="text-2xl font-black text-slate-900">{totalEvaluations}</span>
-                    </div>
-                  </div>
-                </div>
+                    <div className="space-y-1.5 max-h-[170px] overflow-y-auto pr-1">
+                      {currentQuestionDetail?.answer_keys?.map((keyItem: any, idx: number) => {
+                        const geom = keyItem.geometry_data || keyItem;
+                        const labelText = geom.label || keyItem.label || `Answer Key #${idx + 1}`;
+                        const toolType = (keyItem.tool_type || keyItem.type || 'POINT').toUpperCase();
+                        const marks = geom.marks || keyItem.marks || 1;
+                        const meta = TOOL_META[toolType] || { icon: '📍', name: toolType };
 
-                {/* Student Evaluations List */}
-                <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-700">
-                      Student Responses ({currentQuestionDetail?.evaluations?.length || 0})
-                    </h3>
-                  </div>
-
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                    {currentQuestionDetail?.evaluations?.map((ev, idx) => {
-                      const meta = TOOL_META[ev.tool_type?.toUpperCase()] || { icon: '📍', name: ev.tool_type };
-                      const isCorrect = ev.is_correct === 1;
-                      const ans = ev.student_answer;
-                      const label = ans?.label || `Marking #${idx + 1}`;
-
-                      return (
-                        <div 
-                          key={ev.response_object_id || idx}
-                          className={`p-3.5 rounded-2xl border transition-all ${
-                            isCorrect 
-                              ? 'bg-emerald-50/60 border-emerald-200' 
-                              : 'bg-rose-50/60 border-rose-200'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{meta.icon}</span>
-                              <div>
-                                <span className="text-xs font-bold text-slate-900 block">{label}</span>
-                                <span className="text-[10px] font-mono text-slate-500">Tool: {meta.name}</span>
+                        return (
+                          <div 
+                            key={keyItem.answer_object_id || idx}
+                            className="p-2 rounded-lg bg-emerald-50/70 border border-emerald-200 flex items-center justify-between gap-2"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm shrink-0">{meta.icon}</span>
+                              <div className="truncate">
+                                <span className="text-xs font-extrabold text-emerald-950 block truncate">{labelText}</span>
+                                <span className="text-[9px] font-mono text-emerald-700 block">Type: {meta.name}</span>
                               </div>
                             </div>
-
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                              isCorrect 
-                                ? 'bg-emerald-200 text-emerald-900' 
-                                : 'bg-rose-200 text-rose-900'
-                            }`}>
-                              {isCorrect ? `+${ev.score_awarded} Mark` : '0 Mark'}
-                            </span>
-                          </div>
-
-                          {ans?.points?.[0] && (
-                            <div className="mt-2 text-[10px] font-mono text-slate-500 bg-white/80 p-1.5 rounded-lg border border-slate-100">
-                              Coords: ({ans.points[0].x.toFixed(3)}, {ans.points[0].y.toFixed(3)})
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Official Answer Keys List */}
-                <div className="p-6 rounded-3xl border border-slate-200 bg-white shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
-                      <span>🔑 Official Answer Keys ({currentQuestionDetail?.answer_keys?.length || 0})</span>
-                    </h3>
-                  </div>
-
-                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                    {currentQuestionDetail?.answer_keys?.map((keyItem, idx) => {
-                      const meta = TOOL_META[keyItem.tool_type?.toUpperCase()] || { icon: '📍', name: keyItem.tool_type };
-                      const geom = keyItem.geometry_data;
-                      const label = geom?.label || `Key #${idx + 1}`;
-                      const marks = geom?.marks || 1;
-
-                      return (
-                        <div 
-                          key={keyItem.answer_object_id || idx}
-                          className="p-3.5 rounded-2xl border border-emerald-200 bg-emerald-50/40 space-y-2"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{meta.icon}</span>
-                              <div>
-                                <span className="text-xs font-extrabold text-emerald-950 block">{label}</span>
-                                <span className="text-[10px] font-mono text-emerald-700">Tool: {meta.name}</span>
-                              </div>
-                            </div>
-
-                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-200 text-emerald-900">
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-200/80 text-emerald-900 text-[10px] font-extrabold shrink-0">
                               {marks} {marks === 1 ? 'Mark' : 'Marks'}
                             </span>
                           </div>
+                        );
+                      })}
 
-                          {geom?.points?.[0] && (
-                            <div className="text-[10px] font-mono text-emerald-800 bg-white/80 p-1.5 rounded-lg border border-emerald-100">
-                              Expected Coords: ({geom.points[0].x.toFixed(3)}, {geom.points[0].y.toFixed(3)})
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                      {(!currentQuestionDetail?.answer_keys || currentQuestionDetail.answer_keys.length === 0) && (
+                        <p className="text-[11px] text-slate-400 font-medium italic p-2 bg-white rounded-lg border border-slate-200">
+                          No official answer key defined for this question.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
 
+                  {/* 📍 Student Markings Section */}
+                  <div className="space-y-1.5 border-t border-slate-200/80 pt-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1">
+                        <span>📍 Student Markings</span>
+                        <span className="px-1.5 py-0.2 rounded-md bg-slate-200 text-slate-800 text-[10px]">
+                          {currentQuestionDetail?.evaluations?.length || 0}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[170px] overflow-y-auto pr-1">
+                      {currentQuestionDetail?.evaluations?.map((ev: any, idx: number) => {
+                        const ans = ev.student_answer;
+                        const isCorrect = ev.is_correct === 1 || ev.is_correct === true;
+                        const toolType = (ev.tool_type || ans?.tool_type || ans?.type || 'POINT').toUpperCase();
+                        const labelText = ans?.label || ev.label || `Student Marking #${idx + 1}`;
+                        const meta = TOOL_META[toolType] || { icon: '📍', name: toolType };
+
+                        return (
+                          <div 
+                            key={ev.response_object_id || idx}
+                            className={`p-2 rounded-lg border flex items-center justify-between gap-2 ${
+                              isCorrect ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/50 border-rose-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm shrink-0">{meta.icon}</span>
+                              <div className="truncate">
+                                <span className="text-xs font-bold text-slate-900 block truncate">{labelText}</span>
+                                <span className="text-[9px] font-mono text-slate-500 block">Type: {meta.name}</span>
+                              </div>
+                            </div>
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md shrink-0 ${
+                              isCorrect ? 'bg-emerald-200/60 text-emerald-800' : 'bg-rose-200/60 text-rose-800'
+                            }`}>
+                              {isCorrect ? '+1 Mark' : '0 Mark'}
+                            </span>
+                          </div>
+                        );
+                      })}
+
+                      {(!currentQuestionDetail?.evaluations || currentQuestionDetail.evaluations.length === 0) && (
+                        <p className="text-[11px] text-slate-400 font-medium italic p-2 bg-white rounded-lg border border-slate-200">
+                          No student markings recorded for this question.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
               </div>
 
             </div>

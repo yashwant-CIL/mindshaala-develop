@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Stage, Layer, Rect, Circle, Line, Transformer, Arrow, Text } from 'react-konva';
+import { Stage, Layer, Rect, Circle, Line, Transformer, Arrow, Text, Label, Tag } from 'react-konva';
 import { getToolConfig } from './utils/toolConfig';
 // import { useTheme } from 'next-themes';
 
@@ -22,6 +22,9 @@ export interface CanvasShape {
   endY?: number;
   points?: Point[];
   label?: string;
+  stroke?: string;
+  fill?: string;
+  dash?: number[];
 }
 
 export interface ResponseItem {
@@ -331,6 +334,7 @@ export default function DrawingCanvas({
   const size = useSize(containerRef);
   const [drawingShape, setDrawingShape] = useState<CanvasShape | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoveredShapeId, setHoveredShapeId] = useState<string | null>(null);
   const trRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
 
@@ -572,16 +576,30 @@ export default function DrawingCanvas({
     const draggable = !readOnly && activeTool === 'SELECT';
     const config = getToolConfig(shape.type);
 
+    const isHovered = hoveredShapeId === shape.id;
+
     const commonProps = {
       id: shape.id,
       onClick: readOnly ? undefined : handleShapeClick(shape.id),
       onTap: readOnly ? undefined : handleShapeClick(shape.id),
       draggable,
       onDragEnd: (e: any) => handleDragEnd(e, index),
-      onTransformEnd: (e: any) => handleTransformEnd(e, index, shape.id)
+      onTransformEnd: (e: any) => handleTransformEnd(e, index, shape.id),
+      onMouseEnter: (e: any) => {
+        const stage = e.target?.getStage();
+        if (stage?.container()) stage.container().style.cursor = 'pointer';
+        setHoveredShapeId(shape.id);
+      },
+      onMouseLeave: (e: any) => {
+        const stage = e.target?.getStage();
+        if (stage?.container()) stage.container().style.cursor = activeTool === 'SELECT' ? 'default' : 'crosshair';
+        setHoveredShapeId(null);
+      }
     };
 
-    const strokeColor = isSelected ? "#3ecf8e" : config.stroke;
+    const strokeColor = isSelected ? "#3ecf8e" : (shape.stroke || config.stroke);
+    const fillColor = shape.fill !== undefined ? shape.fill : config.fill;
+    const dashPattern = shape.dash !== undefined ? shape.dash : config.dash;
 
     let shapeNode: React.ReactNode = null;
     let labelX = 0, labelY = 0;
@@ -594,8 +612,8 @@ export default function DrawingCanvas({
         <Rect {...commonProps}
           x={Math.min(x1, x2)} y={Math.min(y1, y2)}
           width={Math.abs(x2 - x1)} height={Math.abs(y2 - y1)}
-          fill={config.fill} stroke={strokeColor}
-          strokeWidth={config.strokeWidth} dash={config.dash}
+          fill={fillColor} stroke={strokeColor}
+          strokeWidth={config.strokeWidth} dash={dashPattern}
         />
       );
     }
@@ -608,8 +626,8 @@ export default function DrawingCanvas({
       shapeNode = (
         <Circle {...commonProps}
           x={x1} y={y1} radius={r}
-          fill={config.fill} stroke={strokeColor}
-          strokeWidth={config.strokeWidth} dash={config.dash}
+          fill={fillColor} stroke={strokeColor}
+          strokeWidth={config.strokeWidth} dash={dashPattern}
         />
       );
     }
@@ -624,7 +642,7 @@ export default function DrawingCanvas({
           points={[x1, y1, x2, y2]}
           stroke={strokeColor} strokeWidth={config.strokeWidth}
           pointerLength={config.pointerLength} pointerWidth={config.pointerWidth}
-          fill={strokeColor} hitStrokeWidth={10}
+          fill={strokeColor} hitStrokeWidth={10} dash={dashPattern}
         />
       );
     }
@@ -642,9 +660,9 @@ export default function DrawingCanvas({
           points={flatPoints}
           closed={isClosed}
           stroke={strokeColor} strokeWidth={config.strokeWidth}
-          fill={isClosed && !config.fillPattern ? config.fill : undefined}
-          fillPatternImage={isClosed && config.fillPattern ? (getHatchPattern(config.stroke) as unknown as HTMLImageElement) : undefined}
-          dash={config.dash}
+          fill={isClosed && !config.fillPattern ? fillColor : undefined}
+          fillPatternImage={isClosed && config.fillPattern ? (getHatchPattern(strokeColor) as unknown as HTMLImageElement) : undefined}
+          dash={dashPattern}
           hitStrokeWidth={10}
         />
       );
@@ -657,8 +675,8 @@ export default function DrawingCanvas({
       shapeNode = (
         <Circle {...commonProps}
           x={x1} y={y1} radius={radius}
-          fill={isSelected ? "#3ecf8e" : config.fill}
-          stroke={config.stroke} strokeWidth={config.strokeWidth}
+          fill={isSelected ? "#3ecf8e" : (shape.fill || config.fill)}
+          stroke={strokeColor} strokeWidth={config.strokeWidth}
         />
       );
     }
@@ -668,19 +686,25 @@ export default function DrawingCanvas({
     return (
       <React.Fragment key={shape.id || `temp_${index}`}>
         {shapeNode}
-        {shape.label && (
-          <Text
-            x={labelX} y={labelY}
-            text={shape.label}
-            fontSize={13}
-            fontWeight="bold"
-            fill="white"
-            shadowColor="black"
-            shadowBlur={4}
-            shadowOffset={{ x: 1, y: 1 }}
-            shadowOpacity={1}
-            listening={false}
-          />
+        {isHovered && shape.label && (
+          <Label x={labelX} y={labelY} listening={false}>
+            <Tag
+              fill="#0f172a"
+              opacity={0.92}
+              cornerRadius={6}
+              shadowColor="#000000"
+              shadowBlur={6}
+              shadowOffsetY={2}
+              shadowOpacity={0.4}
+            />
+            <Text
+              text={shape.label}
+              fontSize={12}
+              fontStyle="bold"
+              fill="#ffffff"
+              padding={6}
+            />
+          </Label>
         )}
       </React.Fragment>
     );
