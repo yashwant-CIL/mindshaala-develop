@@ -23,6 +23,7 @@ import PhysicsPhenomenon from "./components/activity-hub/PhysicsPhenomenon";
 import ExplainBiology from "./components/activity-hub/ExplainBiology";
 import EngineeringConcept from "./components/activity-hub/EngineeringConcept";
 import MathGenius from "./components/activity-hub/MathGenius";
+import NotesSelection from "./components/notes/NotesSelection";
 import { TakeTest } from "./components/TakeTest";
 import { TheoryTestPage } from "./components/TheoryTestPage";
 import { EvaluationReport } from "./components/EvaluationReport";
@@ -756,6 +757,9 @@ export default function App() {
                 <RequestOneOnOneSession />
                 )}
                 {activePage === "knowledgehub" && <KnowledgeHub />}
+                {(activePage === "notes-selection" || activePage === "notes") && (
+                  <NotesSelection onNavigate={handleNavigate} />
+                )}
                 {activePage === "compete" && <CompetePlatform />}
                 {activePage === "computer-fundamentals" && (
                 <ComputerFundamentals

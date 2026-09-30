@@ -6,6 +6,17 @@ export const API_ENDPOINT = {
         VERIFY_OTP: '/api/v2/cil/auth/verify/otp',
     },
 
+
+    COMMON_APIS: {
+        GET_ALL_COURSES: `/api/v1/cil/courses/get/all`,
+        GET_ALL_STANDARDS: (courseId: string | number) => `/api/v1/cil/standard/get/all/by/course_id?course_id=${courseId}`,
+        GET_ALL_SUBJECTS: (standardId: string | number) => `/api/v1/cil/subject/get/all/by/standard_id?standard_id=${standardId}`,
+        GET_ALL_SUBJECTS_BY_SUBSCRIPTION_ID: (subscription_id: string | number) => `/api/v1/cil/subscription_subject/get/all/by?subscription_id=${subscription_id}`,
+        GET_ALL_CHAPTERS: (subjectId: string | number) => `/api/v1/cil/chapter/get/all/by/subject_id?subject_id=${subjectId}`,
+        GET_ALL_TOPICS: (chapterId: string | number) => `/api/v1/cil/topics/get/by/chapter_id?chapter_id=${chapterId}`
+    },
+
+
     LANDINGPAGE: {
         CATEGORIES: "/api/v1/cil/courses/get/all",
         POPULAR_COURSES: "/api/v1/cil/subscription/get/all",
@@ -271,6 +282,10 @@ export const API_ENDPOINT = {
         // GET_ATTEMPTED_QUESTIONS_BY_ATTEMPTE_ID: (attempt_id: number) => `/api/v3/mindshaala/map/assessment/student/attempts/${attempt_id}/questions?attempt_id=${attempt_id}`,
         GET_ATTEMPTED_QUESTIONS_BY_ATTEMPTE_ID: (attempt_id: number) => `/api/v3/mindshaala/map/map-assessment/results?attempt_id=${attempt_id}`
     },
+
+    NOTES: {
+        FETCH_NOTES: (user_id: number | string , subject_id: number | string , chapter_id: number | string) =>`/api/v3/mindshaala/notes/fetch?user_id=${user_id}&subject_id=${subject_id}&chapter_id=${chapter_id}`,
+    }
 
 
 
