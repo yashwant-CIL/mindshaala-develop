@@ -971,10 +971,10 @@ export default function App() {
                   <SpeakAlongSession 
                     courseId={speakAlongParams.course_id}
                     subjectId={speakAlongParams.subject_id}
-                    chapterId={speakAlongParams.chapter_id}
+                    chapterIds={speakAlongParams.chapter_ids || (speakAlongParams.chapter_id ? [speakAlongParams.chapter_id] : [])}
                     subjectName={speakAlongParams.subjectName}
-                    onExit={() => setActivePage("speakalong-selection")}
-                    onFinish={() => setActivePage("speakalong-selection")}
+                    onExit={() => setActivePage("speakalong-dashboard")}
+                    onFinish={() => setActivePage("speakalong-dashboard")}
                   />
                 )}
                 {activePage === "conceptual-tutor-dashboard" && (

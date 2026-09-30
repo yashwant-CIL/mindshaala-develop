@@ -9,7 +9,10 @@ import {
   Target,
   Search,
   Layers,
-  Award
+  Award,
+  Check,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { SpeakAlongService } from '../../services/SpeakAlongService';
 import { useCourse } from '../../context/CourseContext';
@@ -39,7 +42,7 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
   const [chapters, setChapters] = useState<Chapter[]>([]);
   
   const [selectedSubject, setSelectedSubject] = useState<number | null>(null);
-  const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
+  const [selectedChapters, setSelectedChapters] = useState<number[]>([]);
 
   const [subjectSearch, setSubjectSearch] = useState('');
   const [chapterSearch, setChapterSearch] = useState('');
@@ -83,27 +86,42 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
 
   const handleSubjectSelect = (subjectId: number) => {
     setSelectedSubject(subjectId);
-    setSelectedChapter(null);
+    setSelectedChapters([]);
     setChapters([]);
     setChapterSearch('');
     fetchChapters(subjectId);
     setActiveStep(2); // Auto-advance to Step 2 on mobile/tablet
   };
 
+  const toggleChapter = (chapterId: number) => {
+    setSelectedChapters(prev => 
+      prev.includes(chapterId)
+        ? prev.filter(id => id !== chapterId)
+        : [...prev, chapterId]
+    );
+  };
+
+  const handleSelectAllChapters = () => {
+    if (selectedChapters.length === chapters.length) {
+      setSelectedChapters([]);
+    } else {
+      setSelectedChapters(chapters.map(c => c.chapter_id));
+    }
+  };
+
   const handleStart = () => {
     if (!selectedSubject) return;
     
     const subjectName = subjects.find(s => s.subject_id === selectedSubject)?.subject_name || '';
-    const chapterName = chapters.find(c => c.chapter_id === selectedChapter)?.chapter_name || '';
 
     const payload = {
       course_id: courseId,
       subject_id: selectedSubject,
-      chapter_id: selectedChapter || undefined, // Not compulsory
-      subjectName,
-      chapterName
+      chapter_ids: selectedChapters,
+      subjectName
     };
     
+    localStorage.removeItem('speakalong_active_session');
     unlockSpeech();
     onStartSession(payload);
   };
@@ -124,7 +142,7 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
             Choose Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">Practice Topic</span>
           </h1>
           <p className="text-slate-500 max-w-xl mx-auto text-[10px] sm:text-sm leading-relaxed hidden sm:block">
-            Select a subject and optionally a chapter to start your SpeakAlong session.
+            Select a subject and choose one or multiple chapters to start your SpeakAlong session.
           </p>
         </div>
       </div>
@@ -153,7 +171,7 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
                 : 'text-slate-300 cursor-not-allowed'
           }`}
         >
-          2. Chapter
+          2. Chapters ({selectedChapters.length})
         </button>
         <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
         <button
@@ -204,7 +222,7 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
                   <button
                     key={subject.subject_id}
                     onClick={() => handleSubjectSelect(subject.subject_id)}
-                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all duration-300 group ${
+                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all duration-300 group cursor-pointer ${
                       selectedSubject === subject.subject_id 
                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
                         : 'text-slate-600 hover:bg-slate-50 border border-transparent'
@@ -229,11 +247,21 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
           </div>
         </div>
 
-        {/* Step 2: Chapter Selection */}
+        {/* Step 2: Multiple Chapters Selection */}
         <div className={`space-y-2 sm:space-y-4 flex flex-col flex-1 h-full min-h-0 ${activeStep === 2 ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="flex items-center gap-3 px-1 shrink-0">
-             <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-purple-200">2</div>
-             <h2 className="text-base sm:text-lg font-bold text-slate-800">Select Chapter</h2>
+          <div className="flex items-center justify-between px-1 shrink-0">
+             <div className="flex items-center gap-3">
+               <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-purple-200">2</div>
+               <h2 className="text-base sm:text-lg font-bold text-slate-800">Select Chapters</h2>
+             </div>
+             {chapters.length > 0 && (
+               <button
+                 onClick={handleSelectAllChapters}
+                 className="text-xs font-bold text-purple-600 hover:text-purple-800 transition-colors cursor-pointer"
+               >
+                 {selectedChapters.length === chapters.length ? 'Deselect All' : 'Select All'}
+               </button>
+             )}
           </div>
           
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex-1 flex flex-col min-h-0">
@@ -259,34 +287,35 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
                         />
                      </div>
                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">Chapters (Optional)</span>
+                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          {selectedChapters.length} of {chapters.length} Selected
+                        </span>
                         {loading.chapters && <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-purple-600 shrink-0"></div>}
                      </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar min-h-0">
                      {chapters.length > 0 ? (
-                       chapters.filter(c => c.chapter_name.toLowerCase().includes(chapterSearch.toLowerCase())).map(chapter => (
-                         <button
-                           key={chapter.chapter_id}
-                           onClick={() => {
-                             setSelectedChapter(chapter.chapter_id);
-                             setActiveStep(3); // Auto-advance to Step 3 on mobile/tablet
-                           }}
-                           className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all duration-300 group ${
-                             selectedChapter === chapter.chapter_id 
-                               ? 'bg-purple-600 text-white shadow-lg shadow-purple-200' 
-                               : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-                           }`}
-                         >
-                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
-                             selectedChapter === chapter.chapter_id ? 'bg-white/20' : 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
-                           }`}>
-                             <Layers className="w-4 h-4" />
-                           </div>
-                           <span className="font-bold text-left flex-1 text-xs sm:text-sm leading-snug">{chapter.chapter_name}</span>
-                           <ChevronRight className={`w-3.5 h-3.5 transition-transform ${selectedChapter === chapter.chapter_id ? 'rotate-90' : 'group-hover:translate-x-1'}`} />
-                         </button>
-                       ))
+                       chapters.filter(c => c.chapter_name.toLowerCase().includes(chapterSearch.toLowerCase())).map(chapter => {
+                         const isSelected = selectedChapters.includes(chapter.chapter_id);
+                         return (
+                           <button
+                             key={chapter.chapter_id}
+                             onClick={() => toggleChapter(chapter.chapter_id)}
+                             className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all duration-300 group cursor-pointer ${
+                               isSelected 
+                                 ? 'bg-purple-600 text-white shadow-lg shadow-purple-200' 
+                                 : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+                             }`}
+                           >
+                             <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors shrink-0 ${
+                               isSelected ? 'bg-white text-purple-600' : 'bg-slate-100 text-slate-400 group-hover:bg-purple-100 group-hover:text-purple-600'
+                             }`}>
+                               {isSelected ? <Check className="w-4 h-4 font-bold" /> : <div className="w-2.5 h-2.5 rounded-xs border border-slate-300" />}
+                             </div>
+                             <span className="font-bold text-left flex-1 text-xs sm:text-sm leading-snug">{chapter.chapter_name}</span>
+                           </button>
+                         );
+                       })
                      ) : !loading.chapters && (
                        <div className="text-center py-12 px-4">
                          <Award className="w-8 h-8 text-slate-200 mx-auto mb-2" />
@@ -316,16 +345,27 @@ export default function SpeakAlongSelection({ onStartSession }: SelectionProps) 
             ) : (
               <div className="flex flex-col items-center justify-center h-full my-auto">
                 <h3 className="text-lg sm:text-2xl font-black text-slate-800 mb-1.5 shrink-0">Great Choice!</h3>
-                <div className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100 mb-4 sm:mb-6 w-full text-left shrink-0">
+                <div className="bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100 mb-4 sm:mb-6 w-full text-left shrink-0 max-h-48 overflow-y-auto">
                    <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5 sm:mb-2">Selection Summary</div>
-                   <div className="flex items-center gap-2 mb-1.5">
-                      <BookMarked className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                      <span className="text-xs font-bold text-slate-700 truncate">{subjects.find(s => s.subject_id === selectedSubject)?.subject_name}</span>
+                   <div className="flex items-center gap-2 mb-2">
+                      <BookMarked className="w-4 h-4 text-indigo-500 shrink-0" />
+                      <span className="text-xs font-bold text-slate-800">{subjects.find(s => s.subject_id === selectedSubject)?.subject_name}</span>
                    </div>
-                   {selectedChapter && (
-                     <div className="flex items-center gap-2">
-                        <Layers className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                        <span className="text-xs font-bold text-slate-700 truncate">{chapters.find(c => c.chapter_id === selectedChapter)?.chapter_name}</span>
+                   <div className="flex items-center gap-2 mb-1">
+                      <Layers className="w-4 h-4 text-purple-500 shrink-0" />
+                      <span className="text-xs font-bold text-slate-700">
+                        {selectedChapters.length > 0 
+                          ? `${selectedChapters.length} Chapter${selectedChapters.length > 1 ? 's' : ''} Selected` 
+                          : 'All Chapters (Default)'}
+                      </span>
+                   </div>
+                   {selectedChapters.length > 0 && (
+                     <div className="pl-6 flex flex-wrap gap-1 mt-1">
+                       {chapters.filter(c => selectedChapters.includes(c.chapter_id)).map(c => (
+                         <span key={c.chapter_id} className="text-[10px] bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded border border-purple-100">
+                           {c.chapter_name}
+                         </span>
+                       ))}
                      </div>
                    )}
                 </div>
