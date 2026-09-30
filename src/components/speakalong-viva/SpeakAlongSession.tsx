@@ -389,12 +389,14 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
           setRecordingAnswerState('submitted');
         }
       } else {
-        toast.error("Could not process audio answer. Please try again.");
+        const errMsg = data?.message || data?.detail || data?.error || "Could not process audio answer. Please try again.";
+        toast.error(errMsg);
         setRecordingAnswerState('recorded');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Submit audio error:", error);
-      toast.error("Failed to submit audio answer.");
+      const errMsg = error?.response?.data?.message || error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Failed to submit audio answer.";
+      toast.error(errMsg);
       setRecordingAnswerState('recorded');
     } finally {
       setIsTranscribing(false);
@@ -479,12 +481,14 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
           };
           localStorage.setItem('speakalong_active_session', JSON.stringify(sessionToCache));
         } else {
-          toast.error("No questions found for this session.");
+          const errMsg = data?.message || data?.detail || data?.error || "No questions found for this session.";
+          toast.error(errMsg);
           onExit();
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error starting session:", error);
-        toast.error("Failed to start session.");
+        const errMsg = error?.response?.data?.message || error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Failed to start Speak Along session.";
+        toast.error(errMsg);
         onExit();
       } finally {
         setLoading(false);
@@ -974,7 +978,6 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
 
   const handleEndSession = async () => {
     stopAllSpeech();
-    localStorage.removeItem('speakalong_active_session');
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (e) {}
     }
@@ -983,15 +986,27 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
     }
 
     if (sessionId) {
+      const toastId = toast.loading("Ending session...");
       try {
         console.log("Ending Speak Along session:", sessionId);
-        await SpeakAlongService.END_SPEAK_ALONG_SESSION({ session_id: Number(sessionId) });
-      } catch (error) {
+        const res = await SpeakAlongService.END_SPEAK_ALONG_SESSION({ session_id: Number(sessionId) });
+        console.log("End session API result:", res);
+        
+        toast.dismiss(toastId);
+        toast.success("Session ended successfully!");
+        localStorage.removeItem('speakalong_active_session');
+        onExit();
+      } catch (error: any) {
         console.error("Error ending session on backend:", error);
+        toast.dismiss(toastId);
+        const errMsg = error?.response?.data?.message || error?.response?.data?.detail || error?.response?.data?.error || error?.message || "Failed to end session. Please try again.";
+        toast.error(errMsg);
+        return;
       }
+    } else {
+      localStorage.removeItem('speakalong_active_session');
+      onExit();
     }
-
-    onExit();
   };
 
   const proceedToNextQuestion = async () => {
@@ -1633,14 +1648,14 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                 {/* User Feedback */}
                 {userTranscript && !isTranscribing && (
                    <div className="flex flex-col gap-3 max-w-2xl w-full mx-auto my-4">
-                      <div className="bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200 text-center">
+                      {/* <div className="bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200 text-center">
                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-center gap-2">
                             <Mic className="w-3.5 h-3.5 text-rose-500" /> Transcribed Speech:
                          </p>
                          <p className="text-base md:text-lg font-medium text-slate-700 italic">
                             "{userTranscript}"
                          </p>
-                      </div>
+                      </div> */}
 
                       {feedbackData && !isRecordingAnswerMode && (
                          <div className={`p-4 md:p-5 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-sm ${
