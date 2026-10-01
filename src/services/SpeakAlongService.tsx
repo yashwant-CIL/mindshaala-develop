@@ -107,8 +107,39 @@ export const SpeakAlongService = {
 
     GET_SPEAK_ALONG_NOTES: async (viva_q_id: number | string) => {
         try {
-            const response = await axiosMindShaalaClient.get(API_ENDPOINT.SPEAK_ALONG.SPEAK_ALONG_NOTES(viva_q_id));
-            console.log("SpeakAlong Notes", response.data);
+            const endpoint = API_ENDPOINT.SPEAK_ALONG.SPEAK_ALONG_NOTES(viva_q_id);
+            console.log("Fetching Speak Along notes from endpoint:", endpoint);
+
+            const response = await axiosMindShaalaClient.get(endpoint, {
+                responseType: 'blob'
+            });
+
+            const blob = response.data;
+            if (blob && blob instanceof Blob) {
+                // If content type is JSON, parse and return JSON object
+                const contentType = blob.type || '';
+                if (contentType.includes('application/json')) {
+                    const text = await blob.text();
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        return text;
+                    }
+                }
+
+                // Read text snippet to check if response is JSON text
+                const textSnippet = await blob.text();
+                const trimmed = textSnippet.trim();
+                if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                    try {
+                        return JSON.parse(trimmed);
+                    } catch (e) {}
+                }
+
+                // Return binary Blob directly for PDF or Image content
+                return blob;
+            }
+
             return response.data;
         } catch (error) {
             console.error("Error fetching Speak Along notes:", error);
