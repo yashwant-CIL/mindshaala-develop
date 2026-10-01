@@ -25,6 +25,7 @@ import Cookies from 'js-cookie';
 import { SpeakAlongService } from '../../services/SpeakAlongService';
 import QuestionMathJax from '../../shared/mathjaxconfig/QuestionMathJax';
 import { speakText } from '../../utils/ttsHelper';
+import NotesViewer from '../../components/notes/NotesViewer';
 
 
 interface SpeakAlongSessionProps {
@@ -147,43 +148,81 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       console.log("Speak Along Notes response data:", data);
       setNotesData(data);
 
-      const responseMessage = data?.message || data?.data?.message || data?.detail || (typeof data === 'string' ? data : '');
-      if (responseMessage && String(responseMessage).toLowerCase().includes("no notes")) {
-        setNotesError("No notes available for this question");
+      let candidateUrl: string | null = null;
+
+      // 1. If binary Blob returned
+      if (data instanceof Blob) {
+        candidateUrl = URL.createObjectURL(data);
       }
-
-      const urlCandidate = 
-        data?.pdf_url || 
-        data?.notes_pdf || 
-        data?.pdf || 
-        data?.notes_url || 
-        data?.url || 
-        data?.data?.pdf_url || 
-        data?.data?.notes_pdf || 
-        data?.data?.url || 
-        (typeof data === 'string' && (data.includes('.pdf') || data.startsWith('http')) ? data : null);
-
-      if (urlCandidate) {
-        let fullPdfUrl = String(urlCandidate).trim();
-        if (!fullPdfUrl.startsWith('http://') && !fullPdfUrl.startsWith('https://') && !fullPdfUrl.startsWith('data:')) {
-          const baseUrl = import.meta.env.VITE_MINDSHAALA_API_URL || import.meta.env.VITE_API_URL || '';
-          fullPdfUrl = `${baseUrl}/api/v1/cil/images/${fullPdfUrl.replace(/^\/+/, '')}`;
+      // 2. If raw string (URL, relative path, or Base64) returned
+      else if (typeof data === 'string' && data.trim().length > 0) {
+        let str = data.trim();
+        if (str.startsWith('JVBERi0')) {
+          candidateUrl = `data:application/pdf;base64,${str}`;
+        } else if (str.startsWith('iVBORw0KGgo')) {
+          candidateUrl = `data:image/png;base64,${str}`;
+        } else if (str.startsWith('/9j/')) {
+          candidateUrl = `data:image/jpeg;base64,${str}`;
+        } else if (str.startsWith('UklGR')) {
+          candidateUrl = `data:image/webp;base64,${str}`;
+        } else {
+          candidateUrl = str;
         }
-        setPdfUrl(fullPdfUrl);
+      }
+      // 3. If JSON object returned
+      else if (typeof data === 'object' && data !== null) {
+        if (
+          data.status === false || 
+          data.success === false || 
+          data.code === 404 || 
+          data.status === 404
+        ) {
+          const errMsg = data.message || data.error || data.detail || "No notes available for this question.";
+          setNotesError(errMsg);
+          return;
+        }
+
+        const extractUrl = (obj: any): string | null => {
+          if (!obj || typeof obj !== 'object') return null;
+          const fields = [
+            'pdf_url', 'notes_pdf', 'pdf', 'file_url', 'url', 'file', 'path', 
+            'notes_url', 'image_url', 'image', 'download_url', 'document_url'
+          ];
+          for (const f of fields) {
+            if (obj[f] && typeof obj[f] === 'string' && obj[f].trim().length > 0) {
+              let val = obj[f].trim();
+              if (val.startsWith('JVBERi0')) return `data:application/pdf;base64,${val}`;
+              if (val.startsWith('iVBORw0KGgo')) return `data:image/png;base64,${val}`;
+              if (val.startsWith('/9j/')) return `data:image/jpeg;base64,${val}`;
+              if (val.startsWith('UklGR')) return `data:image/webp;base64,${val}`;
+              return val;
+            }
+          }
+          return null;
+        };
+
+        candidateUrl = 
+          extractUrl(data) ||
+          extractUrl(data.data) ||
+          (Array.isArray(data.data) && extractUrl(data.data[0])) ||
+          (Array.isArray(data) && extractUrl(data[0])) ||
+          null;
+
+        const textCandidate = 
+          data?.note_text || 
+          data?.notes_text || 
+          data?.text || 
+          data?.description || 
+          data?.content || 
+          data?.data?.note_text || 
+          '';
+
+        setNotesText(textCandidate);
       }
 
-      const textCandidate = 
-        data?.note_text || 
-        data?.notes_text || 
-        data?.text || 
-        data?.description || 
-        data?.content || 
-        data?.data?.note_text || 
-        '';
-
-      setNotesText(textCandidate);
-
-      if (!urlCandidate && !textCandidate && getNoteImages().length === 0) {
+      if (candidateUrl) {
+        setPdfUrl(candidateUrl);
+      } else if (!notesText && getNoteImages().length === 0) {
         setNotesError("No notes available for this question");
       }
     } catch (error: any) {
@@ -1638,12 +1677,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                 </div>
 
                 {/* Loading state during Speech to Text API request */}
-                {isTranscribing && (
+                {/* {isTranscribing && (
                    <div className="bg-indigo-50/80 p-5 rounded-2xl border border-indigo-200/60 text-center mx-auto max-w-2xl w-full flex items-center justify-center gap-3 my-4">
                       <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
                       <span className="text-sm font-bold text-indigo-700">Submitting audio & processing response...</span>
                    </div>
-                )}
+                )} */}
 
                 {/* User Feedback */}
                 {userTranscript && !isTranscribing && (
@@ -1821,205 +1860,190 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
         </div>
       )}
 
-      {/* Right-Side Slide-Over Notes Panel */}
+      {/* Right-Side Slide-Over Notes Panel / DRM NotesViewer */}
       {showNotesPanel && (
-        <div 
-          className="fixed inset-0 z-50 overflow-hidden select-none"
-          onContextMenu={(e) => e.preventDefault()}
-          onCopy={(e) => e.preventDefault()}
-        >
-          {/* Backdrop Overlay */}
-          <div 
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
-            onClick={() => {
+        pdfUrl ? (
+          <NotesViewer 
+            pdfUrl={pdfUrl}
+            chapterTitle={`Speak Along Viva - Question #${currentQuestionIdx + 1}`}
+            subjectName={subjectName || 'Viva Notes'}
+            onBack={() => {
               stopAllSpeech();
               setIsSpeakingNotes(false);
               setShowNotesPanel(false);
             }}
           />
+        ) : (
+          <div 
+            className="fixed inset-0 z-50 overflow-hidden select-none"
+            onContextMenu={(e) => e.preventDefault()}
+            onCopy={(e) => e.preventDefault()}
+          >
+            {/* Backdrop Overlay */}
+            <div 
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
+              onClick={() => {
+                stopAllSpeech();
+                setIsSpeakingNotes(false);
+                setShowNotesPanel(false);
+              }}
+            />
 
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
-            <div className="w-screen max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300 relative">
-              
-              {/* Anti-Screenshot Overlay Blur */}
-              {isPrivacyBlurred && (
-                <div className="absolute inset-0 z-50 bg-slate-900/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
-                    <AlertCircle className="w-8 h-8" />
+            <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
+              <div className="w-screen max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300 relative">
+                
+                {/* Anti-Screenshot Overlay Blur */}
+                {isPrivacyBlurred && (
+                  <div className="absolute inset-0 z-50 bg-slate-900/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
+                    <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                      <AlertCircle className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-xl font-bold">Content Protected</h4>
+                    <p className="text-sm text-slate-300 max-w-sm">
+                      Screenshots, text selection, and screen capturing are prohibited for copyright and study material security.
+                    </p>
+                    <button
+                      onClick={() => setIsPrivacyBlurred(false)}
+                      className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                    >
+                      Resume Viewing
+                    </button>
                   </div>
-                  <h4 className="text-xl font-bold">Content Protected</h4>
-                  <p className="text-sm text-slate-300 max-w-sm">
-                    Screenshots, text selection, and screen capturing are prohibited for copyright and study material security.
-                  </p>
-                  <button
-                    onClick={() => setIsPrivacyBlurred(false)}
-                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
-                  >
-                    Resume Viewing
-                  </button>
+                )}
+
+                {/* Panel Header */}
+                <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-slate-900 text-white flex items-center justify-between shadow-md shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
+                        Study Notes & Concept Reference
+                      </h3>
+                      <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Question {currentQuestionIdx + 1} of {questions.length}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {/* Speaker TTS Button */}
+                    <button
+                      onClick={handleSpeakNotes}
+                      title={isSpeakingNotes ? "Stop Reading Notes" : "Read Notes Aloud"}
+                      className={`px-3 py-1.5 sm:px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border cursor-pointer active:scale-95 ${
+                        isSpeakingNotes
+                          ? 'bg-amber-500 text-white border-amber-400 animate-pulse'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-500'
+                      }`}
+                    >
+                      <Volume2 className="w-4 h-4" />
+                      <span>{isSpeakingNotes ? 'Stop Speech' : 'Read Notes'}</span>
+                    </button>
+
+                    {/* Hide Notes Button */}
+                    <button
+                      onClick={() => {
+                        stopAllSpeech();
+                        setIsSpeakingNotes(false);
+                        setShowNotesPanel(false);
+                      }}
+                      className="px-3 py-1.5 sm:px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer active:scale-95"
+                    >
+                      <X className="w-4 h-4" />
+                      <span className="hidden sm:inline">Close</span>
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              {/* Panel Header */}
-              <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-slate-900 text-white flex items-center justify-between shadow-md shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                    <BookOpen className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
-                      Study Notes & PDF Reference
-                    </h3>
-                    <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Question {currentQuestionIdx + 1} of {questions.length}</p>
-                  </div>
+                {/* Panel Content Body */}
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50 relative select-none">
+                  {fetchingNotes ? (
+                    <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+                      <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+                      <p className="text-sm font-bold text-slate-600">Loading protected study notes...</p>
+                    </div>
+                  ) : notesError || (!notesText && getNoteImages().length === 0) ? (
+                    <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center my-auto space-y-4 animate-in fade-in duration-300">
+                      <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
+                        <BookOpen className="w-8 h-8" />
+                      </div>
+                      
+                      <div className="space-y-1.5 max-w-sm">
+                        <span className="text-[10px] font-black uppercase tracking-widest bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 inline-block">
+                          Content Under Preparation
+                        </span>
+                        <h4 className="text-lg font-bold text-slate-800 pt-2">No Notes Available For This Question</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                          Our academic team is currently preparing study notes and visual references for this question. We are working on it, and it will be available soon.
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl w-full text-xs text-slate-600 font-medium flex items-center gap-2.5 justify-center">
+                        <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                        <span>Thank you for your patience as we enhance our learning resources.</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {notesText && (
+                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                          <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/60 text-xs font-semibold">
+                            <Sparkles className="w-4 h-4 shrink-0 text-indigo-600" />
+                            <span>Study Notes & Concept Breakdown</span>
+                          </div>
+                          <div className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
+                            <QuestionMathJax content={notesText} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Note Images if available */}
+                      {getNoteImages().length > 0 && (
+                        <div className="space-y-3 pt-2">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                            <ImageIcon className="w-4 h-4 text-indigo-600" />
+                            <span>Note Diagrams & Images</span>
+                          </h4>
+                          <div className="grid grid-cols-1 gap-4">
+                            {getNoteImages().map((imgUrl, idx) => (
+                              <div key={idx} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                                <div className="p-2 bg-slate-100 flex items-center justify-center relative">
+                                  <div className="absolute inset-0 bg-transparent z-10" />
+                                  <img 
+                                    src={imgUrl} 
+                                    alt={`Note diagram ${idx + 1}`} 
+                                    className="w-full h-auto object-contain max-h-[350px] rounded-lg"
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* Speaker TTS Button */}
-                  <button
-                    onClick={handleSpeakNotes}
-                    title={isSpeakingNotes ? "Stop Reading Notes" : "Read Notes Aloud"}
-                    className={`px-3 py-1.5 sm:px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border cursor-pointer active:scale-95 ${
-                      isSpeakingNotes
-                        ? 'bg-amber-500 text-white border-amber-400 animate-pulse'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-500'
-                    }`}
-                  >
-                    <Volume2 className="w-4 h-4" />
-                    <span>{isSpeakingNotes ? 'Stop Speech' : 'Read Notes'}</span>
-                  </button>
-
-                  {/* Hide Notes Button */}
+                {/* Panel Footer */}
+                <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
+                  <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Protected Content • Downloading and text copy disabled</p>
                   <button
                     onClick={() => {
                       stopAllSpeech();
                       setIsSpeakingNotes(false);
                       setShowNotesPanel(false);
                     }}
-                    className="px-3 py-1.5 sm:px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer active:scale-95"
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
                   >
-                    <X className="w-4 h-4" />
-                    <span className="hidden sm:inline">Close</span>
+                    <X className="w-3.5 h-3.5" />
+                    <span>Close</span>
                   </button>
                 </div>
+
               </div>
-
-              {/* Panel Content Body */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50 relative select-none">
-                {fetchingNotes ? (
-                  <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-                    <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-                    <p className="text-sm font-bold text-slate-600">Loading protected study notes PDF...</p>
-                  </div>
-                ) : notesError || (!pdfUrl && !notesText && getNoteImages().length === 0) ? (
-                  <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center my-auto space-y-4 animate-in fade-in duration-300">
-                    <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
-                      <BookOpen className="w-8 h-8" />
-                    </div>
-                    
-                    <div className="space-y-1.5 max-w-sm">
-                      <span className="text-[10px] font-black uppercase tracking-widest bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 inline-block">
-                        Content Under Preparation
-                      </span>
-                      <h4 className="text-lg font-bold text-slate-800 pt-2">No Notes Available For This Question</h4>
-                      <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                        Our academic team is currently preparing study notes and visual references for this question. We are working on it, and it will be available soon.
-                      </p>
-                    </div>
-
-                    <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl w-full text-xs text-slate-600 font-medium flex items-center gap-2.5 justify-center">
-                      <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
-                      <span>Thank you for your patience as we enhance our learning resources.</span>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* PDF Protected Viewer Section */}
-                    {pdfUrl ? (
-                      <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden flex flex-col relative">
-                        <div className="bg-slate-100 p-3 border-b border-slate-200 flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-indigo-600" /> Secure PDF Notes Viewer
-                          </span>
-                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-0.5 rounded-full">
-                            DRM Protected
-                          </span>
-                        </div>
-
-                        <div className="relative w-full h-[60vh] sm:h-[70vh] bg-slate-900 overflow-hidden">
-                          {/* Transparent Security Shield Overlay over PDF */}
-                          <div 
-                            className="absolute inset-0 z-10 bg-transparent cursor-default"
-                            onContextMenu={(e) => e.preventDefault()}
-                            onDragStart={(e) => e.preventDefault()}
-                          />
-                          
-                          {/* Embedded PDF iframe with toolbar disabled */}
-                          <iframe
-                            src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                            className="w-full h-full border-none pointer-events-auto"
-                            title="Study Notes PDF"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                        <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/60 text-xs font-semibold">
-                          <Sparkles className="w-4 h-4 shrink-0 text-indigo-600" />
-                          <span>Study Notes & Concept Breakdown</span>
-                        </div>
-                        <div className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
-                          <QuestionMathJax content={notesText} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Note Images if available */}
-                    {getNoteImages().length > 0 && (
-                      <div className="space-y-3 pt-2">
-                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                          <ImageIcon className="w-4 h-4 text-indigo-600" />
-                          <span>Note Diagrams & Images</span>
-                        </h4>
-                        <div className="grid grid-cols-1 gap-4">
-                          {getNoteImages().map((imgUrl, idx) => (
-                            <div key={idx} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                              <div className="p-2 bg-slate-100 flex items-center justify-center relative">
-                                <div className="absolute inset-0 bg-transparent z-10" />
-                                <img 
-                                  src={imgUrl} 
-                                  alt={`Note diagram ${idx + 1}`} 
-                                  className="w-full h-auto object-contain max-h-[350px] rounded-lg"
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* Panel Footer */}
-              <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
-                <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Protected Content • Downloading and text copy disabled</p>
-                <button
-                  onClick={() => {
-                    stopAllSpeech();
-                    setIsSpeakingNotes(false);
-                    setShowNotesPanel(false);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Close</span>
-                </button>
-              </div>
-
             </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Fullscreen Note Image Zoom Modal */}
