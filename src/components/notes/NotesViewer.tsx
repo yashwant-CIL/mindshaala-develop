@@ -50,9 +50,10 @@ interface NotesViewerProps {
   chapterTitle: string;
   subjectName?: string;
   onBack: () => void;
+  inline?: boolean;
 }
 
-export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subject', onBack }: NotesViewerProps) {
+export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subject', onBack, inline = false }: NotesViewerProps) {
   // User info for security watermark
   const userId = localStorage.getItem('user_id') || Cookies.get('user_id') || '100117';
   const userName = localStorage.getItem('username') || 'MindShaala Student';
@@ -454,7 +455,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
 
   const handleExitViewer = async () => {
     try {
-      if (document.fullscreenElement) {
+      if (!inline && document.fullscreenElement) {
         await document.exitFullscreen?.();
       }
     } catch(e) {}
@@ -462,7 +463,10 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden w-screen h-screen">
+    <div className={inline 
+      ? "relative w-full h-[650px] min-h-[500px] bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden rounded-2xl md:rounded-[2rem] border border-slate-800 shadow-xl"
+      : "fixed inset-0 z-[9999] bg-slate-950 text-white flex flex-col font-sans select-none overflow-hidden w-screen h-screen"
+    }>
       
       {/* Dynamic CSS for Print Protection & Text Selection Block */}
       <style>{`
@@ -498,7 +502,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
             className="p-2 sm:px-3 sm:py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all flex items-center gap-2 font-bold text-xs cursor-pointer active:scale-95"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Back to Chapters</span>
+            <span className="hidden sm:inline">Back</span>
           </button>
 
           <div>
@@ -613,31 +617,39 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
             </div>
           </div>
         ) : mediaType === 'image' && resolvedUrl ? (
-          <div className="relative w-full h-full bg-slate-950 rounded-xl shadow-2xl border border-slate-800 overflow-auto flex items-center justify-center p-2">
-            <img
-              src={resolvedUrl}
-              alt={chapterTitle}
-              style={{ transform: `scale(${imageZoom})`, transformOrigin: 'center center', transition: 'transform 0.2s ease-out' }}
-              className="max-w-full max-h-full object-contain pointer-events-auto shadow-2xl rounded select-none"
-              onContextMenu={(e) => e.preventDefault()}
-              onDragStart={(e) => e.preventDefault()}
-            />
+          <div className="relative w-full h-full bg-slate-950 rounded-xl shadow-2xl border border-slate-800 flex flex-col items-center justify-between overflow-hidden p-1 sm:p-3 min-h-0">
+            <div className="flex-1 w-full h-full overflow-auto flex items-center justify-center p-2 sm:p-4 min-h-0">
+              <div className="my-auto flex items-center justify-center min-w-min min-h-min p-2">
+                <img
+                  src={resolvedUrl}
+                  alt={chapterTitle}
+                  style={{ 
+                    width: `${imageZoom * 100}%`, 
+                    maxWidth: 'none', 
+                    transition: 'width 0.2s ease-out' 
+                  }}
+                  className="object-contain pointer-events-auto shadow-2xl rounded select-none"
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                />
+              </div>
+            </div>
 
             {/* Image Zoom Controls */}
-            <div className="absolute bottom-4 right-4 z-40 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl p-1.5 flex items-center gap-2 shadow-xl">
+            <div className="z-40 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 flex items-center justify-center gap-2 shadow-2xl shrink-0 mt-2">
               <button
-                onClick={() => setImageZoom(prev => Math.max(0.5, prev - 0.25))}
+                onClick={() => setImageZoom(prev => Math.max(0.5, parseFloat((prev - 0.25).toFixed(2))))}
                 disabled={imageZoom <= 0.5}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95 transition-all"
                 title="Zoom Out"
               >
                 <ZoomOut className="w-4 h-4" />
               </button>
-              <span className="text-xs font-mono font-bold text-slate-300 w-12 text-center">{Math.round(imageZoom * 100)}%</span>
+              <span className="text-xs font-mono font-bold text-slate-300 w-12 text-center select-none">{Math.round(imageZoom * 100)}%</span>
               <button
-                onClick={() => setImageZoom(prev => Math.min(3.0, prev + 0.25))}
+                onClick={() => setImageZoom(prev => Math.min(3.0, parseFloat((prev + 0.25).toFixed(2))))}
                 disabled={imageZoom >= 3.0}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95 transition-all"
                 title="Zoom In"
               >
                 <ZoomIn className="w-4 h-4" />
@@ -645,7 +657,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
               <button
                 onClick={() => setImageZoom(1.0)}
                 disabled={imageZoom === 1.0}
-                className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-bold cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-bold cursor-pointer active:scale-95 transition-all"
                 title="Reset Zoom"
               >
                 Reset
@@ -656,43 +668,46 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
           /* ========================================================================= */
           /* CUSTOM PDF CANVAS RENDERER (NO PRINT/DOWNLOAD, NO FILENAME, NO DRM BLUR) */
           /* ========================================================================= */
-          <div className="relative w-full h-full bg-slate-950 rounded-xl shadow-2xl border border-slate-800 flex flex-col items-center justify-between overflow-hidden p-1 sm:p-3">
+          <div className="relative w-full h-full bg-slate-950 rounded-xl shadow-2xl border border-slate-800 flex flex-col items-center justify-between overflow-hidden p-1 sm:p-3 min-h-0">
             
             {/* Scrollable Canvas Viewport */}
-            <div className="flex-1 w-full h-full overflow-auto flex flex-col items-center p-2 sm:p-4 relative">
+            <div className="flex-1 w-full h-full overflow-auto flex flex-col items-center p-2 sm:p-4 relative min-h-0">
               {isPdfRendering && (
                 <div className="absolute inset-0 z-30 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center">
                   <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
                 </div>
               )}
-              <canvas 
-                ref={canvasRef} 
-                className="shadow-2xl rounded border border-slate-800 select-none pointer-events-auto my-auto max-w-full"
-                onContextMenu={(e) => e.preventDefault()}
-                onDragStart={(e) => e.preventDefault()}
-              />
+              <div className="my-auto flex items-center justify-center min-w-min min-h-min p-2">
+                <canvas 
+                  ref={canvasRef} 
+                  className="shadow-2xl rounded border border-slate-800 select-none pointer-events-auto"
+                  style={{ maxWidth: 'none' }}
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
+                />
+              </div>
             </div>
 
             {/* Custom PDF Controls Bar: Page Navigation & Zoom (NO Print, NO Download, NO Filename) */}
-            <div className="z-40 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl px-4 py-2 flex flex-wrap items-center justify-between gap-3 shadow-2xl shrink-0 max-w-xl w-full mt-2">
+            <div className="z-40 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-3 shadow-2xl shrink-0 max-w-xl w-full mt-2">
               
               {/* Page Selector Controls */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                   disabled={currentPage <= 1 || isPdfRendering}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95 transition-all"
                   title="Previous Page"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-xs font-bold font-mono text-slate-300">
-                  Page <span className="text-indigo-400">{currentPage}</span> of {numPages}
+                <span className="text-xs font-bold font-mono text-slate-300 whitespace-nowrap">
+                  Page <span className="text-indigo-400">{currentPage}</span> / {numPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(numPages, prev + 1))}
                   disabled={currentPage >= numPages || isPdfRendering}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95 transition-all"
                   title="Next Page"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -700,22 +715,22 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
               </div>
 
               {/* Custom Zoom Controls */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
-                  onClick={() => setPdfScale(prev => Math.max(0.6, prev - 0.2))}
-                  disabled={pdfScale <= 0.6 || isPdfRendering}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95"
+                  onClick={() => setPdfScale(prev => Math.max(0.5, parseFloat((prev - 0.2).toFixed(1))))}
+                  disabled={pdfScale <= 0.5 || isPdfRendering}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95 transition-all"
                   title="Zoom Out"
                 >
                   <ZoomOut className="w-4 h-4" />
                 </button>
-                <span className="text-xs font-mono font-bold text-slate-300 w-12 text-center">
+                <span className="text-xs font-mono font-bold text-slate-300 w-12 text-center select-none">
                   {Math.round(pdfScale * 100)}%
                 </span>
                 <button
-                  onClick={() => setPdfScale(prev => Math.min(3.0, prev + 0.2))}
+                  onClick={() => setPdfScale(prev => Math.min(3.0, parseFloat((prev + 0.2).toFixed(1))))}
                   disabled={pdfScale >= 3.0 || isPdfRendering}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95"
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 cursor-pointer active:scale-95 transition-all"
                   title="Zoom In"
                 >
                   <ZoomIn className="w-4 h-4" />
@@ -723,7 +738,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
                 <button
                   onClick={() => setPdfScale(1.0)}
                   disabled={pdfScale === 1.0 || isPdfRendering}
-                  className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-bold cursor-pointer active:scale-95"
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 text-xs font-bold cursor-pointer active:scale-95 transition-all"
                   title="Reset Zoom"
                 >
                   Reset

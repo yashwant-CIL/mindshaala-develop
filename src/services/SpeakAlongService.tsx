@@ -94,9 +94,9 @@ export const SpeakAlongService = {
         }
     },
 
-    END_SPEAK_ALONG_SESSION: async (payload: any) => {
+    END_SPEAK_ALONG_SESSION: async (session_id: number) => {
         try {
-            const response = await axiosMindShaalaClient.post(API_ENDPOINT.SPEAK_ALONG.END_SPEAK_ALONG_SESSION, payload);
+            const response = await axiosMindShaalaClient.post(API_ENDPOINT.SPEAK_ALONG.END_SPEAK_ALONG_SESSION(session_id));
             console.log("SpeakAlong End-Session", response.data);
             return response.data;
         } catch (error) {

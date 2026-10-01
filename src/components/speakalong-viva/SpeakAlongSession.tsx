@@ -127,6 +127,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
   }, [showNotesPanel]);
 
   const handleOpenNotes = async () => {
+    if (showNotesPanel) {
+      stopAllSpeech();
+      setIsSpeakingNotes(false);
+      setShowNotesPanel(false);
+      return;
+    }
     setShowNotesPanel(true);
     const q = questions?.[currentQuestionIdx];
     const vivaQId = q?.viva_q_id || q?.question_id || q?.id;
@@ -1028,7 +1034,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       const toastId = toast.loading("Ending session...");
       try {
         console.log("Ending Speak Along session:", sessionId);
-        const res = await SpeakAlongService.END_SPEAK_ALONG_SESSION({ session_id: Number(sessionId) });
+        const res = await SpeakAlongService.END_SPEAK_ALONG_SESSION(Number(sessionId));
         console.log("End session API result:", res);
         
         toast.dismiss(toastId);
@@ -1159,12 +1165,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-3 md:p-8 flex flex-col pb-24 lg:pb-8">
+      <main className={`flex-1 ${showNotesPanel ? 'max-w-full' : 'max-w-5xl'} w-full mx-auto p-3 md:p-8 flex flex-col pb-24 lg:pb-8 transition-all duration-300`}>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-start">
             
             {/* Left Column: Question & Target */}
-            <div className="lg:col-span-12 flex flex-col gap-3 md:gap-4">
+            <div className={`${showNotesPanel ? 'lg:col-span-6 order-2 lg:order-1' : 'lg:col-span-12'} flex flex-col gap-3 md:gap-4 transition-all duration-300`}>
 
                 {/* Question Counter & AI Speed Control on Same Line */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
@@ -1236,10 +1242,14 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                       <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-start sm:justify-end shrink-0">
                         <button
                           onClick={handleOpenNotes}
-                          className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80 text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 whitespace-nowrap"
+                          className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 whitespace-nowrap ${
+                            showNotesPanel
+                              ? 'bg-purple-600 text-white border border-purple-600 hover:bg-purple-700'
+                              : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80'
+                          }`}
                         >
-                          <BookOpen className="w-4 h-4 text-purple-600" />
-                          <span>View Notes</span>
+                          <BookOpen className="w-4 h-4" />
+                          <span>{showNotesPanel ? 'Hide Notes' : 'View Notes'}</span>
                         </button>
 
                         <button
@@ -1740,6 +1750,179 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                    </div>
                 )}
             </div>
+
+            {/* Right Column: Embedded Notes Panel (Inline in Same Screen Section) */}
+            {showNotesPanel && (
+              <div className="lg:col-span-6 order-1 lg:order-2 flex flex-col gap-3 md:gap-4 sticky top-20 w-full animate-in fade-in slide-in-from-right duration-300">
+                {pdfUrl ? (
+                  <NotesViewer 
+                    pdfUrl={pdfUrl}
+                    chapterTitle={`Speak Along Viva - Question #${currentQuestionIdx + 1}`}
+                    subjectName={subjectName || 'Viva Notes'}
+                    inline={true}
+                    onBack={() => {
+                      stopAllSpeech();
+                      setIsSpeakingNotes(false);
+                      setShowNotesPanel(false);
+                    }}
+                  />
+                ) : (
+                  <div 
+                    className="bg-white rounded-2xl md:rounded-[2rem] border border-slate-200 shadow-lg flex flex-col overflow-hidden relative select-none min-h-[500px]"
+                    onContextMenu={(e) => e.preventDefault()}
+                    onCopy={(e) => e.preventDefault()}
+                  >
+                    {/* Anti-Screenshot Overlay Blur */}
+                    {isPrivacyBlurred && (
+                      <div className="absolute inset-0 z-50 bg-slate-900/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                          <AlertCircle className="w-8 h-8" />
+                        </div>
+                        <h4 className="text-xl font-bold">Content Protected</h4>
+                        <p className="text-sm text-slate-300 max-w-sm">
+                          Screenshots, text selection, and screen capturing are prohibited for copyright and study material security.
+                        </p>
+                        <button
+                          onClick={() => setIsPrivacyBlurred(false)}
+                          className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                        >
+                          Resume Viewing
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Panel Header */}
+                    <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-slate-900 text-white flex items-center justify-between shadow-md shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                          <BookOpen className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
+                            Study Notes & Reference
+                          </h3>
+                          <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Question {currentQuestionIdx + 1} of {questions.length}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Speaker TTS Button */}
+                        <button
+                          onClick={handleSpeakNotes}
+                          title={isSpeakingNotes ? "Stop Reading Notes" : "Read Notes Aloud"}
+                          className={`px-3 py-1.5 sm:px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border cursor-pointer active:scale-95 ${
+                            isSpeakingNotes
+                              ? 'bg-amber-500 text-white border-amber-400 animate-pulse'
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-500'
+                          }`}
+                        >
+                          <Volume2 className="w-4 h-4" />
+                          <span>{isSpeakingNotes ? 'Stop' : 'Read'}</span>
+                        </button>
+
+                        {/* Hide Notes Button */}
+                        <button
+                          onClick={() => {
+                            stopAllSpeech();
+                            setIsSpeakingNotes(false);
+                            setShowNotesPanel(false);
+                          }}
+                          className="px-3 py-1.5 sm:px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer active:scale-95"
+                        >
+                          <X className="w-4 h-4" />
+                          <span className="hidden sm:inline">Close</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Panel Content Body */}
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50 relative select-none max-h-[600px]">
+                      {fetchingNotes ? (
+                        <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+                          <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+                          <p className="text-sm font-bold text-slate-600">Loading protected study notes...</p>
+                        </div>
+                      ) : notesError || (!notesText && getNoteImages().length === 0) ? (
+                        <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center my-auto space-y-4 animate-in fade-in duration-300">
+                          <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
+                            <BookOpen className="w-8 h-8" />
+                          </div>
+                          
+                          <div className="space-y-1.5 max-w-sm">
+                            <span className="text-[10px] font-black uppercase tracking-widest bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 inline-block">
+                              Content Under Preparation
+                            </span>
+                            <h4 className="text-lg font-bold text-slate-800 pt-2">No Notes Available For This Question</h4>
+                            <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                              Our academic team is currently preparing study notes and visual references for this question. We are working on it, and it will be available soon.
+                            </p>
+                          </div>
+
+                          <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl w-full text-xs text-slate-600 font-medium flex items-center gap-2.5 justify-center">
+                            <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                            <span>Thank you for your patience as we enhance our learning resources.</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {notesText && (
+                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                              <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/60 text-xs font-semibold">
+                                <Sparkles className="w-4 h-4 shrink-0 text-indigo-600" />
+                                <span>Study Notes & Concept Breakdown</span>
+                              </div>
+                              <div className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
+                                <QuestionMathJax content={notesText} />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Note Images if available */}
+                          {getNoteImages().length > 0 && (
+                            <div className="space-y-3 pt-2">
+                              <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                <ImageIcon className="w-4 h-4 text-indigo-600" />
+                                <span>Note Diagrams & Images</span>
+                              </h4>
+                              <div className="grid grid-cols-1 gap-4">
+                                {getNoteImages().map((imgUrl, idx) => (
+                                  <div key={idx} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+                                    <div className="p-2 bg-slate-100 flex items-center justify-center relative">
+                                      <div className="absolute inset-0 bg-transparent z-10" />
+                                      <img 
+                                        src={imgUrl} 
+                                        alt={`Note diagram ${idx + 1}`} 
+                                        className="w-full h-auto object-contain max-h-[350px] rounded-lg"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Panel Footer */}
+                    <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
+                      <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Protected Content • Downloading disabled</p>
+                      <button
+                        onClick={() => {
+                          stopAllSpeech();
+                          setIsSpeakingNotes(false);
+                          setShowNotesPanel(false);
+                        }}
+                        className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Close</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
         </div>
       </main>
 
@@ -1860,191 +2043,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
         </div>
       )}
 
-      {/* Right-Side Slide-Over Notes Panel / DRM NotesViewer */}
-      {showNotesPanel && (
-        pdfUrl ? (
-          <NotesViewer 
-            pdfUrl={pdfUrl}
-            chapterTitle={`Speak Along Viva - Question #${currentQuestionIdx + 1}`}
-            subjectName={subjectName || 'Viva Notes'}
-            onBack={() => {
-              stopAllSpeech();
-              setIsSpeakingNotes(false);
-              setShowNotesPanel(false);
-            }}
-          />
-        ) : (
-          <div 
-            className="fixed inset-0 z-50 overflow-hidden select-none"
-            onContextMenu={(e) => e.preventDefault()}
-            onCopy={(e) => e.preventDefault()}
-          >
-            {/* Backdrop Overlay */}
-            <div 
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity animate-in fade-in duration-300"
-              onClick={() => {
-                stopAllSpeech();
-                setIsSpeakingNotes(false);
-                setShowNotesPanel(false);
-              }}
-            />
 
-            <div className="fixed inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
-              <div className="w-screen max-w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl bg-white shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300 relative">
-                
-                {/* Anti-Screenshot Overlay Blur */}
-                {isPrivacyBlurred && (
-                  <div className="absolute inset-0 z-50 bg-slate-900/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
-                    <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
-                      <AlertCircle className="w-8 h-8" />
-                    </div>
-                    <h4 className="text-xl font-bold">Content Protected</h4>
-                    <p className="text-sm text-slate-300 max-w-sm">
-                      Screenshots, text selection, and screen capturing are prohibited for copyright and study material security.
-                    </p>
-                    <button
-                      onClick={() => setIsPrivacyBlurred(false)}
-                      className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
-                    >
-                      Resume Viewing
-                    </button>
-                  </div>
-                )}
-
-                {/* Panel Header */}
-                <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-slate-900 text-white flex items-center justify-between shadow-md shrink-0">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                      <BookOpen className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-2">
-                        Study Notes & Concept Reference
-                      </h3>
-                      <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Question {currentQuestionIdx + 1} of {questions.length}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Speaker TTS Button */}
-                    <button
-                      onClick={handleSpeakNotes}
-                      title={isSpeakingNotes ? "Stop Reading Notes" : "Read Notes Aloud"}
-                      className={`px-3 py-1.5 sm:px-3.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border cursor-pointer active:scale-95 ${
-                        isSpeakingNotes
-                          ? 'bg-amber-500 text-white border-amber-400 animate-pulse'
-                          : 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-500'
-                      }`}
-                    >
-                      <Volume2 className="w-4 h-4" />
-                      <span>{isSpeakingNotes ? 'Stop Speech' : 'Read Notes'}</span>
-                    </button>
-
-                    {/* Hide Notes Button */}
-                    <button
-                      onClick={() => {
-                        stopAllSpeech();
-                        setIsSpeakingNotes(false);
-                        setShowNotesPanel(false);
-                      }}
-                      className="px-3 py-1.5 sm:px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700 cursor-pointer active:scale-95"
-                    >
-                      <X className="w-4 h-4" />
-                      <span className="hidden sm:inline">Close</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Panel Content Body */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50 relative select-none">
-                  {fetchingNotes ? (
-                    <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-                      <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-                      <p className="text-sm font-bold text-slate-600">Loading protected study notes...</p>
-                    </div>
-                  ) : notesError || (!notesText && getNoteImages().length === 0) ? (
-                    <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center my-auto space-y-4 animate-in fade-in duration-300">
-                      <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-inner">
-                        <BookOpen className="w-8 h-8" />
-                      </div>
-                      
-                      <div className="space-y-1.5 max-w-sm">
-                        <span className="text-[10px] font-black uppercase tracking-widest bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 inline-block">
-                          Content Under Preparation
-                        </span>
-                        <h4 className="text-lg font-bold text-slate-800 pt-2">No Notes Available For This Question</h4>
-                        <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                          Our academic team is currently preparing study notes and visual references for this question. We are working on it, and it will be available soon.
-                        </p>
-                      </div>
-
-                      <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl w-full text-xs text-slate-600 font-medium flex items-center gap-2.5 justify-center">
-                        <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
-                        <span>Thank you for your patience as we enhance our learning resources.</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {notesText && (
-                        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                          <div className="flex items-center gap-2 text-indigo-700 bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/60 text-xs font-semibold">
-                            <Sparkles className="w-4 h-4 shrink-0 text-indigo-600" />
-                            <span>Study Notes & Concept Breakdown</span>
-                          </div>
-                          <div className="text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 font-medium">
-                            <QuestionMathJax content={notesText} />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Note Images if available */}
-                      {getNoteImages().length > 0 && (
-                        <div className="space-y-3 pt-2">
-                          <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                            <ImageIcon className="w-4 h-4 text-indigo-600" />
-                            <span>Note Diagrams & Images</span>
-                          </h4>
-                          <div className="grid grid-cols-1 gap-4">
-                            {getNoteImages().map((imgUrl, idx) => (
-                              <div key={idx} className="group relative bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
-                                <div className="p-2 bg-slate-100 flex items-center justify-center relative">
-                                  <div className="absolute inset-0 bg-transparent z-10" />
-                                  <img 
-                                    src={imgUrl} 
-                                    alt={`Note diagram ${idx + 1}`} 
-                                    className="w-full h-auto object-contain max-h-[350px] rounded-lg"
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {/* Panel Footer */}
-                <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
-                  <p className="text-[10px] sm:text-xs text-slate-400 font-medium">Protected Content • Downloading and text copy disabled</p>
-                  <button
-                    onClick={() => {
-                      stopAllSpeech();
-                      setIsSpeakingNotes(false);
-                      setShowNotesPanel(false);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Close</span>
-                  </button>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        )
-      )}
 
       {/* Fullscreen Note Image Zoom Modal */}
       {selectedNoteImage && (

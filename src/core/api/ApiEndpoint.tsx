@@ -148,7 +148,7 @@ export const API_ENDPOINT = {
     SPEAK_ALONG: {
         START_SPEAK_ALONG_SESSION: `/api/v3/mindshaala/speak-along/start-session`,
         SUBMIT_SPEAK_ALONG_ANSWER: `/api/v3/mindshaala/speak-along/submit-audio`,
-        END_SPEAK_ALONG_SESSION: `/api/v3/mindshaala/speak-along/session/end`,
+        END_SPEAK_ALONG_SESSION:(session_id: number) => `/api/v3/mindshaala/speak-along/session/end?session_id=${session_id}`,
         // GET_RANDOM_QUESTIONS: `/api/v1/viva/questions/fetch`,
         SPEECH_TO_TEXT: `/v1/transcribe`,
         SPEAK_ALONG_NOTES: (viva_q_id: number | string) => `/api/v3/mindshaala/speak-along/notes/fetch?viva_q_id=${viva_q_id}`
