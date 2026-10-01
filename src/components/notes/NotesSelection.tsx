@@ -206,38 +206,79 @@ export default function NotesSelection({ onNavigate }: NotesSelectionProps) {
       const notesData = await NoteService.GET_NOTES(userId, selectedSubjectId, chapterId);
       console.log("NoteService.GET_NOTES response:", notesData);
 
-      // 1. Check for failure status or error message returned by API
-      if (
-        notesData?.status === false || 
-        notesData?.success === false || 
-        notesData?.code === 404 || 
-        notesData?.status === 404
-      ) {
-        const errMsg = notesData?.message || notesData?.error || notesData?.detail || "No notes found for this chapter.";
-        toast.error(`⚠️ ${errMsg}`);
-        return;
-      }
+      let candidatePdfUrl: string | null = null;
 
-      // 2. Extract valid PDF URL candidate
-      const candidatePdfUrl = 
-        notesData?.pdf_url || 
-        notesData?.notes_pdf || 
-        notesData?.pdf || 
-        notesData?.data?.pdf_url || 
-        notesData?.data?.notes_pdf || 
-        notesData?.url || 
-        notesData?.data?.url || 
-        chapter.pdf_url ||
-        chapter.notes_pdf_url ||
-        (typeof notesData === 'string' && (notesData.includes('.pdf') || notesData.startsWith('http')) ? notesData : null);
+      // 1. If binary Blob returned
+      if (notesData instanceof Blob) {
+        candidatePdfUrl = URL.createObjectURL(notesData);
+      }
+      // 2. If raw string (URL or Base64) returned
+      else if (typeof notesData === 'string' && notesData.trim().length > 0) {
+        let str = notesData.trim();
+        if (str.startsWith('JVBERi0')) {
+          candidatePdfUrl = `data:application/pdf;base64,${str}`;
+        } else if (str.startsWith('iVBORw0KGgo')) {
+          candidatePdfUrl = `data:image/png;base64,${str}`;
+        } else if (str.startsWith('/9j/')) {
+          candidatePdfUrl = `data:image/jpeg;base64,${str}`;
+        } else if (str.startsWith('UklGR')) {
+          candidatePdfUrl = `data:image/webp;base64,${str}`;
+        } else {
+          candidatePdfUrl = str;
+        }
+      }
+      // 3. If JSON object returned
+      else if (typeof notesData === 'object' && notesData !== null) {
+        // Check for error status
+        if (
+          notesData.status === false || 
+          notesData.success === false || 
+          notesData.code === 404 || 
+          notesData.status === 404
+        ) {
+          const errMsg = notesData.message || notesData.error || notesData.detail || "No study notes available for this chapter.";
+          toast.error(`⚠️ ${errMsg}`);
+          return;
+        }
+
+        // Helper to extract candidate URL from an object
+        const extractUrl = (obj: any): string | null => {
+          if (!obj || typeof obj !== 'object') return null;
+          const fields = [
+            'pdf_url', 'notes_pdf', 'pdf', 'file_url', 'url', 'file', 'path', 
+            'image_url', 'image', 'notes_url', 'download_url', 'document_url'
+          ];
+          for (const f of fields) {
+            if (obj[f] && typeof obj[f] === 'string' && obj[f].trim().length > 0) {
+              let val = obj[f].trim();
+              if (val.startsWith('JVBERi0')) return `data:application/pdf;base64,${val}`;
+              if (val.startsWith('iVBORw0KGgo')) return `data:image/png;base64,${val}`;
+              if (val.startsWith('/9j/')) return `data:image/jpeg;base64,${val}`;
+              if (val.startsWith('UklGR')) return `data:image/webp;base64,${val}`;
+              return val;
+            }
+          }
+          return null;
+        };
+
+        // Deep extract candidate URL
+        candidatePdfUrl = 
+          extractUrl(notesData) ||
+          extractUrl(notesData.data) ||
+          (Array.isArray(notesData.data) && extractUrl(notesData.data[0])) ||
+          (Array.isArray(notesData) && extractUrl(notesData[0])) ||
+          chapter.pdf_url ||
+          chapter.notes_pdf_url ||
+          null;
+      }
 
       if (!candidatePdfUrl) {
-        const errMsg = notesData?.message || notesData?.detail || "No study notes found for this chapter.";
+        const errMsg = (notesData && typeof notesData === 'object' && (notesData.message || notesData.detail)) || "No study notes found for this chapter.";
         toast.error(`⚠️ ${errMsg}`);
         return;
       }
 
-      // 3. Valid PDF found -> Navigate to DRM NotesViewer Component
+      // Valid PDF/Image found -> Launch NotesViewer Component
       const activeSubject = subjects.find(s => String(s.subject_id || s.id) === String(selectedSubjectId));
       const subjectName = activeSubject?.subject_name || activeSubject?.name || 'Study Notes';
       const chapterTitle = chapter.chapter_name || chapter.title || chapter.name || `Chapter ${chapterId}`;
@@ -257,7 +298,6 @@ export default function NotesSelection({ onNavigate }: NotesSelectionProps) {
         "No study notes found for this chapter.";
 
       toast.error(`⚠️ ${apiErrorMessage}`);
-      // Stay on selection screen; do NOT navigate to NotesViewer when notes fail to fetch
     } finally {
       setIsLoadingPdf(false);
       setLoadingChapterId(null);

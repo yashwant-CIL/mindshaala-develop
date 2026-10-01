@@ -1,19 +1,46 @@
-import { API_ENDPOINT } from "../core/api/ApiEndpoint"
-import axiosClient, { axiosMindShaalaClient } from "../core/api/AxiosClient"
+import { API_ENDPOINT } from "../core/api/ApiEndpoint";
+import { axiosMindShaalaClient } from "../core/api/AxiosClient";
 
 export const NoteService = {
-   GET_NOTES: async (userId: number | string, subjectId: number | string, chapterId: number | string) => {
-    const response = await axiosMindShaalaClient.get(API_ENDPOINT.NOTES.FETCH_NOTES(userId,subjectId,chapterId))
-    return response.data;
-   },
+  GET_NOTES: async (userId: number | string, subjectId: number | string, chapterId: number | string) => {
+    try {
+      const endpoint = API_ENDPOINT.NOTES.FETCH_NOTES(userId, subjectId, chapterId);
+      console.log("Fetching notes from endpoint:", endpoint);
 
-//    ADD_NOTES: async (payload:any) => {
-//     const response = await axiosMindShaalaClient.post(API_ENDPOINT.NOTES.ADD_NOTE,payload)
-//     return response.data;
-//    },
+      const response = await axiosMindShaalaClient.get(endpoint, {
+        responseType: 'blob'
+      });
 
-//    DELETE_NOTE: async (noteId:number | string) => {
-//     const response = await axiosMindShaalaClient.delete(API_ENDPOINT.NOTES.DELETE_NOTE(noteId))
-//     return response.data;
-//    }
-}
+      const blob = response.data;
+      if (blob && blob instanceof Blob) {
+        // If content type is JSON, parse and return JSON object
+        const contentType = blob.type || '';
+        if (contentType.includes('application/json')) {
+          const text = await blob.text();
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            return text;
+          }
+        }
+
+        // Read text snippet to check if response is JSON text
+        const textSnippet = await blob.text();
+        const trimmed = textSnippet.trim();
+        if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+          try {
+            return JSON.parse(trimmed);
+          } catch (e) {}
+        }
+
+        // Return binary Blob directly for PDF or Image content
+        return blob;
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Error in NoteService.GET_NOTES:", error);
+      throw error;
+    }
+  },
+};
