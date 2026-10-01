@@ -55,7 +55,7 @@ interface NotesViewerProps {
 export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subject', onBack }: NotesViewerProps) {
   // User info for security watermark
   const userId = localStorage.getItem('user_id') || Cookies.get('user_id') || '100117';
-  const userName = localStorage.getItem('user_name') || 'MindShaala Student';
+  const userName = localStorage.getItem('username') || 'MindShaala Student';
   const timestamp = new Date().toLocaleDateString('en-GB', { 
     day: '2-digit', 
     month: 'short', 
