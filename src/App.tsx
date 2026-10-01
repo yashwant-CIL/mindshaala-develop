@@ -441,12 +441,23 @@ export default function App() {
   });
 
   const handleNavigate = (page: string, params?: any) => {
-    if (params) {
+    if (params !== undefined) {
       setMapPracticeParams(params);
       try {
-        sessionStorage.setItem('mapPracticeParams', JSON.stringify(params));
+        if (params === null) {
+          sessionStorage.removeItem('mapPracticeParams');
+        } else {
+          sessionStorage.setItem('mapPracticeParams', JSON.stringify(params));
+        }
       } catch (e) {
         console.warn('Could not save mapPracticeParams to sessionStorage', e);
+      }
+    } else if (page === 'map-practice-attempts' || page === 'map-practice-attempt-list' || page === 'map-practice-selection' || page === 'map-practice-dashboard') {
+      setMapPracticeParams(null);
+      try {
+        sessionStorage.removeItem('mapPracticeParams');
+      } catch (e) {
+        console.warn('Could not remove mapPracticeParams from sessionStorage', e);
       }
     }
     setActivePage(page as any);

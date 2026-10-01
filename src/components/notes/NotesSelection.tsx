@@ -85,7 +85,8 @@ export default function NotesSelection({ onNavigate }: NotesSelectionProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // Active viewing state for NotesViewer PDF component
+  // Active viewing state & Chapter PDF cache for NotesViewer component
+  const [pdfCache, setPdfCache] = useState<Record<string | number, string>>({});
   const [activeNotesView, setActiveNotesView] = useState<{
     pdfUrl: string;
     chapterTitle: string;
@@ -199,6 +200,21 @@ export default function NotesSelection({ onNavigate }: NotesSelectionProps) {
       return;
     }
 
+    const activeSubject = subjects.find(s => String(s.subject_id || s.id) === String(selectedSubjectId));
+    const subjectName = activeSubject?.subject_name || activeSubject?.name || 'Study Notes';
+    const chapterTitle = chapter.chapter_name || chapter.title || chapter.name || `Chapter ${chapterId}`;
+
+    // REQUIREMENT 3: Check Cache! If user clicks the same chapter again, load cached PDF without calling API
+    if (pdfCache[chapterId]) {
+      console.log("Loading chapter PDF from cache for chapterId:", chapterId);
+      setActiveNotesView({
+        pdfUrl: pdfCache[chapterId],
+        chapterTitle,
+        subjectName
+      });
+      return;
+    }
+
     setIsLoadingPdf(true);
     setLoadingChapterId(chapterId);
     try {
@@ -236,8 +252,7 @@ export default function NotesSelection({ onNavigate }: NotesSelectionProps) {
           notesData.code === 404 || 
           notesData.status === 404
         ) {
-          const errMsg = notesData.message || notesData.error || notesData.detail || "No study notes available for this chapter.";
-          toast.error(`⚠️ ${errMsg}`);
+          toast.error("No pdf is available for this chapter");
           return;
         }
 
@@ -273,16 +288,14 @@ export default function NotesSelection({ onNavigate }: NotesSelectionProps) {
       }
 
       if (!candidatePdfUrl) {
-        const errMsg = (notesData && typeof notesData === 'object' && (notesData.message || notesData.detail)) || "No study notes found for this chapter.";
-        toast.error(`⚠️ ${errMsg}`);
+        toast.error("No pdf is available for this chapter");
         return;
       }
 
-      // Valid PDF/Image found -> Launch NotesViewer Component
-      const activeSubject = subjects.find(s => String(s.subject_id || s.id) === String(selectedSubjectId));
-      const subjectName = activeSubject?.subject_name || activeSubject?.name || 'Study Notes';
-      const chapterTitle = chapter.chapter_name || chapter.title || chapter.name || `Chapter ${chapterId}`;
+      // Store fetched PDF URL in cache for this chapterId
+      setPdfCache(prev => ({ ...prev, [chapterId]: candidatePdfUrl! }));
 
+      // Valid PDF/Image found -> Launch NotesViewer Component
       setActiveNotesView({
         pdfUrl: candidatePdfUrl,
         chapterTitle,
@@ -290,14 +303,17 @@ export default function NotesSelection({ onNavigate }: NotesSelectionProps) {
       });
     } catch (err: any) {
       console.error("Error fetching notes PDF:", err);
-      const apiErrorMessage = 
-        err?.response?.data?.message || 
-        err?.response?.data?.detail || 
-        err?.response?.data?.error || 
-        err?.message || 
-        "No study notes found for this chapter.";
+      const isNetworkError = 
+        !navigator.onLine || 
+        err?.code === 'ERR_NETWORK' || 
+        err?.message === 'Network Error' || 
+        !err?.response;
 
-      toast.error(`⚠️ ${apiErrorMessage}`);
+      if (isNetworkError) {
+        toast.error("Network error, please try after some time");
+      } else {
+        toast.error("No pdf is available for this chapter");
+      }
     } finally {
       setIsLoadingPdf(false);
       setLoadingChapterId(null);

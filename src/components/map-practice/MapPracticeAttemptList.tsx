@@ -216,7 +216,11 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
 
   useEffect(() => {
     if (initialAttemptId) {
-      handleSelectAttempt(initialAttemptId);
+      if (onNavigate) {
+        onNavigate('map-practice-result', { attemptId: initialAttemptId });
+      } else {
+        handleSelectAttempt(initialAttemptId);
+      }
     }
   }, [initialAttemptId]);
 
@@ -245,7 +249,16 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
   // ---------------------------------------------------------------------------
   // Fetch Attempt Details when clicking an attempt
   // ---------------------------------------------------------------------------
-  const handleSelectAttempt = async (attemptId: number) => {
+  const handleSelectAttempt = async (attemptId: number, attempt?: AttemptItem) => {
+    if (onNavigate) {
+      onNavigate('map-practice-result', { 
+        attemptId, 
+        mapTitle: attempt?.assessment_title || `Assessment #${attempt?.assessment_id || attemptId}`,
+        score: attempt?.total_score 
+      });
+      return;
+    }
+
     setSelectedAttemptId(attemptId);
     setIsLoadingDetail(true);
     setDetailError(null);
@@ -830,7 +843,8 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
               return (
                 <div 
                   key={attempt.attempt_id}
-                  className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-4 group relative"
+                  onClick={() => handleSelectAttempt(attempt.attempt_id, attempt)}
+                  className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-4 group relative cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
@@ -869,7 +883,10 @@ export default function MapPracticeAttemptList({ userId: propUserId, initialAtte
                   </div>
 
                   <button
-                    onClick={() => handleSelectAttempt(attempt.attempt_id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectAttempt(attempt.attempt_id, attempt);
+                    }}
                     className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs shadow-md shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
                   >
                     <Eye className="w-4 h-4" />

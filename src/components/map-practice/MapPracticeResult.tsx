@@ -6,6 +6,7 @@ import {
   RotateCcw, 
   Compass, 
   ArrowRight, 
+  ArrowLeft,
   MapPin, 
   Clock, 
   Target, 
@@ -83,6 +84,23 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
       mapViewportRef.current.scrollTop = 0;
     }
   };
+
+  // Hide sidebar during result view and restore on unmount
+  useEffect(() => {
+    const sidebar = (document.querySelector('[data-sidebar]') as HTMLElement) || (document.querySelector('aside') as HTMLElement);
+    const sidebarMini = document.querySelector('[data-sidebar-mini]') as HTMLElement;
+    const sidebarAvatar = document.querySelector('[data-sidebar-avatar]') as HTMLElement;
+
+    if (sidebar) sidebar.style.display = 'none';
+    if (sidebarMini) sidebarMini.style.display = 'none';
+    if (sidebarAvatar) sidebarAvatar.style.display = 'none';
+
+    return () => {
+      if (sidebar) sidebar.style.display = '';
+      if (sidebarMini) sidebarMini.style.display = '';
+      if (sidebarAvatar) sidebarAvatar.style.display = '';
+    };
+  }, []);
 
   // Reset zoom and viewport whenever the active question changes
   useEffect(() => {
@@ -294,7 +312,16 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
           
           {/* Module Title info */}
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            <button
+              onClick={() => onNavigate?.('map-practice-attempts', null)}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs transition-all flex items-center gap-1.5 cursor-pointer backdrop-blur-sm border border-white/20 shrink-0 active:scale-95"
+              title="Back to Attempt List"
+            >
+              <ArrowLeft className="w-4 h-4 text-white" />
+              <span className="hidden sm:inline">Back to Attempts</span>
+            </button>
+
+            <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
               <Award className="w-5 h-5 text-blue-400" />
             </div>
             <div>
@@ -574,7 +601,7 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
       )}
 
       {/* Footer Navigation CTA */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 md:p-4 rounded-2xl border border-slate-200/80 shadow-xs">
+      {/* <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 md:p-4 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
           <h4 className="font-extrabold text-slate-900 text-xs">Ready for your next map challenge?</h4>
           <p className="text-[11px] text-slate-500 font-medium">Explore world political maps, physical landforms, or ancient history sites.</p>
@@ -595,7 +622,7 @@ export default function MapPracticeResult({ onNavigate, params }: MapPracticeRes
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
-      </div>
+      </div> */}
 
     </div>
   );

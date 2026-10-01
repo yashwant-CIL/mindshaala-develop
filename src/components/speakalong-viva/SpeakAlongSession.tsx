@@ -18,7 +18,8 @@ import {
   Image as ImageIcon,
   Sparkles,
   RotateCcw,
-  Send
+  Send,
+  SkipBackIcon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Cookies from 'js-cookie';
@@ -64,6 +65,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
   const [isSpeakingFull, setIsSpeakingFull] = useState(false);
   const [autoPlayNext, setAutoPlayNext] = useState(false);
   const [practiceMode, setPracticeMode] = useState<'chunks' | 'full'>('chunks');
+  const [selectedBox, setSelectedBox] = useState<'question' | 'answer'>('question');
   
   const [fullAnswerTokens, setFullAnswerTokens] = useState<string[]>([]);
   const [currentTokenIdx, setCurrentTokenIdx] = useState<number>(-1);
@@ -82,6 +84,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
   const [isSpeakingNotes, setIsSpeakingNotes] = useState(false);
   const [isPrivacyBlurred, setIsPrivacyBlurred] = useState(false);
   const [selectedNoteImage, setSelectedNoteImage] = useState<string | null>(null);
+  const [lastFetchedNotesVivaQId, setLastFetchedNotesVivaQId] = useState<string | number | null>(null);
 
   // Anti-Screenshot & DRM Security Handlers
   useEffect(() => {
@@ -133,15 +136,24 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       setShowNotesPanel(false);
       return;
     }
-    setShowNotesPanel(true);
+
     const q = questions?.[currentQuestionIdx];
     const vivaQId = q?.viva_q_id || q?.question_id || q?.id;
     if (!vivaQId) {
       console.warn("No viva_q_id found for current question", q);
       setNotesError("No notes available for this question");
+      setShowNotesPanel(true);
       return;
     }
 
+    // REQUIREMENT 1: If user is on the same question and notes were already fetched, DO NOT call API again!
+    if (lastFetchedNotesVivaQId === vivaQId && (pdfUrl || notesText || notesError || notesData)) {
+      setShowNotesPanel(true);
+      return;
+    }
+
+    setShowNotesPanel(true);
+    setLastFetchedNotesVivaQId(vivaQId);
     setFetchingNotes(true);
     setNotesData(null);
     setPdfUrl(null);
@@ -774,6 +786,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       setRecordingAnswerState('idle');
       setRecordedText('');
       setFeedbackData(null);
+      setShowNotesPanel(false);
+      setIsSpeakingNotes(false);
+      setSelectedBox('question');
       
       speakQuestion(false);
     }
@@ -1021,6 +1036,55 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
     }
   };
 
+  const handleSelectQuestionBox = () => {
+    stopAllSpeech();
+    setSelectedBox('question');
+  };
+
+  const handleSelectAnswerBox = () => {
+    stopAllSpeech();
+    setSelectedBox('answer');
+    if (practiceMode === 'full') {
+      speakFullAnswer();
+    } else {
+      speakCurrentChunk();
+    }
+  };
+
+  const handleHeaderReadClick = () => {
+    if (selectedBox === 'question') {
+      if (isPlaying && isSpeakingQuestion) {
+        stopAllSpeech();
+      } else {
+        speakQuestion(false);
+      }
+    } else {
+      if (isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))) {
+        stopAllSpeech();
+      } else {
+        if (practiceMode === 'chunks') {
+          handleNextChunk();
+        } else {
+          speakFullAnswer();
+        }
+      }
+    }
+  };
+
+  const getHeaderReadLabel = () => {
+    if (selectedBox === 'question') {
+      return isPlaying && isSpeakingQuestion ? 'Stop' : 'Read';
+    } else {
+      if (isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))) {
+        return 'Stop';
+      }
+      if (practiceMode === 'chunks') {
+        return 'Next Chunk';
+      }
+      return 'Read';
+    }
+  };
+
   const handleEndSession = async () => {
     stopAllSpeech();
     if (recognitionRef.current) {
@@ -1171,22 +1235,77 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
             
             {/* Left Column: Question & Target */}
             <div className={`${showNotesPanel ? 'lg:col-span-6 order-2 lg:order-1' : 'lg:col-span-12'} flex flex-col gap-3 md:gap-4 transition-all duration-300`}>
-
-                {/* Question Counter & AI Speed Control on Same Line */}
+                {/* Question Counter & Controls Header: Buttons between Question count & AI Speed bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                     {currentQuestionIdx > 0 && (
                       <button
                         onClick={proceedToPreviousQuestion}
-                        className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
+                        className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
                       >
-                        <ArrowLeft className="w-4 h-4" />
-                        <span>Previous Question</span>
+                        {/* <ArrowLeft className="w-4 h-4" /> */}
+                        <SkipBackIcon className="w-4 h-4" />
+                        {/* <span>Previous</span> */}
                       </button>
                     )}
                     <p className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider shrink-0 whitespace-nowrap">
                       Question {currentQuestionIdx + 1} of {questions.length}
                     </p>
+
+                    {/* Next Question Button right after Question count */}
+                    <button
+                      onClick={proceedToNextQuestion}
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
+                    >
+                      {/* <span>{currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'End Session'}</span> */}
+                      <SkipForward className="w-4 h-4" />
+                    </button>
+
+                    {/* View Notes and Read buttons between Question count & AI speed bar */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={handleOpenNotes}
+                        className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 whitespace-nowrap ${
+                          showNotesPanel
+                            ? 'bg-purple-600 text-white border border-purple-600 hover:bg-purple-700'
+                            : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80'
+                        }`}
+                      >
+                        <BookOpen className="w-4 h-4" />
+                        <span>{showNotesPanel ? 'Hide' : 'Notes'}</span>
+                      </button>
+
+                      <button
+                        onClick={handleHeaderReadClick}
+                        className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm shrink-0 whitespace-nowrap ${
+                          isPlaying
+                            ? 'bg-amber-500 text-white hover:bg-amber-600'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                        }`}
+                      >
+                        <Volume2 className="w-4 h-4" />
+                        <span>{getHeaderReadLabel()}</span>
+                      </button>
+                      {/* Record Answer Button between Practice Phrase & Chunks/Full Answer option */}
+                           <button
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 stopAllSpeech();
+                                 if (skipWarningForSession) {
+                                    setIsRecordingAnswerMode(true);
+                                    setRecordingAnswerState('idle');
+                                    setRecordedText('');
+                                    setFeedbackData(null);
+                                 } else {
+                                    setShowWarningModal(true);
+                                 }
+                              }}
+                              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
+                           >
+                              <Mic className="w-4 h-4" />
+                              <span>Record Answer</span>
+                           </button>
+                    </div>
                   </div>
 
                   {/* AI Speed Control */}
@@ -1218,14 +1337,23 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                     ></div>
                 </div>
                 
-                {/* Question Card */}
-                <div className="bg-white rounded-2xl md:rounded-[2rem] p-4 md:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] relative overflow-hidden group">
-                   {/* <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                      <BrainCircuit className="w-24 h-24 md:w-32 md:h-32 text-indigo-600" />
-                   </div> */}
-                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 md:mb-6">
+                {/* Question Card - Selectable Box */}
+                <div 
+                  onClick={handleSelectQuestionBox}
+                  className={`rounded-2xl md:rounded-[2rem] p-4 md:p-8 transition-all duration-300 relative overflow-hidden group cursor-pointer ${
+                    selectedBox === 'question'
+                      ? 'bg-white border-2 border-indigo-600 ring-4 ring-indigo-500/15 shadow-[0_20px_50px_rgba(79,70,229,0.1)]'
+                      : 'bg-white border-2 border-slate-100 hover:border-slate-300 shadow-[0_20px_50px_rgba(0,0,0,0.03)]'
+                  }`}
+                >
+                   <div className="flex items-center justify-between gap-3 mb-3 md:mb-5">
                       <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
                         <span className="px-2.5 py-1 sm:px-3 sm:py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] whitespace-nowrap">Active Question</span>
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
+                          selectedBox === 'question' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {selectedBox === 'question' ? '✓ Selected Box' : 'Click to Select'}
+                        </span>
                         {isSpeakingQuestion && (
                            <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase whitespace-nowrap">
                               <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Speaking
@@ -1237,170 +1365,152 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                            </span>
                         )}
                       </div>
-
-                      {/* Question Control Buttons */}
-                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap w-full sm:w-auto justify-start sm:justify-end shrink-0">
-                        <button
-                          onClick={handleOpenNotes}
-                          className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 whitespace-nowrap ${
-                            showNotesPanel
-                              ? 'bg-purple-600 text-white border border-purple-600 hover:bg-purple-700'
-                              : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200/80'
-                          }`}
-                        >
-                          <BookOpen className="w-4 h-4" />
-                          <span>{showNotesPanel ? 'Hide Notes' : 'View Notes'}</span>
-                        </button>
-
-                        <button
-                           onClick={() => {
-                              if (isPlaying && isSpeakingQuestion) {
-                                 stopAllSpeech();
-                              } else {
-                                 speakQuestion(false);
-                              }
-                           }}
-                           className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm shrink-0 whitespace-nowrap ${
-                              isPlaying && isSpeakingQuestion
-                                 ? 'bg-amber-500 text-white hover:bg-amber-600'
-                                 : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
-                           }`}
-                        >
-                           <Volume2 className="w-4 h-4" />
-                           <span>{isPlaying && isSpeakingQuestion ? 'Stop Question' : 'Read Question'}</span>
-                        </button>
-                      </div>
                    </div>
                    <div className={`text-base sm:text-2xl md:text-3xl font-bold transition-all duration-500 ${isSpeakingQuestion ? 'text-indigo-600 scale-[1.01]' : 'text-slate-800'} leading-[1.4]`}>
-                     {/* <QuestionMathJax content={question_text} /> */}
-                           <QuestionMathJax content={question_text} />
+                      <QuestionMathJax content={question_text} />
                    </div>
                 </div>
 
-                {/* Target Answer / Chunks Card */}
-                <div className="bg-white rounded-2xl md:rounded-[2rem] p-4 md:p-10 border border-slate-100 shadow-[0_20px_50px_rgba(0,0,0,0.03)] flex flex-col">
-                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-10">
-                        <div className="flex flex-col gap-0.5">
-                           <h3 className="text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em]">Practice Phrase</h3>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto shrink-0">
-                            {/* Segmented Control Practice Mode Selector */}
-                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/50 shrink-0">
-                               <button
-                                 onClick={() => {
-                                   stopAllSpeech();
-                                   setPracticeMode('chunks');
-                                 }}
-                                 disabled={isSpeakingQuestion}
-                                 className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                   practiceMode === 'chunks'
-                                     ? 'bg-indigo-600 text-white shadow-sm'
-                                     : 'text-slate-500 hover:text-slate-700'
-                                 }`}
-                               >
-                                  Chunks
-                               </button>
-                               <button
-                                 onClick={() => {
-                                   stopAllSpeech();
-                                   setPracticeMode('full');
-                                 }}
-                                 disabled={isSpeakingQuestion}
-                                 className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                   practiceMode === 'full'
-                                     ? 'bg-indigo-600 text-white shadow-sm'
-                                     : 'text-slate-500 hover:text-slate-700'
-                                 }`}
-                               >
-                                  Full Answer
-                               </button>
-                            </div>
+                {/* Target Answer / Chunks Card - Selectable Box */}
+                <div 
+                  onClick={handleSelectAnswerBox}
+                  className={`rounded-2xl md:rounded-[2rem] p-4 md:p-8 transition-all duration-300 flex flex-col cursor-pointer ${
+                    selectedBox === 'answer'
+                      ? 'bg-white border-2 border-indigo-600 ring-4 ring-indigo-500/15 shadow-[0_20px_50px_rgba(79,70,229,0.1)]'
+                      : 'bg-white border-2 border-slate-100 hover:border-slate-300 shadow-[0_20px_50px_rgba(0,0,0,0.03)]'
+                  }`}
+                >
+                     <div className="flex flex-col gap-3 mb-4 md:mb-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
+                           <div className="flex items-center gap-2 shrink-0">
+                             <h3 className="text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em]">Practice Phrase</h3>
+                             <span className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
+                               selectedBox === 'answer' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'
+                             }`}>
+                               {selectedBox === 'answer' ? '✓ Selected Box' : 'Click to Select'}
+                             </span>
+                           </div>
 
-                            {practiceMode === 'chunks' && (
-                               <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-wider shrink-0">
-                                  CHUNK {currentChunkIdx + 1} OF {chunks.length}
-                               </div>
-                            )}
+                           {/* Record Answer Button between Practice Phrase & Chunks/Full Answer option */}
+                           {/* <button
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 stopAllSpeech();
+                                 if (skipWarningForSession) {
+                                    setIsRecordingAnswerMode(true);
+                                    setRecordingAnswerState('idle');
+                                    setRecordedText('');
+                                    setFeedbackData(null);
+                                 } else {
+                                    setShowWarningModal(true);
+                                 }
+                              }}
+                              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
+                           >
+                              <Mic className="w-4 h-4" />
+                              <span>Record Answer</span>
+                           </button> */}
 
-                            {/* Answer Speech Button */}
-                            <button
-                               onClick={() => {
-                                  if (isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))) {
+                           {/* Segmented Control Mode Selector & Chunk Counter */}
+                           <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/50 shrink-0">
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
                                      stopAllSpeech();
-                                  } else {
-                                     if (practiceMode === 'full') {
-                                        speakFullAnswer();
-                                     } else {
-                                        speakCurrentChunk();
-                                     }
-                                  }
-                               }}
-                               className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
-                                  isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))
-                                     ? 'bg-amber-500 text-white hover:bg-amber-600'
-                                     : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
-                               }`}
-                            >
-                               <Volume2 className="w-4 h-4" />
-                               <span>
-                                  {isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))
-                                     ? 'Stop Speech'
-                                     : practiceMode === 'full'
-                                        ? 'Read Answer'
-                                        : 'Read Answer'}
-                               </span>
-                            </button>
+                                     setPracticeMode('chunks');
+                                   }}
+                                   disabled={isSpeakingQuestion}
+                                   className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                     practiceMode === 'chunks'
+                                       ? 'bg-indigo-600 text-white shadow-sm'
+                                       : 'text-slate-500 hover:text-slate-700'
+                                   }`}
+                                 >
+                                    Chunks
+                                 </button>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     stopAllSpeech();
+                                     setPracticeMode('full');
+                                   }}
+                                   disabled={isSpeakingQuestion}
+                                   className={`px-3 py-1.5 rounded-lg text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                     practiceMode === 'full'
+                                       ? 'bg-indigo-600 text-white shadow-sm'
+                                       : 'text-slate-500 hover:text-slate-700'
+                                   }`}
+                                 >
+                                    Full Answer
+                                 </button>
+                              </div>
 
-                            {/* Next Chunk Navigation Button */}
-                            {practiceMode === 'chunks' && !isQuestionFinished && currentChunkIdx < chunks.length - 1 && (
-                               <button
-                                  onClick={handleNextChunk}
-                                  className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-green-600 text-white hover:bg-slate-900 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
-                               >
-                                  <span>Next Chunk</span>
-                                  <SkipForward className="w-4 h-4" />
-                               </button>
-                            )}
+                              {practiceMode === 'chunks' && (
+                                 <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-wider shrink-0">
+                                    CHUNK {currentChunkIdx + 1} OF {chunks.length}
+                                 </div>
+                              )}
+                           </div>
+                        </div>
 
-                            {/* Question Completion & Record Answer Navigation */}
-                            {(isQuestionFinished || (practiceMode === 'chunks' && currentChunkIdx >= chunks.length - 1)) && (
-                               <div className="flex items-center gap-2 flex-wrap">
-                                  <button
-                                     onClick={() => {
-                                        stopAllSpeech();
-                                        if (skipWarningForSession) {
-                                           setIsRecordingAnswerMode(true);
-                                           setRecordingAnswerState('idle');
-                                           setRecordedText('');
-                                           setFeedbackData(null);
-                                        } else {
-                                           setShowWarningModal(true);
-                                        }
-                                     }}
-                                     className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
-                                  >
-                                     <Mic className="w-4 h-4" />
-                                     <span>Record Answer</span>
-                                  </button>
+                        {/* Responsive Practice Action Buttons Bar */}
+                        {/* <div className="flex items-center gap-2 flex-wrap pt-1 w-full" onClick={(e) => e.stopPropagation()}> */}
+                           {/* <button
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))) {
+                                    stopAllSpeech();
+                                 } else {
+                                    if (practiceMode === 'full') {
+                                       speakFullAnswer();
+                                    } else {
+                                       speakCurrentChunk();
+                                    }
+                                 }
+                              }}
+                              className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm shrink-0 whitespace-nowrap ${
+                                 isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))
+                                    ? 'bg-amber-500 text-white hover:bg-amber-600'
+                                    : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                              }`}
+                           >
+                              <Volume2 className="w-4 h-4" />
+                              <span>
+                                 {isPlaying && (isSpeakingFull || (!isSpeakingQuestion && practiceMode === 'chunks'))
+                                    ? 'Stop Speech'
+                                    : practiceMode === 'full'
+                                       ? 'Read Full Answer'
+                                       : 'Read Chunk'}
+                              </span>
+                           </button> */}
 
-                                  <button
-                                     onClick={handleDiscard}
-                                     className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all cursor-pointer"
-                                  >
-                                     Retry
-                                  </button>
+                           {/* Next Chunk Navigation Button */}
+                           {/* {practiceMode === 'chunks' && !isQuestionFinished && currentChunkIdx < chunks.length - 1 && (
+                              <button
+                                 onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleNextChunk();
+                                 }}
+                                 className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-green-600 text-white hover:bg-slate-900 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
+                              >
+                                 <span>Next Chunk</span>
+                                 <SkipForward className="w-4 h-4" />
+                              </button>
+                           )} */}
 
-                                  <button
-                                     onClick={proceedToNextQuestion}
-                                     className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-95"
-                                  >
-                                     <span>{currentQuestionIdx < questions.length - 1 ? 'Next Question' : 'End Session'}</span>
-                                     <SkipForward className="w-4 h-4" />
-                                  </button>
-                               </div>
-                            )}
-                         </div>
-                      </div>
+                           {/* Retry Button */}
+                           {/* <button
+                              onClick={(e) => {
+                                 e.stopPropagation();
+                                 handleDiscard();
+                              }}
+                              className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-all cursor-pointer shrink-0 whitespace-nowrap"
+                           >
+                              Retry
+                           </button> */}
+                        {/* </div> */}
+                     </div>
 
                       {isRecordingAnswerMode ? (
                         <div className="flex flex-col gap-6 py-2">
@@ -1832,6 +1942,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                           <X className="w-4 h-4" />
                           <span className="hidden sm:inline">Close</span>
                         </button>
+
                       </div>
                     </div>
 
@@ -1927,7 +2038,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       </main>
 
       {/* Sticky Bottom Control Bar for Mobile Viewports */}
-      {!isQuestionFinished ? (
+      {/* {!isQuestionFinished ? (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-lg border-t border-slate-200 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.06)] flex items-center justify-between gap-3">
           <div className="flex flex-col gap-0.5 shrink-0">
             <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Mode</span>
@@ -1981,7 +2092,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
             <SkipForward className="w-3.5 h-3.5" />
           </button>
         </div>
-      )}
+      )} */}
 
       {/* Warning Popup Modal for Record Answer Mode */}
       {showWarningModal && (

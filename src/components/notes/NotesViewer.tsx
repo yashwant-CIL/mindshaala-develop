@@ -20,7 +20,9 @@ import {
   ZoomIn,
   ZoomOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { toast } from 'react-hot-toast';
@@ -71,14 +73,159 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
   const [isLoadingMedia, setIsLoadingMedia] = useState<boolean>(true);
   const [mediaError, setMediaError] = useState<string | null>(null);
 
-  // Zoom & Image/PDF Navigation States
+  // Zoom, Image/PDF Navigation & TTS States
   const [imageZoom, setImageZoom] = useState<number>(1.0);
   const [pdfScale, setPdfScale] = useState<number>(1.2);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageInput, setPageInput] = useState<string>('1');
   const [numPages, setNumPages] = useState<number>(1);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [isPdfRendering, setIsPdfRendering] = useState<boolean>(false);
+  const [isSpeakingNotes, setIsSpeakingNotes] = useState<boolean>(false);
+  const [activeHighlightBox, setActiveHighlightBox] = useState<{ x: number; y: number; width: number; height: number; str: string } | null>(null);
+  const pageTextItemsRef = useRef<{ str: string; startChar: number; endChar: number; x: number; y: number; width: number; height: number }[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Helper matrix multiplication for PDF.js viewport transform
+  const transformPdfMatrix = (m1: number[], m2: number[]) => {
+    return [
+      m1[0] * m2[0] + m1[2] * m2[1],
+      m1[1] * m2[0] + m1[3] * m2[1],
+      m1[0] * m2[2] + m1[2] * m2[3],
+      m1[1] * m2[2] + m1[3] * m2[3],
+      m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+      m1[1] * m2[4] + m1[3] * m2[5] + m1[5]
+    ];
+  };
+
+  // Keep pageInput synced with currentPage & stop TTS when page changes
+  useEffect(() => {
+    setPageInput(String(currentPage));
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeakingNotes(false);
+    setActiveHighlightBox(null);
+  }, [currentPage, pdfScale]);
+
+  // Clean up TTS on unmount
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  // Text-To-Speech (TTS) for notes starting from current page with PDF Canvas Highlight
+  const handleToggleNotesTts = async () => {
+    if (isSpeakingNotes) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeakingNotes(false);
+      setActiveHighlightBox(null);
+      return;
+    }
+
+    if (!('speechSynthesis' in window)) {
+      toast.error("Speech synthesis is not supported in this browser.");
+      return;
+    }
+
+    let textToRead = "";
+    pageTextItemsRef.current = [];
+
+    if (pdfDoc) {
+      try {
+        toast.loading("Extracting PDF text & canvas coordinates for speech...", { id: 'tts-load' });
+        const pdfjsLib = (window as any).pdfjsLib;
+        const page = await pdfDoc.getPage(currentPage);
+        const viewport = page.getViewport({ scale: pdfScale });
+        const textContent = await page.getTextContent();
+
+        const textParts: string[] = [];
+        let charOffset = 0;
+
+        for (const item of textContent.items) {
+          if (!item.str || !item.str.trim()) continue;
+
+          let tx: number[];
+          if (pdfjsLib && pdfjsLib.Util && pdfjsLib.Util.transform) {
+            tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+          } else {
+            tx = transformPdfMatrix(viewport.transform, item.transform);
+          }
+
+          const fontHeight = Math.abs(tx[3]) || Math.abs(tx[0]) || (item.height ? item.height * pdfScale : 14);
+          const x = tx[4];
+          const y = tx[5] - fontHeight * 0.85;
+          const width = item.width ? item.width * pdfScale : (item.str.length * fontHeight * 0.5);
+          const height = fontHeight * 1.15;
+
+          const str = item.str;
+          const startChar = charOffset;
+          const endChar = charOffset + str.length;
+
+          pageTextItemsRef.current.push({
+            str,
+            startChar,
+            endChar,
+            x,
+            y,
+            width,
+            height
+          });
+
+          textParts.push(str);
+          charOffset += str.length + 1;
+        }
+
+        toast.dismiss('tts-load');
+        textToRead = textParts.join(' ');
+      } catch (err) {
+        console.warn("Could not extract PDF text for TTS:", err);
+        toast.dismiss('tts-load');
+      }
+    }
+
+    if (!textToRead.trim()) {
+      textToRead = `Notes for ${chapterTitle}, ${subjectName}. Page ${currentPage}.`;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(textToRead);
+    utterance.rate = 1.0;
+
+    utterance.onboundary = (event: any) => {
+      if (event.name === 'word') {
+        const charIndex = event.charIndex;
+        const items = pageTextItemsRef.current;
+        const active = items.find(item => charIndex >= item.startChar && charIndex <= item.endChar + 2);
+        if (active) {
+          setActiveHighlightBox({
+            x: active.x,
+            y: active.y,
+            width: active.width,
+            height: active.height,
+            str: active.str
+          });
+        }
+      }
+    };
+
+    utterance.onstart = () => setIsSpeakingNotes(true);
+    utterance.onend = () => {
+      setIsSpeakingNotes(false);
+      setActiveHighlightBox(null);
+    };
+    utterance.onerror = () => {
+      setIsSpeakingNotes(false);
+      setActiveHighlightBox(null);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
 
   // DRM & Security States
   const [isPrivacyBlurred, setIsPrivacyBlurred] = useState<boolean>(false);
@@ -454,6 +601,10 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
     : (pdfUrl.includes('#') ? pdfUrl : `${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`);
 
   const handleExitViewer = async () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeakingNotes(false);
     try {
       if (!inline && document.fullscreenElement) {
         await document.exitFullscreen?.();
@@ -520,8 +671,21 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
           </div>
         </div>
 
-        {/* Security Indicator Badges & Fullscreen Controls */}
+        {/* Security Indicator Badges, TTS & Fullscreen Controls */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleToggleNotesTts}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border active:scale-95 ${
+              isSpeakingNotes 
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse' 
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+            }`}
+            title={isSpeakingNotes ? "Stop Reading Notes" : "Read Notes Aloud from Current Page"}
+          >
+            {isSpeakingNotes ? <VolumeX className="w-4 h-4 text-amber-400" /> : <Volume2 className="w-4 h-4 text-indigo-400" />}
+            <span className="hidden sm:inline">{isSpeakingNotes ? 'Stop TTS' : 'Read Page TTS'}</span>
+          </button>
+
           <button
             onClick={toggleFullscreen}
             className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-700 active:scale-95"
@@ -677,21 +841,36 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
                   <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
                 </div>
               )}
-              <div className="my-auto flex items-center justify-center min-w-min min-h-min p-2">
+              <div className="relative my-auto flex items-center justify-center min-w-min min-h-min p-2">
                 <canvas 
                   ref={canvasRef} 
-                  className="shadow-2xl rounded border border-slate-800 select-none pointer-events-auto"
+                  className="shadow-2xl rounded border border-slate-800 select-none pointer-events-auto block"
                   style={{ maxWidth: 'none' }}
                   onContextMenu={(e) => e.preventDefault()}
                   onDragStart={(e) => e.preventDefault()}
                 />
+
+                {/* Real-time PDF Canvas Word Highlight Overlay directly on PDF text */}
+                {isSpeakingNotes && activeHighlightBox && (
+                  <div 
+                    className="absolute pointer-events-none z-30 rounded-xs transition-all duration-150 shadow-[0_0_8px_rgba(250,204,21,0.4)]"
+                    style={{
+                      left: `${activeHighlightBox.x + 8}px`,
+                      top: `${activeHighlightBox.y + 8}px`,
+                      width: `${Math.max(activeHighlightBox.width, 14)}px`,
+                      height: `${Math.max(activeHighlightBox.height, 14)}px`,
+                      backgroundColor: 'rgba(253, 224, 71, 0.65)',
+                      mixBlendMode: 'multiply'
+                    }}
+                  />
+                )}
               </div>
             </div>
 
             {/* Custom PDF Controls Bar: Page Navigation & Zoom (NO Print, NO Download, NO Filename) */}
             <div className="z-40 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl px-3 py-1.5 sm:px-4 sm:py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-3 shadow-2xl shrink-0 max-w-xl w-full mt-2">
               
-              {/* Page Selector Controls */}
+              {/* Page Selector Controls with Direct Page Number Input Box */}
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
@@ -701,9 +880,40 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-xs font-bold font-mono text-slate-300 whitespace-nowrap">
-                  Page <span className="text-indigo-400">{currentPage}</span> / {numPages}
-                </span>
+
+                <div className="flex items-center gap-1 text-xs font-bold font-mono text-slate-300 whitespace-nowrap">
+                  <span>Page</span>
+                  <input 
+                    type="number"
+                    min={1}
+                    max={numPages}
+                    value={pageInput}
+                    onChange={(e) => setPageInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const val = parseInt(pageInput, 10);
+                        if (!isNaN(val) && val >= 1 && val <= numPages) {
+                          setCurrentPage(val);
+                        } else {
+                          setPageInput(String(currentPage));
+                          toast.error(`Please enter a page number between 1 and ${numPages}`);
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(pageInput, 10);
+                      if (!isNaN(val) && val >= 1 && val <= numPages) {
+                        setCurrentPage(val);
+                      } else {
+                        setPageInput(String(currentPage));
+                      }
+                    }}
+                    className="w-12 px-1 py-0.5 rounded bg-slate-800 border border-slate-700 text-center font-bold text-indigo-400 focus:outline-none focus:border-indigo-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    title="Type page number and press Enter"
+                  />
+                  <span>/ {numPages}</span>
+                </div>
+
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(numPages, prev + 1))}
                   disabled={currentPage >= numPages || isPdfRendering}
@@ -713,6 +923,20 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+
+              {/* TTS Read Aloud Control Button */}
+              <button
+                onClick={handleToggleNotesTts}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
+                  isSpeakingNotes
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                    : 'bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30'
+                }`}
+                title="Read Notes Aloud starting from current page"
+              >
+                {isSpeakingNotes ? <VolumeX className="w-3.5 h-3.5 text-amber-400" /> : <Volume2 className="w-3.5 h-3.5 text-indigo-400" />}
+                <span>{isSpeakingNotes ? 'Stop' : 'Read TTS'}</span>
+              </button>
 
               {/* Custom Zoom Controls */}
               <div className="flex items-center gap-1.5 sm:gap-2">
