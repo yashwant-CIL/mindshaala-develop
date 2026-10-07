@@ -95,6 +95,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
 
     const handleBlur = () => {
       setIsPrivacyBlurred(true);
+      stopAllSpeech();
     };
 
     const handleFocus = () => {
@@ -113,6 +114,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
         (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5'))
       ) {
         setIsPrivacyBlurred(true);
+        stopAllSpeech();
         toast.error("Screenshots and printing are disabled for security reasons.", { id: 'screenshot-warn' });
         setTimeout(() => setIsPrivacyBlurred(false), 3000);
       }
@@ -337,6 +339,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
     setIsPlaying(false);
     setIsSpeakingQuestion(false);
     setIsSpeakingFull(false);
+    setIsSpeakingNotes(false);
+    setAutoPlayNext(false);
     if (speechTimerRef.current) {
       clearTimeout(speechTimerRef.current);
       speechTimerRef.current = null;
@@ -1037,12 +1041,14 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
   };
 
   const handleSelectQuestionBox = () => {
+    if (isRecordingAnswerMode) return;
     stopAllSpeech();
     setSelectedBox('question');
   };
 
   const handleSelectAnswerBox = () => {
     stopAllSpeech();
+    if (isRecordingAnswerMode) return;
     setSelectedBox('answer');
     if (practiceMode === 'full') {
       speakFullAnswer();
@@ -1052,6 +1058,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
   };
 
   const handleHeaderReadClick = () => {
+    if (isRecordingAnswerMode) return;
     if (selectedBox === 'question') {
       if (isPlaying && isSpeakingQuestion) {
         stopAllSpeech();
@@ -1072,6 +1079,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
   };
 
   const getHeaderReadLabel = () => {
+    if (isRecordingAnswerMode) return 'Read';
     if (selectedBox === 'question') {
       return isPlaying && isSpeakingQuestion ? 'Stop' : 'Read';
     } else {
@@ -1277,10 +1285,13 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
 
                       <button
                         onClick={handleHeaderReadClick}
-                        className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm shrink-0 whitespace-nowrap ${
-                          isPlaying
-                            ? 'bg-amber-500 text-white hover:bg-amber-600'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                        disabled={isRecordingAnswerMode}
+                        className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 whitespace-nowrap ${
+                          isRecordingAnswerMode
+                            ? 'opacity-50 cursor-not-allowed bg-slate-200 text-slate-500 border border-slate-300'
+                            : isPlaying
+                              ? 'bg-amber-500 text-white hover:bg-amber-600 cursor-pointer'
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 cursor-pointer'
                         }`}
                       >
                         <Volume2 className="w-4 h-4" />
@@ -1338,58 +1349,72 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                 </div>
                 
                 {/* Question Card - Selectable Box */}
-                <div 
-                  onClick={handleSelectQuestionBox}
-                  className={`rounded-2xl md:rounded-[2rem] p-4 md:p-8 transition-all duration-300 relative overflow-hidden group cursor-pointer ${
-                    selectedBox === 'question'
-                      ? 'bg-white border-2 border-indigo-600 ring-4 ring-indigo-500/15 shadow-[0_20px_50px_rgba(79,70,229,0.1)]'
-                      : 'bg-white border-2 border-slate-100 hover:border-slate-300 shadow-[0_20px_50px_rgba(0,0,0,0.03)]'
-                  }`}
-                >
-                   <div className="flex items-center justify-between gap-3 mb-3 md:mb-5">
-                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
-                        <span className="px-2.5 py-1 sm:px-3 sm:py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] whitespace-nowrap">Active Question</span>
-                        <span className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
-                          selectedBox === 'question' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          {selectedBox === 'question' ? '✓ Selected Box' : 'Click to Select'}
-                        </span>
-                        {isSpeakingQuestion && (
-                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase whitespace-nowrap">
-                              <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Speaking
-                           </span>
-                        )}
-                        {isPlaying && isSpeakingFull && (
-                           <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase whitespace-nowrap">
-                              <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Reading Full
-                           </span>
-                        )}
-                      </div>
-                   </div>
-                   <div className={`text-base sm:text-2xl md:text-3xl font-bold transition-all duration-500 ${isSpeakingQuestion ? 'text-indigo-600 scale-[1.01]' : 'text-slate-800'} leading-[1.4]`}>
-                      <QuestionMathJax content={question_text} />
-                   </div>
-                </div>
+                {(() => {
+                  const isQuestionActive = !isRecordingAnswerMode && selectedBox === 'question';
+                  return (
+                    <div 
+                      onClick={handleSelectQuestionBox}
+                      className={`rounded-2xl md:rounded-[2rem] p-4 md:p-8 transition-all duration-300 relative overflow-hidden group ${
+                        isRecordingAnswerMode ? 'cursor-default opacity-85' : 'cursor-pointer'
+                      } ${
+                        isQuestionActive
+                          ? 'bg-white border-2 border-indigo-600 ring-4 ring-indigo-500/15 shadow-[0_20px_50px_rgba(79,70,229,0.1)]'
+                          : 'bg-white border-2 border-slate-100 hover:border-slate-300 shadow-[0_20px_50px_rgba(0,0,0,0.03)]'
+                      }`}
+                    >
+                       <div className="flex items-center justify-between gap-3 mb-3 md:mb-5">
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0">
+                            <span className="px-2.5 py-1 sm:px-3 sm:py-1 rounded-full bg-indigo-50 text-indigo-600 text-[9px] md:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] whitespace-nowrap">Active Question</span>
+                            <span className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
+                              isQuestionActive ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {isRecordingAnswerMode ? 'Selection Disabled' : (isQuestionActive ? '✓ Selected Box' : 'Click to Select')}
+                            </span>
+                            {isSpeakingQuestion && (
+                               <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase whitespace-nowrap">
+                                  <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Speaking
+                               </span>
+                            )}
+                            {isPlaying && isSpeakingFull && (
+                               <span className="flex items-center gap-1.5 text-indigo-500 animate-pulse font-bold text-[9px] md:text-[10px] uppercase whitespace-nowrap">
+                                  <div className="w-1 h-1 rounded-full bg-indigo-500"></div> AI Reading Full
+                               </span>
+                            )}
+                          </div>
+                       </div>
+                       <div className={`text-base sm:text-2xl md:text-3xl font-bold transition-all duration-500 ${isSpeakingQuestion ? 'text-indigo-600 scale-[1.01]' : 'text-slate-800'} leading-[1.4]`}>
+                          <QuestionMathJax content={question_text} />
+                       </div>
+                    </div>
+                  );
+                })()}
 
-                {/* Target Answer / Chunks Card - Selectable Box */}
-                <div 
-                  onClick={handleSelectAnswerBox}
-                  className={`rounded-2xl md:rounded-[2rem] p-4 md:p-8 transition-all duration-300 flex flex-col cursor-pointer ${
-                    selectedBox === 'answer'
-                      ? 'bg-white border-2 border-indigo-600 ring-4 ring-indigo-500/15 shadow-[0_20px_50px_rgba(79,70,229,0.1)]'
-                      : 'bg-white border-2 border-slate-100 hover:border-slate-300 shadow-[0_20px_50px_rgba(0,0,0,0.03)]'
-                  }`}
-                >
-                     <div className="flex flex-col gap-3 mb-4 md:mb-6" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
-                           <div className="flex items-center gap-2 shrink-0">
-                             <h3 className="text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em]">Practice Phrase</h3>
-                             <span className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
-                               selectedBox === 'answer' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'
-                             }`}>
-                               {selectedBox === 'answer' ? '✓ Selected Box' : 'Click to Select'}
-                             </span>
-                           </div>
+                {/* Target Answer / Chunks Card - Selectable Box / Record Box */}
+                {(() => {
+                  const isAnswerActive = !isRecordingAnswerMode && selectedBox === 'answer';
+                  const isRecordActive = isRecordingAnswerMode;
+                  const isActive = isRecordActive || isAnswerActive;
+                  return (
+                    <div 
+                      onClick={handleSelectAnswerBox}
+                      className={`rounded-2xl md:rounded-[2rem] p-4 md:p-8 transition-all duration-300 flex flex-col cursor-pointer ${
+                        isActive
+                          ? 'bg-white border-2 border-indigo-600 ring-4 ring-indigo-500/15 shadow-[0_20px_50px_rgba(79,70,229,0.1)]'
+                          : 'bg-white border-2 border-slate-100 hover:border-slate-300 shadow-[0_20px_50px_rgba(0,0,0,0.03)]'
+                      }`}
+                    >
+                         <div className="flex flex-col gap-3 mb-4 md:mb-6" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap">
+                               <div className="flex items-center gap-2 shrink-0">
+                                 <h3 className="text-slate-400 font-black text-[9px] md:text-[10px] uppercase tracking-[0.2em]">
+                                   {isRecordActive ? 'Record Answer' : 'Practice Phrase'}
+                                 </h3>
+                                 <span className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all ${
+                                   isActive ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-500'
+                                 }`}>
+                                   {isRecordActive ? '✓ Active Record Box' : (isAnswerActive ? '✓ Selected Box' : 'Click to Select')}
+                                 </span>
+                               </div>
 
                            {/* Record Answer Button between Practice Phrase & Chunks/Full Answer option */}
                            {/* <button
@@ -1525,13 +1550,15 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                                  </div>
                               </div>
                               <button
-                                 onClick={() => {
+                                 onClick={(e) => {
+                                    e.stopPropagation();
                                     stopAllSpeech();
                                     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-                                       try { mediaRecorderRef.current.stop(); } catch(e){}
+                                       try { mediaRecorderRef.current.stop(); } catch(err){}
                                     }
                                     setIsRecordingAnswerMode(false);
                                     setRecordingAnswerState('idle');
+                                    setSelectedBox('answer');
                                  }}
                                  className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                               >
@@ -1553,7 +1580,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                                     Click the button below to start recording your answer.
                                  </p>
                                  <button
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                       e.stopPropagation();
                                        stopAllSpeech();
                                        setUserTranscript('');
                                        setRecordedText('');
@@ -1564,8 +1592,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                                              if (mediaRecorderRef.current.state === 'inactive') {
                                                 mediaRecorderRef.current.start(200);
                                              }
-                                          } catch(e) {
-                                             console.error("Failed to start media recorder", e);
+                                          } catch(err) {
+                                             console.error("Failed to start media recorder", err);
                                           }
                                        }
                                     }}
@@ -1588,14 +1616,16 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                                     </p>
                                  </div>
                                  <button
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                       e.stopPropagation();
+                                       stopAllSpeech();
                                        if (mediaRecorderRef.current) {
                                           try {
                                              if (mediaRecorderRef.current.state === 'recording') {
                                                 mediaRecorderRef.current.stop();
                                              }
-                                          } catch(e) {
-                                             console.error("Failed to stop media recorder", e);
+                                          } catch(err) {
+                                             console.error("Failed to stop media recorder", err);
                                           }
                                        }
                                     }}
@@ -1623,7 +1653,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
 
                                  <div className="flex items-center gap-3 w-full max-w-md pt-2">
                                     <button
-                                       onClick={() => {
+                                       onClick={(e) => {
+                                          e.stopPropagation();
                                           stopAllSpeech();
                                           setRecordedAudioUrl(null);
                                           setRecordedAudioBlob(null);
@@ -1637,7 +1668,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                                     </button>
 
                                     <button
-                                       onClick={() => {
+                                       onClick={(e) => {
+                                          e.stopPropagation();
+                                          stopAllSpeech();
                                           if (recordedAudioBlob) {
                                              handleTranscribeAudio(recordedAudioBlob);
                                           }
@@ -1722,7 +1755,8 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
 
                                  <div className="flex items-center justify-end gap-3 pt-2">
                                     <button
-                                       onClick={() => {
+                                       onClick={(e) => {
+                                          e.stopPropagation();
                                           stopAllSpeech();
                                           setRecordingAnswerState('idle');
                                           setRecordedText('');
@@ -1733,10 +1767,12 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                                        Try Again
                                     </button>
                                     <button
-                                       onClick={() => {
+                                       onClick={(e) => {
+                                          e.stopPropagation();
                                           stopAllSpeech();
                                           setIsRecordingAnswerMode(false);
                                           setRecordingAnswerState('idle');
+                                          setSelectedBox('answer');
                                        }}
                                        className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs uppercase tracking-wider hover:bg-slate-800 transition-all cursor-pointer"
                                     >
@@ -1794,7 +1830,9 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                            </div>
                         </div>
                       )}
-                </div>
+                 </div>
+                  );
+                })()}
 
                 {/* Loading state during Speech to Text API request */}
                 {/* {isTranscribing && (

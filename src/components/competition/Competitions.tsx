@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useCourse } from '../../context/CourseContext';
 import { CompetitionService } from '../../services/CompetitionService';
 import Cookies from 'js-cookie';
@@ -524,8 +524,10 @@ export const Competitions: React.FC = () => {
   }, [activeUserId]);
 
   // Fetch upcoming competitions from backend based on subscriptionId and module filter
-  const fetchCompetitions = async (moduleType: string, subId: string | number, uid?: string | number) => {
-    setIsLoadingCompetitions(true);
+  const fetchCompetitions = async (moduleType: string, subId: string | number, uid?: string | number, isSilent: boolean = false) => {
+    if (!isSilent) {
+      setIsLoadingCompetitions(true);
+    }
     setApiBackendMessage(null);
     try {
       let response: any;
@@ -570,24 +572,26 @@ export const Competitions: React.FC = () => {
         "No upcoming competitions";
       setApiBackendMessage(errMsg);
     } finally {
-      setIsLoadingCompetitions(false);
+      if (!isSilent) {
+        setIsLoadingCompetitions(false);
+      }
     }
   };
 
   // Re-fetch whenever selected subscription context, module type, or user ID changes
   useEffect(() => {
-    if (activeSubscriptionId) {
-      fetchCompetitions(selectedModuleType, activeSubscriptionId, activeUserId);
+    if (activeSubscriptionId || selectedModuleType === 'GK') {
+      fetchCompetitions(selectedModuleType, activeSubscriptionId || '', activeUserId);
     }
   }, [activeSubscriptionId, selectedModuleType, activeUserId]);
 
-  // Callback when any upcoming competition timer expires to refresh API data
-  const handleUpcomingTimerEnded = () => {
-    if (activeSubscriptionId) {
-      console.log("Timer ended for an upcoming competition. Fetching updated competition list from API...");
-      fetchCompetitions(selectedModuleType, activeSubscriptionId, activeUserId);
+  // Callback when any upcoming competition timer expires to refresh API data silently
+  const handleUpcomingTimerEnded = useCallback(() => {
+    if (activeSubscriptionId || selectedModuleType === 'GK') {
+      console.log("Timer transition detected for an upcoming competition. Fetching updated competition list from API silently...");
+      fetchCompetitions(selectedModuleType, activeSubscriptionId || '', activeUserId, true);
     }
-  };
+  }, [selectedModuleType, activeSubscriptionId, activeUserId]);
 
   // Sync isRegistered flag on upcoming competitions when registeredCompetitions updates
   useEffect(() => {
@@ -749,8 +753,8 @@ export const Competitions: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-slate-50 text-slate-800 p-3 sm:p-5 md:p-6 lg:p-8 space-y-5 sm:space-y-6 md:space-y-8 font-sans">
       {/* Top Header & Registration Counter Bar - Light Theme */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6 bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm">
-        <div className="space-y-1">
+      {/* <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6 bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm"> */}
+        {/* <div className="space-y-1">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold uppercase tracking-wider">
             <Trophy className="w-3.5 h-3.5 text-blue-600" /> MindShaala Competition Hub
           </div>
@@ -760,10 +764,10 @@ export const Competitions: React.FC = () => {
           <p className="text-xs sm:text-sm text-slate-500 max-w-xl">
             Test your knowledge in real-time speed challenges, Olympiads, and STEM leagues. Earn medals, cash prizes, and national glory.
           </p>
-        </div>
+        </div> */}
 
         {/* Live Registered Counter Badge & Stats */}
-        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 md:gap-4 w-full lg:w-auto">
+        {/* <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 md:gap-4 w-full lg:w-auto">
           <div className="flex items-center gap-3 bg-blue-50/80 border border-blue-200 rounded-xl px-4 py-3 flex-1 min-w-[240px]">
             <div className="p-2.5 rounded-lg bg-blue-600 text-white font-bold shadow-md shadow-blue-500/20 shrink-0">
               <CheckCircle2 className="w-5 h-5" />
@@ -786,10 +790,10 @@ export const Competitions: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* 1. Poster Publicity Carousel Section - Light Theme Container */}
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-slate-900 text-white shadow-xl">
+      {/* <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-slate-900 text-white shadow-xl">
         <div className={`p-5 sm:p-8 md:p-12 bg-gradient-to-br ${currentPoster.bgGradient} transition-all duration-700 ease-in-out`}>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
             <div className="lg:col-span-8 space-y-3 sm:space-y-5">
@@ -804,10 +808,10 @@ export const Competitions: React.FC = () => {
 
               <p className="text-xs sm:text-base md:text-lg text-slate-100 font-normal leading-relaxed max-w-2xl">
                 {currentPoster.subtitle}
-              </p>
+              </p> */}
 
               {/* Highlights pills */}
-              <div className="flex flex-wrap gap-1.5 sm:gap-2 pt-1 sm:pt-2">
+              {/* <div className="flex flex-wrap gap-1.5 sm:gap-2 pt-1 sm:pt-2">
                 {currentPoster.highlights.map((h, idx) => (
                   <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-black/25 border border-white/20 text-[11px] sm:text-xs text-white font-medium">
                     <Check className="w-3.5 h-3.5 text-emerald-400" /> {h}
@@ -824,10 +828,10 @@ export const Competitions: React.FC = () => {
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            </div> */}
 
             {/* Poster Decorative Graphics */}
-            <div className="lg:col-span-4 flex justify-center items-center py-2 lg:py-0">
+            {/* <div className="lg:col-span-4 flex justify-center items-center py-2 lg:py-0">
               <div className="relative w-36 h-36 sm:w-48 sm:h-48 md:w-56 md:h-56 rounded-full bg-white/10 border border-white/20 backdrop-blur-2xl flex items-center justify-center shadow-2xl group">
                 <div className="absolute inset-0 rounded-full bg-gradient-to-r from-amber-400/20 to-indigo-500/20 blur-xl animate-pulse" />
                 {currentPoster.imageIcon === 'Trophy' && (
@@ -842,10 +846,10 @@ export const Competitions: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Carousel Navigation Dots */}
-        <div className="absolute bottom-3 sm:bottom-4 left-4 sm:left-8 flex items-center gap-2">
+        {/* <div className="absolute bottom-3 sm:bottom-4 left-4 sm:left-8 flex items-center gap-2">
           {MOCK_POSTERS.map((_, idx) => (
             <button
               key={idx}
@@ -855,8 +859,8 @@ export const Competitions: React.FC = () => {
               }`}
             />
           ))}
-        </div>
-      </div>
+        </div> */}
+      {/* </div> */}
 
       {/* 2. Ongoing Offers & Promo Discounts - Light Theme */}
       <div className="space-y-4">
@@ -1373,20 +1377,26 @@ const UpcomingCompCard: React.FC<{
   const nowMs = useNetworkNow(1000);
   const targetDateStr = comp.start_time || comp.end_time || '';
   const [timeLeft, setTimeLeft] = useState(() => calculateTimeLeft(targetDateStr, nowMs));
-  const [hasFiredExpiry, setHasFiredExpiry] = useState(false);
+
+  // Track if this competition was active (not expired) during this card lifecycle
+  const wasActiveRef = useRef<boolean>(!calculateTimeLeft(targetDateStr, nowMs).expired);
+  const hasFiredExpiryRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (targetDateStr) {
       const calculated = calculateTimeLeft(targetDateStr, nowMs);
       setTimeLeft(calculated);
-      if (calculated.expired && !hasFiredExpiry) {
-        setHasFiredExpiry(true);
+
+      if (!calculated.expired) {
+        wasActiveRef.current = true;
+      } else if (calculated.expired && wasActiveRef.current && !hasFiredExpiryRef.current) {
+        hasFiredExpiryRef.current = true;
         if (onTimerEnded) {
           onTimerEnded();
         }
       }
     }
-  }, [targetDateStr, nowMs, hasFiredExpiry, onTimerEnded]);
+  }, [targetDateStr, nowMs, onTimerEnded]);
 
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return 'TBA';
@@ -1494,9 +1504,23 @@ const UpcomingCompCard: React.FC<{
 
         {/* Live Countdown Timer based on start_time / end_time */}
         {targetDateStr && (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center space-y-1">
-            <div className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider flex items-center justify-center gap-1">
-              <Timer className="w-3 h-3 text-blue-600" /> Start: {formatDateTime(comp.start_time || comp.end_time)}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center space-y-1.5">
+            <div className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider flex items-center justify-center gap-x-2 gap-y-1 flex-wrap">
+              {comp.start_time && (
+                <span className="flex items-center gap-1">
+                  <Timer className="w-3 h-3 text-blue-600 shrink-0" /> Start: {formatDateTime(comp.start_time)}
+                </span>
+              )}
+              {comp.end_time && (
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-indigo-600 shrink-0" /> End: {formatDateTime(comp.end_time)}
+                </span>
+              )}
+              {!comp.start_time && !comp.end_time && (
+                <span className="flex items-center gap-1">
+                  <Timer className="w-3 h-3 text-blue-600 shrink-0" /> Start: TBA
+                </span>
+              )}
             </div>
             {timeLeft && !timeLeft.expired && (
               <div className="grid grid-cols-4 gap-1 font-mono text-center pt-1">
@@ -1810,8 +1834,14 @@ const RegistrationConfirmationModal: React.FC<{
             <div className="grid grid-cols-2 gap-2.5 sm:gap-3 pt-2 border-t border-slate-200 text-xs">
               <div>
                 <span className="text-slate-400 block font-medium">Start Time</span>
-                <span className="font-semibold text-slate-800">{formatDateTime(comp.start_time || comp.end_time)}</span>
+                <span className="font-semibold text-slate-800">{formatDateTime(comp.start_time)}</span>
               </div>
+              {comp.end_time && (
+                <div>
+                  <span className="text-slate-400 block font-medium">End Time</span>
+                  <span className="font-semibold text-slate-800">{formatDateTime(comp.end_time)}</span>
+                </div>
+              )}
               <div>
                 <span className="text-slate-400 block font-medium">Entry Fee</span>
                 <span className="font-extrabold text-amber-600">{isFree ? 'FREE' : `₹${amount}`}</span>

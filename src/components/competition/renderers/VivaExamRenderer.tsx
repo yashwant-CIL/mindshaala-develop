@@ -64,6 +64,7 @@ import {
   VolumeX,
   CheckCircle2,
   ChevronRight,
+  ChevronLeft,
   AlertTriangle,
   Clock,
   User,
@@ -105,6 +106,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(new Set([0]));
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | number>('');
   const [sessionData, setSessionData] = useState<VivaSessionData | null>(null);
@@ -152,11 +154,17 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   useEffect(() => {
     setVisitedQuestions((prev) => new Set(prev).add(currentQuestionIndex));
     setAudioBlob(null);
-    setAudioUrl(null);
     setIsRecording(false);
     setRecordingSeconds(0);
     voiceStartTimeRef.current = new Date().toISOString();
     if (timerRef.current) clearInterval(timerRef.current);
+
+    const existingAns = userAnswers[qId] || userAnswers[currentQuestionIndex];
+    if (existingAns?.audioUrl) {
+      setAudioUrl(existingAns.audioUrl);
+    } else {
+      setAudioUrl(null);
+    }
   }, [currentQuestionIndex]);
 
   // TTS Read Question
@@ -399,7 +407,8 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   };
 
   const handleConfirmVoiceSubmit = async () => {
-    if (!audioBlob) return;
+    if (!audioBlob || isSubmittingAnswer) return;
+    setIsSubmittingAnswer(true);
     const endTimeStr = new Date().toISOString();
     const currentQId = qId;
 
@@ -422,30 +431,62 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
       formData.append('total_time_taken', String(recordingSeconds));
 
       console.log("Submitting Viva voice answer FormData:", Array.from(formData.entries()));
-      await CompetitionService.SubmitCompetitionAnswer(formData);
+      const res = await CompetitionService.SubmitCompetitionAnswer(formData);
+
+      toast.success(res?.message || res?.detail || "Voice answer submitted successfully!");
+
+      const savedAudioUrl = audioUrl;
 
       setUserAnswers((prev) => ({
         ...prev,
-        [currentQId]: { type: 'audio', recorded: true, duration: recordingSeconds }
+        [currentQId]: {
+          type: 'audio',
+          recorded: true,
+          submitted: true,
+          duration: recordingSeconds,
+          audioUrl: savedAudioUrl
+        },
+        [currentQuestionIndex]: {
+          type: 'audio',
+          recorded: true,
+          submitted: true,
+          duration: recordingSeconds,
+          audioUrl: savedAudioUrl
+        }
       }));
+
+      setQuestions((prevQ) =>
+        prevQ.map((q, idx) =>
+          idx === currentQuestionIndex ? { ...q, is_submitted: true, submitted: true } : q
+        )
+      );
 
       if (currentQuestionIndex < questions.length - 1) {
         setCurrentQuestionIndex((prev) => prev + 1);
       } else {
         setShowConfirmEndModal(true);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to submit Viva voice answer:", err);
-      alert("Failed to upload audio response. Please try again.");
+      const errorMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to upload audio response. Please try again.";
+      toast.error(errorMsg);
+    } finally {
+      setIsSubmittingAnswer(false);
     }
   };
 
   const handleSkipQuestion = async () => {
+    if (isSubmittingAnswer) return;
     if (isRecording) {
       stopRecording();
     }
     stopSpeech();
 
+    setIsSubmittingAnswer(true);
     const currentQId = qId;
 
     try {
@@ -462,26 +503,54 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
       formData.append('total_time_taken', '');
 
       console.log("Submitting Viva Skip Answer FormData:", Array.from(formData.entries()));
-      await CompetitionService.SubmitCompetitionAnswer(formData);
+      const res = await CompetitionService.SubmitCompetitionAnswer(formData);
+
+      toast.success(res?.message || "Question skipped");
 
       setUserAnswers((prev) => ({
         ...prev,
-        [currentQId]: { type: 'audio', skipped: true }
+        [currentQId]: { type: 'audio', skipped: true, submitted: true },
+        [currentQuestionIndex]: { type: 'audio', skipped: true, submitted: true }
       }));
-    } catch (err) {
+
+      setQuestions((prevQ) =>
+        prevQ.map((q, idx) =>
+          idx === currentQuestionIndex ? { ...q, is_submitted: true, submitted: true } : q
+        )
+      );
+
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex((prev) => prev + 1);
+      } else {
+        setShowConfirmEndModal(true);
+      }
+    } catch (err: any) {
       console.error("Failed to submit Viva skip answer API call:", err);
+      toast.error("Failed to skip question. Please try again.");
     } finally {
+      setIsSubmittingAnswer(false);
       setAudioBlob(null);
       setAudioUrl(null);
       setIsRecording(false);
       setRecordingSeconds(0);
+    }
+  };
 
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex((prev) => prev + 1);
-        toast.success("Question skipped");
-      } else {
-        setShowConfirmEndModal(true);
-      }
+  const handlePreviousQuestion = () => {
+    if (isSubmittingAnswer) return;
+    if (isRecording) stopRecording();
+    stopSpeech();
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex((prev) => prev - 1);
+    }
+  };
+
+  const handleNextQuestion = () => {
+    if (isSubmittingAnswer) return;
+    if (isRecording) stopRecording();
+    stopSpeech();
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex((prev) => prev + 1);
     }
   };
 
@@ -519,44 +588,55 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   const remainingSecs = Math.floor((remainingMs / 1000) % 60);
   const timeRemainingStr = `${String(remainingHours).padStart(2, '0')}:${String(remainingMins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
 
+  const answerRecord = userAnswers[qId] ?? userAnswers[currentQuestionIndex];
+  const isQuestionSubmitted = Boolean(
+    answerRecord?.submitted ||
+    answerRecord?.recorded ||
+    answerRecord?.skipped ||
+    currentQ.is_submitted ||
+    currentQ.submitted ||
+    currentQ.user_answer ||
+    currentQ.status === 'submitted'
+  );
+
   return (
-    <div className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-slate-50 text-slate-800 font-sans flex flex-col p-3 sm:p-5 md:p-8 space-y-4 sm:space-y-6">
+    <div className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-slate-50 text-slate-800 font-sans flex flex-col p-4 md:p-8 space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm gap-3">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-          <div className="p-2 sm:p-2.5 rounded-xl bg-purple-600 text-white font-bold shadow-md shrink-0">
-            <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
+      <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-purple-600 text-white font-bold shadow-md">
+            <Mic className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
-            <div className="text-[10px] sm:text-xs text-purple-700 font-bold uppercase tracking-wider truncate">
+          <div>
+            <div className="text-xs text-purple-700 font-bold uppercase tracking-wider">
               {comp.viva_type ? `${comp.viva_type} Voice Examination` : 'Viva Voice Examination'}
             </div>
-            <div className="text-sm sm:text-base font-extrabold text-slate-800 truncate">
+            <div className="text-base font-extrabold text-slate-800">
               {sessionData?.assessment_name || comp.title}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-[11px] sm:text-xs font-black">
-            <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 animate-pulse shrink-0" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-xs font-black">
+            <AlertTriangle className="w-4 h-4 text-red-600 animate-pulse" />
             <span>Warnings: {tabSwitchWarnings}/3</span>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-100 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-mono font-bold text-slate-700 border border-slate-200">
-            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 shrink-0" />
+          <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl text-sm font-mono font-bold text-slate-700 border border-slate-200">
+            <Clock className="w-4 h-4 text-slate-500" />
             <span>{timeRemainingStr}</span>
           </div>
 
           <button
             onClick={toggleMute}
-            className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
               isMuted
                 ? 'bg-slate-100 text-slate-500 border-slate-200'
                 : 'bg-purple-600 text-white border-purple-600 shadow-md'
             }`}
           >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-pulse" />}
+            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 animate-pulse" />}
             <span>{isMuted ? 'Muted' : 'Audio On'}</span>
           </button>
         </div>
@@ -568,150 +648,268 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
           <p className="text-slate-600 text-sm font-semibold">Initializing Viva Voice Examination...</p>
         </div>
       ) : (
-        <div className="max-w-4xl mx-auto w-full space-y-4 sm:space-y-6">
-          {/* Question Counter */}
-          <div className="flex justify-between items-center text-[10px] sm:text-xs font-extrabold text-slate-500 uppercase tracking-widest px-1">
-            <span>Question {currentQuestionIndex + 1} of {totalQuestions}</span>
-            <span>Completed: {Object.keys(userAnswers).length} / {totalQuestions}</span>
+        <div className="max-w-4xl mx-auto w-full space-y-6">
+          {/* Question Palette / Header Bar */}
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between items-center text-xs font-extrabold text-slate-500 uppercase tracking-widest px-1">
+              <span>Question {currentQuestionIndex + 1} of {totalQuestions}</span>
+              <span>Completed: {Object.keys(userAnswers).length} / {totalQuestions}</span>
+            </div>
+
+            {/* Questions Jump Palette */}
+            {totalQuestions > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+                {questions.map((q, idx) => {
+                  const qNumId = q.viva_q_id || q.viva_question_id || q.question_id || q.id || q.question_no || (idx + 1);
+                  const qAns = userAnswers[qNumId] || userAnswers[idx];
+                  const qSub = Boolean(qAns?.submitted || qAns?.recorded || qAns?.skipped || q.is_submitted || q.submitted);
+                  const isCurrent = idx === currentQuestionIndex;
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        if (!isSubmittingAnswer) {
+                          if (isRecording) stopRecording();
+                          stopSpeech();
+                          setCurrentQuestionIndex(idx);
+                        }
+                      }}
+                      disabled={isSubmittingAnswer}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed ${
+                        isCurrent
+                          ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-400'
+                          : qSub
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {qSub && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                      Q{idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Question Card */}
-          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 space-y-3 sm:space-y-4 shadow-sm">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 space-y-4 shadow-sm">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="px-2.5 sm:px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-[10px] sm:text-[11px] font-black uppercase tracking-wider">
+              <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-[11px] font-black uppercase tracking-wider">
                 Oral Voice Question
               </span>
               {currentQ.time_per_question && (
-                <span className="px-2.5 sm:px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] sm:text-[11px] font-bold flex items-center gap-1 border border-slate-200">
-                  <Clock className="w-3 h-3 text-purple-600 shrink-0" /> {currentQ.time_per_question}s time limit
+                <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold flex items-center gap-1 border border-slate-200">
+                  <Clock className="w-3 h-3 text-purple-600" /> {currentQ.time_per_question}s time limit
                 </span>
               )}
             </div>
-            <h2 className="text-base sm:text-xl md:text-2xl font-bold text-slate-900 leading-relaxed break-words">
+            <h2 className="text-lg md:text-2xl font-bold text-slate-900 leading-relaxed">
               <QuestionMathJax content={questionText} />
             </h2>
             {currentQ.question_details?.description_diagrams_url && (
-              <div className="mt-3 sm:mt-4">
+              <div className="mt-4">
                 <img
                   src={currentQ.question_details.description_diagrams_url}
                   alt="Question Diagram"
-                  className="max-h-48 sm:max-h-64 max-w-full rounded-xl border border-slate-200 object-contain mx-auto"
+                  className="max-h-64 rounded-xl border border-slate-200 object-contain mx-auto"
                 />
               </div>
             )}
           </div>
 
-          {/* Voice Studio Container */}
-          <div className="bg-white text-slate-800 border-2 border-purple-100 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center space-y-4 sm:space-y-6 shadow-sm">
-            <div className="space-y-1">
-              <div className="text-[10px] sm:text-xs uppercase font-extrabold tracking-widest text-purple-700">
-                Voice Answer Studio
+          {/* Answer Studio / Submitted Status */}
+          {isQuestionSubmitted ? (
+            <div className="bg-emerald-50 border-2 border-emerald-200 rounded-3xl p-8 text-center space-y-4 shadow-sm">
+              <div className="w-14 h-14 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+                <CheckCircle2 className="w-7 h-7 text-emerald-600" />
               </div>
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                Speak clearly into your microphone to record your response.
-              </p>
-            </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-black text-emerald-900">
+                  This question is already submitted
+                </h3>
+                <p className="text-xs text-emerald-700 font-medium">
+                  {answerRecord?.skipped
+                    ? 'You skipped this question.'
+                    : 'Your audio response for this question has been recorded and saved successfully.'}
+                </p>
+              </div>
 
-            {/* Waveform & Timer */}
-            <div className="py-2 sm:py-4">
-              {isRecording ? (
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex items-center justify-center gap-1 sm:gap-1.5 h-10 sm:h-12">
-                    {[...Array(12)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="w-1.5 bg-purple-600 rounded-full animate-pulse"
-                        style={{
-                          height: `${Math.max(12, Math.floor(Math.random() * 40))}px`,
-                          animationDuration: `${0.3 + (i % 5) * 0.1}s`
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <div className="text-lg sm:text-2xl font-mono font-black text-red-600 animate-pulse">
-                    Recording: {recordingSeconds}s
-                  </div>
-                </div>
-              ) : audioUrl ? (
-                <div className="space-y-3">
-                  <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 text-[11px] sm:text-xs font-extrabold">
-                    <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Answer Recorded ({recordingSeconds}s)
-                  </div>
-                  <div className="pt-2">
-                    <audio controls src={audioUrl} className="mx-auto max-w-md w-full h-9 sm:h-10 rounded-xl" />
-                  </div>
-                </div>
-              ) : (
-                <div className="text-slate-400 text-[11px] sm:text-xs font-medium">
-                  Click the microphone button below to start recording
+              {(answerRecord?.audioUrl || audioUrl || currentQ.audio_url || currentQ.user_answer_url) && !answerRecord?.skipped && (
+                <div className="pt-2">
+                  <p className="text-xs font-bold text-slate-600 mb-2">Submitted Recording Preview:</p>
+                  <audio
+                    controls
+                    src={answerRecord?.audioUrl || audioUrl || currentQ.audio_url || currentQ.user_answer_url}
+                    className="mx-auto max-w-md w-full rounded-xl"
+                  />
                 </div>
               )}
             </div>
-
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-3">
-              {!isRecording && !audioUrl && (
-                <div className="flex items-center gap-2.5 sm:gap-3 flex-col sm:flex-row w-full sm:w-auto justify-center">
-                  <button
-                    onClick={startRecording}
-                    className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2.5 sm:gap-3 cursor-pointer w-full sm:w-auto"
-                  >
-                    <Mic className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" /> Start Recording Voice
-                  </button>
-                  <button
-                    onClick={handleSkipQuestion}
-                    className="px-5 sm:px-6 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm border border-slate-300 transition-all flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
-                  >
-                    <SkipForward className="w-4 h-4 text-slate-600 shrink-0" /> Skip Question
-                  </button>
+          ) : (
+            /* Voice Studio Container (Not Attempted) */
+            <div className="bg-white text-slate-800 border-2 border-purple-100 rounded-3xl p-8 text-center space-y-6 shadow-sm">
+              <div className="space-y-1">
+                <div className="text-xs uppercase font-extrabold tracking-widest text-purple-700">
+                  Voice Answer Studio
                 </div>
-              )}
+                <p className="text-xs text-slate-500 font-medium">
+                  Speak clearly into your microphone to record your response.
+                </p>
+              </div>
 
-              {isRecording && (
+              {/* Waveform & Timer */}
+              <div className="py-4">
+                {isRecording ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-center gap-1.5 h-12">
+                      {[...Array(12)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-1.5 bg-purple-600 rounded-full animate-pulse"
+                          style={{
+                            height: `${Math.max(15, Math.floor(Math.random() * 45))}px`,
+                            animationDuration: `${0.3 + (i % 5) * 0.1}s`
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="text-2xl font-mono font-black text-red-600 animate-pulse">
+                      Recording: {recordingSeconds}s
+                    </div>
+                  </div>
+                ) : audioUrl ? (
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-extrabold">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Answer Recorded ({recordingSeconds}s)
+                    </div>
+                    <div className="pt-2">
+                      <audio controls src={audioUrl} className="mx-auto max-w-md w-full rounded-xl" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-slate-400 text-xs font-medium">
+                    Click the microphone button below to start recording
+                  </div>
+                )}
+              </div>
+
+              {/* Controls */}
+              <div className="flex items-center justify-center gap-4">
+                {!isRecording && !audioUrl && (
+                  <div className="flex items-center gap-3 flex-wrap justify-center">
+                    <button
+                      onClick={startRecording}
+                      disabled={isSubmittingAnswer}
+                      className="px-8 py-4 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-sm shadow-lg shadow-purple-600/30 transition-all flex items-center gap-3 cursor-pointer disabled:opacity-50"
+                    >
+                      <Mic className="w-5 h-5" /> Start Recording Voice
+                    </button>
+                    <button
+                      onClick={handleSkipQuestion}
+                      disabled={isSubmittingAnswer}
+                      className="px-6 py-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm border border-slate-300 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSubmittingAnswer ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+                      ) : (
+                        <SkipForward className="w-4 h-4 text-slate-600" />
+                      )}
+                      <span>Skip Question</span>
+                    </button>
+                  </div>
+                )}
+
+                {isRecording && (
+                  <button
+                    onClick={stopRecording}
+                    className="px-8 py-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm shadow-lg shadow-red-600/30 transition-all flex items-center gap-3 cursor-pointer animate-pulse"
+                  >
+                    <Square className="w-5 h-5 fill-current" /> Stop Recording
+                  </button>
+                )}
+
+                {audioUrl && !isRecording && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        setAudioBlob(null);
+                        setAudioUrl(null);
+                      }}
+                      disabled={isSubmittingAnswer}
+                      className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center gap-2 cursor-pointer border border-slate-200 disabled:opacity-50"
+                    >
+                      <RefreshCw className="w-4 h-4 text-slate-600" /> Re-record Answer
+                    </button>
+
+                    <button
+                      onClick={handleConfirmVoiceSubmit}
+                      disabled={isSubmittingAnswer}
+                      className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmittingAnswer ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin text-white" />
+                          <span>Submitting Answer...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Save & Submit Voice Answer</span>
+                          <ChevronRight className="w-4 h-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Action Bar */}
+          <div className="pt-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handlePreviousQuestion}
+                disabled={currentQuestionIndex === 0 || isSubmittingAnswer}
+                className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 font-bold text-xs border border-slate-300 transition-all flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-600" /> Previous Question
+              </button>
+
+              {isQuestionSubmitted && currentQuestionIndex < totalQuestions - 1 && (
                 <button
-                  onClick={stopRecording}
-                  className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-red-600/30 transition-all flex items-center justify-center gap-2.5 sm:gap-3 cursor-pointer animate-pulse w-full sm:w-auto"
+                  onClick={handleNextQuestion}
+                  disabled={isSubmittingAnswer}
+                  className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  <Square className="w-4 h-4 sm:w-5 sm:h-5 fill-current shrink-0" /> Stop Recording
+                  <span>Next Question</span>
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               )}
 
-              {audioUrl && !isRecording && (
-                <div className="flex items-center gap-2.5 sm:gap-3 flex-col sm:flex-row w-full sm:w-auto">
-                  <button
-                    onClick={() => {
-                      setAudioBlob(null);
-                      setAudioUrl(null);
-                    }}
-                    className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer border border-slate-200 w-full sm:w-auto"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600 shrink-0" /> Re-record Answer
-                  </button>
-
-                  <button
-                    onClick={handleConfirmVoiceSubmit}
-                    className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto"
-                  >
-                    Save & Submit Voice Answer <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                  </button>
-                </div>
+              {!isQuestionSubmitted && (
+                <button
+                  onClick={handleSkipQuestion}
+                  disabled={isSubmittingAnswer}
+                  className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingAnswer ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
+                  ) : (
+                    <SkipForward className="w-4 h-4 text-slate-600" />
+                  )}
+                  <span>Skip Question</span>
+                </button>
               )}
             </div>
-          </div>
 
-          {/* Action Bar */}
-          <div className="pt-2 sm:pt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <button
-              onClick={handleSkipQuestion}
-              className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <SkipForward className="w-4 h-4 text-slate-600 shrink-0" /> Skip Question
-            </button>
             <button
               onClick={() => setShowConfirmEndModal(true)}
-              className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              disabled={isSubmittingAnswer || isSubmitting}
+              className="px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              <FileCheck className="w-4 h-4 shrink-0" /> End Viva Examination
+              <FileCheck className="w-4 h-4" /> End Viva Examination
             </button>
           </div>
         </div>

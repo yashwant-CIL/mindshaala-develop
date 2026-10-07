@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Cookies from 'js-cookie';
+import { toast } from 'react-hot-toast';
 import { CompetitionService } from '../../services/CompetitionService';
 import { useCourse } from '../../context/CourseContext';
 import {
@@ -484,25 +485,35 @@ export const Leaderboard: React.FC<{
 
   // Handle clicking "View Rank Table" on an individual competition card
   const handleOpenRankTable = async (comp: CompetitionAttemptItem) => {
-    setSelectedCompetition(comp);
     setIsLoadingResult(true);
     setDetailedResultData(null);
     try {
-      const rawModType = String(comp.moduleType || selectedModuleType).toUpperCase();
-      const rawSessionId = comp.rawItem?.session_id || comp.rawItem?.session_Id || comp.attemptId;
-      const rawGkUserAssId = comp.rawItem?.gk_user_ass_id || comp.rawItem?.gk_user_assessment_id || comp.attemptId;
+      const rawCompId = Number(comp.competitionId || comp.rawItem?.competition_id || comp.rawItem?.competition_Id || comp.attemptId || 0);
+      const rawUserId = Number(activeUserId || 0);
+      const rawCompType = String(comp.moduleType || comp.rawItem?.competition_type || comp.rawItem?.competitionType || selectedModuleType).toUpperCase();
 
-      const res = await CompetitionService.GetCompetitionResult(
-        rawModType,
-        activeUserId,
-        (rawModType === 'VIVA' || rawModType === 'TAM') ? rawSessionId : undefined,
-        rawModType === 'GK' ? rawGkUserAssId : undefined
+      console.log("Fetching competition rankings with params:", { rawCompId, rawUserId, rawCompType });
+
+      const res = await CompetitionService.GetCompetitionRankings(
+        rawCompId,
+        rawUserId,
+        rawCompType
       );
 
-      const payload = res?.data?.data || res?.data || res?.result || res || comp.rawItem;
+      console.log("GetCompetitionRankings API response:", res);
+      const payload = res?.data?.data || res?.data || res?.result || res;
+
+      if (!payload) {
+        throw new Error("No competition ranking data returned from server.");
+      }
+
       setDetailedResultData(payload);
-    } catch (err) {
-      console.error("Failed to load competition detailed result:", err);
+      setSelectedCompetition(comp);
+    } catch (err: any) {
+      console.error("Failed to load competition rankings:", err);
+      setSelectedCompetition(null);
+      setDetailedResultData(null);
+      toast.error(err?.response?.data?.message || err?.message || "Failed to load competition rankings.");
     } finally {
       setIsLoadingResult(false);
     }
@@ -762,6 +773,9 @@ export const Leaderboard: React.FC<{
 /* ============================================================================
    SUB-COMPONENT: INDIVIDUAL COMPETITION RANK TABLE & STANDINGS VIEW
    ============================================================================ */
+/* ============================================================================
+   SUB-COMPONENT: INDIVIDUAL COMPETITION RANK TABLE & STANDINGS VIEW
+   ============================================================================ */
 const IndividualCompetitionRankTable: React.FC<{
   competition: CompetitionAttemptItem;
   detailedResult?: any;
@@ -770,119 +784,137 @@ const IndividualCompetitionRankTable: React.FC<{
 }> = ({ competition, detailedResult, isLoadingResult, onBack }) => {
   const [tableSearch, setTableSearch] = useState('');
 
-  const sessionObj = detailedResult?.session || detailedResult || {};
-  const userRank = (competition.rank !== undefined && competition.rank !== null)
-    ? competition.rank
-    : (sessionObj.rank ?? sessionObj.user_rank ?? 4);
+  if (isLoadingResult) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs shadow-sm transition-all cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4 text-slate-600 shrink-0" />
+            Back to Competition Category Cards
+          </button>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-3xl p-12 flex flex-col items-center justify-center gap-4 text-center shadow-sm min-h-[300px]">
+          <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
+          <p className="text-base font-bold text-slate-700">Loading Competition Rankings...</p>
+          <p className="text-xs text-slate-400">Fetching participant rankings from backend service...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const maxScore = competition.maxScore || Number(sessionObj.max_score || sessionObj.total_marks || 100);
-  const userScore = competition.score || Number(sessionObj.total_score || sessionObj.score || 0);
+  // Parse API payload parameters returned by GetCompetitionRankings:
+  // { competition_id, competition_title, competition_type, start_time, end_time, current_user, ranking }
+  const compTitle = detailedResult?.competition_title || detailedResult?.title || competition.title || "Competition Standings";
+  const compType = detailedResult?.competition_type || detailedResult?.moduleType || competition.moduleType || "Competition";
+  const currentUserObj = detailedResult?.current_user || null;
 
-  // Generate structured standings entries for this specific competition
-  const generateStandingsList = (): IndividualParticipantStanding[] => {
-    const list: IndividualParticipantStanding[] = [
-      {
-        rank: 1,
-        id: 'p1',
-        name: 'Aarav Sharma',
-        school: 'DPS R.K. Puram',
-        city: 'New Delhi',
-        activityTitle: competition.title,
-        score: Math.round(maxScore * 0.98),
-        maxScore,
-        metricLabel: 'Accuracy',
-        metricValue: '98%',
-        timeSpent: '16m 20s',
-        xpEarned: 2500,
-        badges: ['Gold Medal', 'Top Topper']
-      },
-      {
-        rank: 2,
-        id: 'p2',
-        name: 'Ananya Verma',
-        school: 'National Public School',
-        city: 'Bengaluru',
-        activityTitle: competition.title,
-        score: Math.round(maxScore * 0.95),
-        maxScore,
-        metricLabel: 'Accuracy',
-        metricValue: '95%',
-        timeSpent: '18m 10s',
-        xpEarned: 2100,
-        badges: ['Silver Medal', 'Precision Pro']
-      },
-      {
-        rank: 3,
-        id: 'p3',
-        name: 'Rohan Gupta',
-        school: 'DAV Public School',
-        city: 'Mumbai',
-        activityTitle: competition.title,
-        score: Math.round(maxScore * 0.92),
-        maxScore,
-        metricLabel: 'Accuracy',
-        metricValue: '92%',
-        timeSpent: '19m 45s',
-        xpEarned: 1800,
-        badges: ['Bronze Medal']
-      },
-      {
-        rank: 4,
-        id: 'p4',
-        name: 'Priya Sundaram',
-        school: 'P.S. Senior Sec School',
-        city: 'Chennai',
-        activityTitle: competition.title,
-        score: Math.round(maxScore * 0.90),
-        maxScore,
-        metricLabel: 'Accuracy',
-        metricValue: '90%',
-        timeSpent: '20m 15s',
-        xpEarned: 1700,
-        badges: ['Merit Certificate']
-      },
-      {
-        rank: 5,
-        id: 'p5',
-        name: 'Kabir Mehta',
-        school: 'St. Xavier High School',
-        city: 'Kolkata',
-        activityTitle: competition.title,
-        score: Math.round(maxScore * 0.88),
-        maxScore,
-        metricLabel: 'Accuracy',
-        metricValue: '88%',
-        timeSpent: '20m 40s',
-        xpEarned: 1600,
-        badges: ['Top 5 Achiever']
-      }
-    ];
-
-    // Current User Entry
-    const currentUserEntry: IndividualParticipantStanding = {
-      rank: userRank,
-      id: 'current-user',
-      name: 'You (Current Participant)',
-      school: 'Checkers Innovation Lab',
-      city: 'Indore',
-      activityTitle: competition.title,
-      score: userScore,
-      maxScore,
-      metricLabel: 'Accuracy',
-      metricValue: `${competition.percentage}%`,
-      timeSpent: competition.timeTaken,
-      xpEarned: Math.round(competition.percentage * 15),
-      badges: [competition.badge || 'National Competitor'],
-      isCurrentUser: true
-    };
-
-    // If user rank matches one of top ranks, substitute or place user correctly
-    const existingIndex = list.findIndex((item) => item.rank === userRank);
-    if (existingIndex !== -1) {
-      list[existingIndex] = currentUserEntry;
-    } else {
-      list.push(currentUserEntry);
+  const formatArrayDate = (arr?: number[]) => {
+    if (Array.isArray(arr) && arr.length >= 3) {
+      const [year, month, day, hour = 0, minute = 0] = arr;
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthStr = months[(month - 1) % 12] || String(month);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${day} ${monthStr} ${year}${arr.length >= 5 ? `, ${pad(hour)}:${pad(minute)}` : ''}`;
     }
+    return null;
+  };
+
+  const formattedStartDate = formatArrayDate(detailedResult?.start_time) || competition.attemptDate;
+
+  // Extract User info from current_user
+  const userRank = currentUserObj
+    ? Number(currentUserObj.rank || currentUserObj.user_rank || currentUserObj.position || competition.rank || 0)
+    : (competition.rank ?? 0);
+
+  const maxScore = currentUserObj
+    ? Number(currentUserObj.max_score || currentUserObj.total_marks || currentUserObj.maxScore || competition.maxScore || 100)
+    : (competition.maxScore || 100);
+
+  const userScore = currentUserObj
+    ? Number(currentUserObj.score || currentUserObj.total_score || currentUserObj.marks_obtained || currentUserObj.marks || competition.score || 0)
+    : (competition.score || 0);
+
+  const userPercentage = currentUserObj
+    ? Number(currentUserObj.percentage || currentUserObj.accuracy || (maxScore > 0 ? Math.round((userScore / maxScore) * 100) : 0))
+    : (competition.percentage || 0);
+
+  // Generate structured standings entries strictly from API response payload
+  const generateStandingsList = (): IndividualParticipantStanding[] => {
+    const rawRankings: any[] = Array.isArray(detailedResult?.ranking)
+      ? detailedResult.ranking
+      : (Array.isArray(detailedResult?.rankings) ? detailedResult.rankings : []);
+
+    const list: IndividualParticipantStanding[] = [];
+
+    if (rawRankings.length > 0) {
+      rawRankings.forEach((item: any, idx: number) => {
+        const r = Number(item.rank || item.user_rank || item.position || idx + 1);
+        const name = item.name || item.user_name || item.student_name || [item.first_name, item.last_name].filter(Boolean).join(' ') || `Participant #${r}`;
+        const school = item.school_name || item.school || item.college || 'School / Academy';
+        const city = item.city || item.location || 'India';
+        const score = Number(item.score || item.total_score || item.marks || item.marks_obtained || 0);
+        const itemMaxScore = Number(item.max_score || item.total_marks || item.maxScore || maxScore);
+        const percentage = Number(item.percentage || item.accuracy || (itemMaxScore > 0 ? Math.round((score / itemMaxScore) * 100) : 0));
+        const timeSpent = item.time_taken || item.time_spent || item.duration || 'N/A';
+        const xpEarned = Number(item.xp_earned || item.xp || Math.round(percentage * 15));
+        const badges = Array.isArray(item.badges)
+          ? item.badges
+          : (item.badge ? [item.badge] : (r === 1 ? ['Gold Medal', 'Top Topper'] : r === 2 ? ['Silver Medal'] : r === 3 ? ['Bronze Medal'] : ['Participant']));
+        const isCurrentUser = currentUserObj
+          ? (item.user_id === currentUserObj.user_id || item.id === currentUserObj.id || item.is_current_user)
+          : (item.is_current_user || Boolean(item.isCurrentUser));
+
+        list.push({
+          rank: r,
+          id: String(item.user_id || item.id || `rank-${r}`),
+          name: isCurrentUser ? `${name} (You)` : name,
+          school,
+          city,
+          activityTitle: compTitle,
+          score,
+          maxScore: itemMaxScore,
+          metricLabel: 'Accuracy',
+          metricValue: `${percentage}%`,
+          timeSpent,
+          xpEarned,
+          badges,
+          isCurrentUser
+        });
+      });
+    }
+
+    if (currentUserObj && !list.some(entry => entry.isCurrentUser)) {
+      const cName = currentUserObj.name || currentUserObj.user_name || [currentUserObj.first_name, currentUserObj.last_name].filter(Boolean).join(' ') || 'You (Current Participant)';
+      list.push({
+        rank: userRank || list.length + 1,
+        id: String(currentUserObj.user_id || currentUserObj.id || 'current-user'),
+        name: `${cName} (You)`,
+        school: currentUserObj.school_name || currentUserObj.school || 'Academy Student',
+        city: currentUserObj.city || currentUserObj.location || 'India',
+        activityTitle: compTitle,
+        score: userScore,
+        maxScore,
+        metricLabel: 'Accuracy',
+        metricValue: `${userPercentage}%`,
+        timeSpent: currentUserObj.time_taken || currentUserObj.time_spent || competition.timeTaken || '0m',
+        xpEarned: Number(currentUserObj.xp_earned || currentUserObj.xp || Math.round(userPercentage * 15)),
+        badges: [currentUserObj.badge || competition.badge || 'National Competitor'],
+        isCurrentUser: true
+      });
+    }
+
+    /* ========================================================================
+       PREVIOUS STATIC FALLBACK DATA (COMMENTED OUT FOR NO STATIC DATA DEMAND)
+       ========================================================================
+       const list: IndividualParticipantStanding[] = [
+         { rank: 1, id: 'p1', name: 'Aarav Sharma', school: 'DPS R.K. Puram', city: 'New Delhi', ... },
+         { rank: 2, id: 'p2', name: 'Ananya Verma', school: 'National Public School', city: 'Bengaluru', ... },
+         ...
+       ];
+       ======================================================================== */
 
     return list.sort((a, b) => a.rank - b.rank);
   };
@@ -920,12 +952,12 @@ const IndividualCompetitionRankTable: React.FC<{
           <div className="space-y-1.5 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                {competition.moduleType || 'Competition'} Standings
+                {compType} Standings
               </span>
-              <span className="text-xs text-slate-500">{competition.attemptDate}</span>
+              <span className="text-xs text-slate-500">{formattedStartDate}</span>
             </div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight break-words">
-              {competition.title}
+              {compTitle}
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
               Official individual competition rank table and performance parameters.
@@ -955,7 +987,7 @@ const IndividualCompetitionRankTable: React.FC<{
                 <div className="text-base sm:text-xl font-black text-slate-900 truncate">
                   {userScore} <span className="text-xs text-slate-500 font-normal">/ {maxScore}</span>
                 </div>
-                <div className="text-[10px] text-blue-700 font-bold truncate">{competition.percentage}% Percentage</div>
+                <div className="text-[10px] text-blue-700 font-bold truncate">{userPercentage}% Percentage</div>
               </div>
             </div>
           </div>

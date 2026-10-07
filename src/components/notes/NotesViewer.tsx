@@ -83,6 +83,10 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
   const [isPdfRendering, setIsPdfRendering] = useState<boolean>(false);
   const [isSpeakingNotes, setIsSpeakingNotes] = useState<boolean>(false);
   const [activeHighlightBox, setActiveHighlightBox] = useState<{ x: number; y: number; width: number; height: number; str: string } | null>(null);
+  const [pausedCharIndex, setPausedCharIndex] = useState<number | null>(null);
+  const [pausedPage, setPausedPage] = useState<number | null>(null);
+  const [showTtsResumeModal, setShowTtsResumeModal] = useState<boolean>(false);
+  const currentCharIndexRef = useRef<number>(0);
   const pageTextItemsRef = useRef<{ str: string; startChar: number; endChar: number; x: number; y: number; width: number; height: number }[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -98,7 +102,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
     ];
   };
 
-  // Keep pageInput synced with currentPage & stop TTS when page changes
+  // Keep pageInput synced with currentPage & reset TTS state when page or PDF changes
   useEffect(() => {
     setPageInput(String(currentPage));
     if ('speechSynthesis' in window) {
@@ -106,7 +110,10 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
     }
     setIsSpeakingNotes(false);
     setActiveHighlightBox(null);
-  }, [currentPage, pdfScale]);
+    setPausedCharIndex(null);
+    setPausedPage(null);
+    currentCharIndexRef.current = 0;
+  }, [currentPage, pdfScale, pdfUrl]);
 
   // Clean up TTS on unmount
   useEffect(() => {
@@ -118,19 +125,39 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
   }, []);
 
   // Text-To-Speech (TTS) for notes starting from current page with PDF Canvas Highlight
-  const handleToggleNotesTts = async () => {
+  const handleToggleNotesTts = () => {
     if (isSpeakingNotes) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
       setIsSpeakingNotes(false);
-      setActiveHighlightBox(null);
+      if (currentCharIndexRef.current > 0) {
+        setPausedCharIndex(currentCharIndexRef.current);
+        setPausedPage(currentPage);
+      }
       return;
     }
 
     if (!('speechSynthesis' in window)) {
       toast.error("Speech synthesis is not supported in this browser.");
       return;
+    }
+
+    // If previously stopped on the same page, show popup asking to continue or start over
+    if (pausedCharIndex !== null && pausedPage === currentPage && pausedCharIndex > 0) {
+      setShowTtsResumeModal(true);
+      return;
+    }
+
+    startTtsFromIndex(0);
+  };
+
+  const startTtsFromIndex = async (startIndex: number = 0) => {
+    setShowTtsResumeModal(false);
+    if (startIndex === 0) {
+      setPausedCharIndex(null);
+      setPausedPage(null);
+      currentCharIndexRef.current = 0;
     }
 
     let textToRead = "";
@@ -146,9 +173,17 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
 
         const textParts: string[] = [];
         let charOffset = 0;
+        let lastStr = "";
 
         for (const item of textContent.items) {
           if (!item.str || !item.str.trim()) continue;
+
+          const currentTrimmed = item.str.trim();
+          // Skip duplicate consecutive text items (prevents reading headings or lines twice)
+          if (currentTrimmed === lastStr) {
+            continue;
+          }
+          lastStr = currentTrimmed;
 
           let tx: number[];
           if (pdfjsLib && pdfjsLib.Util && pdfjsLib.Util.transform) {
@@ -193,15 +228,25 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
       textToRead = `Notes for ${chapterTitle}, ${subjectName}. Page ${currentPage}.`;
     }
 
+    let textForSpeech = textToRead;
+    let actualStartIndex = startIndex;
+    if (startIndex > 0 && startIndex < textToRead.length) {
+      textForSpeech = textToRead.substring(startIndex);
+    } else {
+      actualStartIndex = 0;
+    }
+
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(textToRead);
+    const utterance = new SpeechSynthesisUtterance(textForSpeech);
     utterance.rate = 1.0;
 
     utterance.onboundary = (event: any) => {
       if (event.name === 'word') {
-        const charIndex = event.charIndex;
+        const relativeIndex = event.charIndex;
+        const absoluteIndex = relativeIndex + actualStartIndex;
+        currentCharIndexRef.current = absoluteIndex;
         const items = pageTextItemsRef.current;
-        const active = items.find(item => charIndex >= item.startChar && charIndex <= item.endChar + 2);
+        const active = items.find(item => absoluteIndex >= item.startChar && absoluteIndex <= item.endChar + 2);
         if (active) {
           setActiveHighlightBox({
             x: active.x,
@@ -218,6 +263,9 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
     utterance.onend = () => {
       setIsSpeakingNotes(false);
       setActiveHighlightBox(null);
+      setPausedCharIndex(null);
+      setPausedPage(null);
+      currentCharIndexRef.current = 0;
     };
     utterance.onerror = () => {
       setIsSpeakingNotes(false);
@@ -309,12 +357,25 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
   // ---------------------------------------------------------------------------
   useEffect(() => {
     // 1. Window Blur & Visibility Loss (Snipping tool / Tab Switch / External Capture app)
+    const stopSpeechOnSecurityBlur = () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      setIsSpeakingNotes(false);
+      if (currentCharIndexRef.current > 0) {
+        setPausedCharIndex(currentCharIndexRef.current);
+        setPausedPage(currentPage);
+      }
+    };
+
+    // 1. Window Blur & Visibility Loss (Snipping tool / Tab Switch / External Capture app)
     // Small timeout prevents false blur triggers when clicking internal buttons/controls
     const handleBlur = () => {
       setTimeout(() => {
         if (!document.hasFocus() && !document.hidden) {
           setIsPrivacyBlurred(true);
           setSecurityNotice("Screen protected: Content hidden while window is out of focus.");
+          stopSpeechOnSecurityBlur();
         }
       }, 200);
     };
@@ -328,6 +389,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
       if (document.hidden) {
         setIsPrivacyBlurred(true);
         setSecurityNotice("Document hidden: Tab switched or browser minimized.");
+        stopSpeechOnSecurityBlur();
       } else {
         setIsPrivacyBlurred(false);
         setSecurityNotice(null);
@@ -346,6 +408,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
       if (e.key === 'PrintScreen' || e.key === 'PrtScn' || e.code === 'PrintScreen') {
         e.preventDefault();
         setIsPrivacyBlurred(true);
+        stopSpeechOnSecurityBlur();
         setScreenshotWarningCount(prev => prev + 1);
         toast.error("⚠️ DRM ALERT: Screenshots are strictly prohibited on MindShaala Study Notes!", { id: 'drm-prtsc' });
         setTimeout(() => setIsPrivacyBlurred(false), 3500);
@@ -361,6 +424,7 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
       ) {
         e.preventDefault();
         setIsPrivacyBlurred(true);
+        stopSpeechOnSecurityBlur();
         toast.error("⚠️ Security Restricted: Copying, saving, or inspecting PDF source is disabled.", { id: 'drm-save' });
         setTimeout(() => setIsPrivacyBlurred(false), 3000);
       }
@@ -853,13 +917,14 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
                 {/* Real-time PDF Canvas Word Highlight Overlay directly on PDF text */}
                 {isSpeakingNotes && activeHighlightBox && (
                   <div 
-                    className="absolute pointer-events-none z-30 rounded-xs transition-all duration-150 shadow-[0_0_8px_rgba(250,204,21,0.4)]"
+                    className="absolute pointer-events-none z-30 rounded-xs transition-all duration-150 shadow-[0_0_8px_rgba(250,204,21,0.35)]"
                     style={{
                       left: `${activeHighlightBox.x + 8}px`,
                       top: `${activeHighlightBox.y + 8}px`,
                       width: `${Math.max(activeHighlightBox.width, 14)}px`,
                       height: `${Math.max(activeHighlightBox.height, 14)}px`,
-                      backgroundColor: 'rgba(253, 224, 71, 0.65)',
+                      backgroundColor: 'rgba(253, 224, 71, 0.35)',
+                      borderBottom: '2px solid #eab308',
                       mixBlendMode: 'multiply'
                     }}
                   />
@@ -999,6 +1064,42 @@ export default function NotesViewer({ pdfUrl, chapterTitle, subjectName = 'Subje
         </div>
         <span className="hidden sm:inline text-slate-500 font-mono text-[10px]">DRM Hash: MS-SEC-{userId}-{Date.now().toString(36).toUpperCase()}</span>
       </footer>
+
+      {/* Resume TTS Speech Modal */}
+      {showTtsResumeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-slate-100 flex flex-col gap-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-indigo-600">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center shrink-0 border border-indigo-100">
+                <Volume2 className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Resume Reading Notes?</h3>
+                <p className="text-xs text-slate-500 font-medium">Page {currentPage} • Previously Paused Position</p>
+              </div>
+            </div>
+
+            <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 text-indigo-900 text-sm font-medium leading-relaxed">
+              You previously stopped listening on this page. Would you like to continue reading from where you stopped or read from the beginning?
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => startTtsFromIndex(0)}
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-50 transition-all cursor-pointer"
+              >
+                Read From Start
+              </button>
+              <button
+                onClick={() => startTtsFromIndex(pausedCharIndex || 0)}
+                className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white font-black text-xs uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-md shadow-indigo-200 cursor-pointer active:scale-95"
+              >
+                Continue Reading
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

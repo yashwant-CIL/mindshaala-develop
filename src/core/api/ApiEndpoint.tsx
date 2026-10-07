@@ -227,6 +227,8 @@ export const API_ENDPOINT = {
         COMPETITION_DASHBOARD_WEAK_CHAPTERS: `/api/competition/dashboard/weak-chapters`,
         COMPETITION_DASHBOARD_WEAK_TOPICS: `/api/competition/dashboard/weak-topics`,
         COMPETITION_DASHBOARD_SUBJECT_RADAR: `/api/competition/dashboard/subject-radar`,
+        //Rankings REST API
+        GET_COMPETITION_RANKINGS: (competition_id: number ,user_id:number ,competition_type: string  ) => `api/competitions/rankings?competition_id=${competition_id}&user_id=${user_id}&competition_type=${competition_type}`,
 
         GET_ALL_UPCOMING_COMPETITIONS: (user_id: string | number, subscription_id?: string | number, module_type?: string | number,) => {
             const params: string[] = [];

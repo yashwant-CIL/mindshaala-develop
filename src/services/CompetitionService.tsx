@@ -196,6 +196,17 @@ export const CompetitionService = {
         }
     },
 
+    GetCompetitionRankings: async (competition_id: number ,user_id:number ,competition_type: string) => {
+        try{
+            const response = await axiosMindShaalaClient.get(API_ENDPOINT.COMPETITIONS.GET_COMPETITION_RANKINGS(competition_id, user_id, competition_type));
+            console.log("Fetch competition rankings", response.data);
+            return response.data;
+        }catch(error){
+            console.error("Error fetching the competition rankings", error);
+            throw error;
+        }
+    },
+
 
 
     
