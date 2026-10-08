@@ -17,6 +17,10 @@ RUN npm run build
 # Use a lightweight Node.js image to serve the build folder
 FROM node:22-alpine
 
+# Set timezone to Asia/Kolkata
+ENV TZ=Asia/Kolkata
+RUN apk add --no-cache tzdata
+
 #Set working directory
 WORKDIR /app
 

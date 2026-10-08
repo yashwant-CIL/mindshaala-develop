@@ -35,6 +35,7 @@ export interface QuestionAttempt {
   correctLetter?: string;
   isCorrect: boolean;
   isSkipped: boolean;
+  isUnattempted: boolean;
   explanation: string;
   aiFeedback?: string;
   timeSpent: string;
@@ -57,8 +58,10 @@ export interface CompetitionAttemptResult {
   percentile: number;
   timeTaken: string;
   totalQuestions: number;
+  attemptedCount: number;
   correctCount: number;
   incorrectCount: number;
+  unattemptedCount: number;
   skippedCount: number;
   xpEarned: number;
   rewardBadge: string;
@@ -197,7 +200,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
   moduleType = 'GK',
   onBack
 }) => {
-  const [filterType, setFilterType] = useState<'all' | 'correct' | 'incorrect' | 'skipped'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'attempted' | 'unattempted' | 'skipped'>('all');
   const [resultData, setResultData] = useState<CompetitionAttemptResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -253,6 +256,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
           let correct = 0;
           let incorrect = 0;
           let skipped = 0;
+          let unattempted = 0;
 
           const parsedQuestions: QuestionAttempt[] = rawQList.map((q: any, idx: number) => {
             const qText = q.question_latex || q.gk_question || q.question_text || q.question || q.title || `Question ${idx + 1}`;
@@ -273,8 +277,11 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             const corrIdx = letterToIdx(q.correct_answer ?? q.correct_option ?? q.correctOption);
 
             const rawStatus = String(q.status || '').toUpperCase();
-            const isSkipped = rawStatus === 'UNATTEMPTED' || rawStatus === 'SKIPPED' || rawStatus === 'UN_ATTEMPTED' || (!q.user_transcription && (q.user_answer === null || q.user_answer === undefined || q.user_answer === '' || String(q.user_answer).toUpperCase() === 'NONE'));
-            const isCorrect = !isSkipped && (
+            const isSkipped = rawStatus === 'SKIPPED' || rawStatus === 'SKIP';
+            const isUnattempted = !isSkipped && (rawStatus === 'UNATTEMPTED' || rawStatus === 'UN_ATTEMPTED' || (!q.user_transcription && (q.user_answer === null || q.user_answer === undefined || q.user_answer === '' || String(q.user_answer).toUpperCase() === 'NONE')));
+            const isNotAttempted = isSkipped || isUnattempted;
+
+            const isCorrect = !isNotAttempted && (
               rawStatus === 'CORRECT' ||
               rawStatus === 'COMPLETED' ||
               q.is_correct === true ||
@@ -283,10 +290,11 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             );
 
             if (isSkipped) skipped++;
+            else if (isUnattempted) unattempted++;
             else if (isCorrect) correct++;
             else incorrect++;
 
-            const timeSec = Number(q.total_time_taken || q.time_taken_seconds || q.time_taken || q.timeSpent );
+            const timeSec = Number(q.total_time_taken || q.time_taken_seconds || q.time_taken || q.timeSpent);
 
             return {
               id: String(q.question_id || q.gk_question_id || q.v_ans_id || q.id || `q-${idx + 1}`),
@@ -295,12 +303,13 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               options: opts,
               selectedOption: userIdx,
               correctOption: corrIdx ?? 0,
-              userLetter: isSkipped ? 'Unattempted' : (userIdx !== null ? String.fromCharCode(65 + userIdx) : 'Recorded Response'),
+              userLetter: isSkipped ? 'Skipped' : (isUnattempted ? 'Unattempted' : (userIdx !== null ? String.fromCharCode(65 + userIdx) : 'Recorded Response')),
               correctLetter: corrIdx !== null ? String.fromCharCode(65 + corrIdx) : 'Model Answer',
               isCorrect,
               isSkipped,
+              isUnattempted,
               explanation: q.answer_description || q.gk_answer || q.answer_explanation || q.explanation || q.gk_explanation || q.solution || 'Detailed solution for this question.',
-              aiFeedback: q.ai_feedback || q.speech_transcript || q.feedback_text || (isCorrect ? 'Strong response precision!' : (isSkipped ? 'Question was not attempted.' : 'Review fundamental concepts for this question.')),
+              aiFeedback: q.ai_feedback || q.speech_transcript || q.feedback_text || (isCorrect ? 'Strong response precision!' : (isSkipped ? 'Question was skipped.' : (isUnattempted ? 'Question was not attempted.' : 'Review fundamental concepts for this question.'))),
               timeSpent: timeSec > 0 ? `${timeSec}s` : (q.time_taken_seconds),
               topic: q.topic_name || q.subject || q.topic || sessionObj.subject_name || sessionObj.assessment_name || sessionObj.gk_assessment_name || 'General Knowledge',
               difficulty: q.difficulty || (idx % 3 === 0 ? 'Easy' : idx % 3 === 1 ? 'Medium' : 'Hard'),
@@ -318,15 +327,27 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               ? Number(sessionObj.accuracy)
               : (maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(1)) : 0));
 
-          const finalCorrect = sessionObj.attempted_count !== undefined
+          const finalAttempted = sessionObj.attempted_count !== undefined && sessionObj.attempted_count !== null
             ? Number(sessionObj.attempted_count)
-            : (sessionObj.correct_count !== undefined ? Number(sessionObj.correct_count) : correct);
-          const finalIncorrect = sessionObj.incorrect_count !== undefined
+            : (correct + incorrect);
+
+          const finalCorrect = sessionObj.correct_count !== undefined && sessionObj.correct_count !== null
+            ? Number(sessionObj.correct_count)
+            : correct;
+
+          const finalIncorrect = sessionObj.incorrect_count !== undefined && sessionObj.incorrect_count !== null
             ? Number(sessionObj.incorrect_count)
             : incorrect;
-          const finalSkipped = sessionObj.unattempted_count !== undefined
+
+          const finalUnattempted = sessionObj.unattempted_count !== undefined && sessionObj.unattempted_count !== null
             ? Number(sessionObj.unattempted_count)
-            : (sessionObj.skip_count !== undefined ? Number(sessionObj.skip_count) : (sessionObj.skipped_count !== undefined ? Number(sessionObj.skipped_count) : skipped));
+            : unattempted;
+
+          const finalSkipped = sessionObj.skip_count !== undefined && sessionObj.skip_count !== null
+            ? Number(sessionObj.skip_count)
+            : (sessionObj.skipped_count !== undefined && sessionObj.skipped_count !== null
+              ? Number(sessionObj.skipped_count)
+              : (sessionObj.skipCount !== undefined ? Number(sessionObj.skipCount) : skipped));
 
           let timeTakenStr = sessionObj.time_taken || sessionObj.timeTaken;
           if (!timeTakenStr && (sessionObj.completed_at || sessionObj.end_time) && (sessionObj.started_at || sessionObj.start_time)) {
@@ -367,8 +388,10 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             percentile: Number(sessionObj.percentile || (percentage >= 90 ? 98.5 : percentage)),
             timeTaken: timeTakenStr,
             totalQuestions: totalQ,
+            attemptedCount: finalAttempted,
             correctCount: finalCorrect,
             incorrectCount: finalIncorrect,
+            unattemptedCount: finalUnattempted,
             skippedCount: finalSkipped,
             xpEarned: Math.round(percentage * 15),
             rewardBadge: percentage >= 90 ? 'Gold Medal Merit Certificate' : 'Merit Certificate',
@@ -416,10 +439,14 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
 
   const activeResult = resultData;
 
+  const attemptedCount = activeResult.attemptedCount ?? (activeResult.questions.length > 0 ? activeResult.questions.filter((q) => !q.isSkipped && !q.isUnattempted).length : activeResult.correctCount);
+  const unattemptedCount = activeResult.unattemptedCount ?? (activeResult.questions.length > 0 ? activeResult.questions.filter((q) => q.isUnattempted).length : 0);
+  const skippedCount = activeResult.skippedCount ?? (activeResult.questions.length > 0 ? activeResult.questions.filter((q) => q.isSkipped).length : 0);
+
   // Filtered questions based on selected pill
   const filteredQuestions = activeResult.questions.filter((q) => {
-    if (filterType === 'correct') return q.isCorrect;
-    if (filterType === 'incorrect') return !q.isCorrect && !q.isSkipped;
+    if (filterType === 'attempted') return !q.isSkipped && !q.isUnattempted;
+    if (filterType === 'unattempted') return q.isUnattempted;
     if (filterType === 'skipped') return q.isSkipped;
     return true;
   });
@@ -490,33 +517,37 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
 
         {/* Overview Stat Counters */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 pt-4 border-t border-slate-200">
+          {/* KPI 1: Attempted Questions / Total Questions */}
           <div className="bg-emerald-50/80 border border-emerald-200 p-3 sm:p-4 rounded-2xl space-y-1">
-            {/* <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold truncate">
-              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Correct Answers
-            </div> */}
+            <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold truncate">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0" /> Attempted Questions
+            </div>
             <div className="text-xl sm:text-2xl font-black text-emerald-800">
-              {activeResult.correctCount} <span className="text-xs font-semibold text-emerald-600">/ {activeResult.totalQuestions}</span>
+              {attemptedCount} <span className="text-xs font-semibold text-emerald-600">/ {activeResult.totalQuestions}</span>
             </div>
           </div>
 
+          {/* KPI 2: Unattempted Questions */}
           <div className="bg-red-50/80 border border-red-200 p-3 sm:p-4 rounded-2xl space-y-1">
-            {/* <div className="flex items-center gap-1.5 text-red-700 text-xs font-bold truncate">
-              <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 shrink-0" /> Incorrect Answers
-            </div> */}
+            <div className="flex items-center gap-1.5 text-red-700 text-xs font-bold truncate">
+              <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 shrink-0" /> Unattempted Questions
+            </div>
             <div className="text-xl sm:text-2xl font-black text-red-800">
-              {activeResult.incorrectCount} <span className="text-xs font-semibold text-red-600">Questions</span>
+              {unattemptedCount} <span className="text-xs font-semibold text-red-600">Questions</span>
             </div>
           </div>
 
+          {/* KPI 3: Skipped Questions */}
           <div className="bg-amber-50/80 border border-amber-200 p-3 sm:p-4 rounded-2xl space-y-1">
             <div className="flex items-center gap-1.5 text-amber-700 text-xs font-bold truncate">
-              <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" /> Unattempted / Skipped
+              <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" /> Skipped Questions
             </div>
             <div className="text-xl sm:text-2xl font-black text-amber-800">
-              {activeResult.skippedCount} <span className="text-xs font-semibold text-amber-600">Skipped</span>
+              {skippedCount} <span className="text-xs font-semibold text-amber-600">Skipped</span>
             </div>
           </div>
 
+          {/* KPI 4: Time Taken */}
           <div className="bg-indigo-50/80 border border-indigo-200 p-3 sm:p-4 rounded-2xl space-y-1">
             <div className="flex items-center gap-1.5 text-indigo-700 text-xs font-bold truncate">
               <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" /> Time Taken
@@ -548,20 +579,20 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               All ({activeResult.questions.length})
             </button>
             <button
-              onClick={() => setFilterType('correct')}
+              onClick={() => setFilterType('attempted')}
               className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                filterType === 'correct' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
+                filterType === 'attempted' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Correct ({activeResult.correctCount})
+              Attempted ({attemptedCount})
             </button>
             <button
-              onClick={() => setFilterType('incorrect')}
+              onClick={() => setFilterType('unattempted')}
               className={`px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                filterType === 'incorrect' ? 'bg-red-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
+                filterType === 'unattempted' ? 'bg-red-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Incorrect ({activeResult.incorrectCount})
+              Unattempted ({unattemptedCount})
             </button>
             <button
               onClick={() => setFilterType('skipped')}
@@ -569,7 +600,7 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
                 filterType === 'skipped' ? 'bg-amber-600 text-white font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Skipped ({activeResult.skippedCount})
+              Skipped ({skippedCount})
             </button>
           </div>
         </div>
@@ -604,11 +635,11 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
           : 'border-red-200 hover:border-red-300'
       }`}
     >
-      {/* Question Card Top Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 sm:pb-4">
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Question Card Top Bar: Question Number + Question Text on left, Status & Time on right */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-100 pb-3 sm:pb-4">
+        <div className="flex items-start gap-2.5 min-w-0 flex-1">
           <span
-            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full font-black text-[11px] sm:text-xs flex items-center justify-center text-white shrink-0 ${
+            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full font-black text-[11px] sm:text-xs flex items-center justify-center text-white shrink-0 mt-0.5 ${
               question.isCorrect
                 ? 'bg-emerald-600 shadow-md shadow-emerald-600/20'
                 : question.isSkipped
@@ -619,27 +650,17 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
             Q{question.questionNumber}
           </span>
 
-          <span className="px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] sm:text-xs font-semibold break-words">
-            {question.topic}
-          </span>
-
-          <span
-            className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold ${
-              question.difficulty === 'Easy'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : question.difficulty === 'Medium'
-                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}
-          >
-            {question.difficulty}
-          </span>
+          <div className="text-sm sm:text-base font-bold text-slate-900 leading-snug break-words flex-1 pt-0.5">
+            {question.questionText}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <span className="text-[11px] sm:text-xs text-slate-500 font-mono flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {question.timeSpent} sec
-          </span>
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-start sm:self-auto">
+          {question.timeSpent && (
+            <span className="text-[11px] sm:text-xs text-slate-500 font-mono flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {question.timeSpent}
+            </span>
+          )}
 
           {question.isCorrect ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] sm:text-xs font-extrabold">
@@ -647,7 +668,11 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
             </span>
           ) : question.isSkipped ? (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] sm:text-xs font-extrabold">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" /> Unattempted
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" /> Skipped
+            </span>
+          ) : question.isUnattempted ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-[11px] sm:text-xs font-extrabold">
+              <XCircle className="w-3.5 h-3.5 text-red-600 shrink-0" /> Unattempted
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-[11px] sm:text-xs font-extrabold">
@@ -655,11 +680,6 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
             </span>
           )}
         </div>
-      </div>
-
-      {/* Question Text */}
-      <div className="text-sm sm:text-base font-bold text-slate-900 leading-relaxed break-words">
-        {question.questionText}
       </div>
 
       {/* Options Grid */}
@@ -736,7 +756,7 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
         <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 sm:p-4 space-y-1.5 mt-2">
           <div className="flex items-center gap-2 text-[10px] sm:text-xs font-extrabold text-amber-900 uppercase tracking-wider">
             <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600 shrink-0" />
-            {moduleType === 'GK' ? 'GK Answer Explanation' : 'Model Answer & Solution'}
+            {moduleType === 'GK' ? 'GK Answer Explanation' : 'Expected Answer'}
           </div>
           <p className="text-xs text-slate-700 leading-relaxed font-sans break-words">{question.explanation}</p>
         </div>

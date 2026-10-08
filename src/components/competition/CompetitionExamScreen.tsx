@@ -7,6 +7,7 @@ import { ConceptualExamRenderer } from './renderers/ConceptualExamRenderer';
 export interface CompetitionExamScreenProps {
   comp: CompetitionItem;
   userId?: string | number;
+  initialData?: any;
   onExit: () => void;
   onComplete: (resultData?: any) => void;
 }
@@ -14,6 +15,7 @@ export interface CompetitionExamScreenProps {
 export const CompetitionExamScreen: React.FC<CompetitionExamScreenProps> = ({
   comp,
   userId,
+  initialData,
   onExit,
   onComplete
 }) => {
@@ -24,6 +26,7 @@ export const CompetitionExamScreen: React.FC<CompetitionExamScreenProps> = ({
       <GKExamRenderer
         comp={comp}
         userId={userId}
+        initialData={initialData}
         onExit={onExit}
         onComplete={onComplete}
       />
@@ -35,6 +38,7 @@ export const CompetitionExamScreen: React.FC<CompetitionExamScreenProps> = ({
       <VivaExamRenderer
         comp={comp}
         userId={userId}
+        initialData={initialData}
         onExit={onExit}
         onComplete={onComplete}
       />
@@ -46,6 +50,7 @@ export const CompetitionExamScreen: React.FC<CompetitionExamScreenProps> = ({
     <ConceptualExamRenderer
       comp={comp}
       userId={userId}
+      initialData={initialData}
       onExit={onExit}
       onComplete={onComplete}
     />

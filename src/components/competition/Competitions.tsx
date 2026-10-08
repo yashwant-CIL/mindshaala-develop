@@ -490,6 +490,91 @@ export const Competitions: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'explore' | 'registered'>('explore');
   const [waitingRoomComp, setWaitingRoomComp] = useState<CompetitionItem | null>(null);
   const [activeExamComp, setActiveExamComp] = useState<CompetitionItem | null>(null);
+  const [isStartingExam, setIsStartingExam] = useState<boolean>(false);
+  const [startingExamId, setStartingExamId] = useState<string | number | null>(null);
+  const [startErrorModal, setStartErrorModal] = useState<{ title: string; message: string } | null>(null);
+  const [initialExamData, setInitialExamData] = useState<any>(null);
+
+  // Pre-fetch StartCompetition API call before navigating to the exam screen
+  const handleStartExam = async (comp: CompetitionItem) => {
+    const compId = comp.competition_id || comp.id || '';
+    setIsStartingExam(true);
+    setStartingExamId(compId);
+    try {
+      const parseNum = (val: any) => {
+        if (val === null || val === undefined || val === '') return 0;
+        const num = Number(val);
+        return isNaN(num) ? val : num;
+      };
+
+      const rawUserId = activeUserId || getActiveUserId();
+
+      const payload: Record<string, any> = {
+        module_type: comp.module_type || 'VIVA',
+        user_id: parseNum(rawUserId),
+        competition_id: parseNum(compId),
+        course_id: parseNum(comp.course_id),
+        subject_id: parseNum(comp.subject_id),
+        chapter_id: comp.chapter_id ?? '',
+        topic_id: comp.topic_id ? String(comp.topic_id) : '',
+        ...(comp.viva_type ? { viva_type: comp.viva_type } : {}),
+        ...(comp.gk_assessment_type ? { gk_assessment_type: comp.gk_assessment_type } : {}),
+        ...(comp.gk_creation_mode ? { gk_creation_mode: comp.gk_creation_mode } : {})
+      };
+
+      console.log("Pre-starting competition assessment API payload:", payload);
+      const res = await CompetitionService.StartCompetition(payload);
+      console.log("StartCompetition API response:", res);
+
+      let qList: any[] = [];
+      const rawObj = res?.data || res;
+
+      if (rawObj) {
+        if (Array.isArray(rawObj.questions)) {
+          qList = rawObj.questions;
+        } else if (Array.isArray(rawObj)) {
+          qList = rawObj;
+        } else if (typeof rawObj === 'object') {
+          const numericKeys = Object.keys(rawObj)
+            .filter((k) => !isNaN(Number(k)))
+            .sort((a, b) => Number(a) - Number(b));
+
+          if (numericKeys.length > 0) {
+            qList = numericKeys.map((k) => rawObj[k]);
+          } else if (rawObj.data && Array.isArray(rawObj.data)) {
+            qList = rawObj.data;
+          }
+        }
+      }
+
+      if (!qList || qList.length === 0) {
+        const errorMsg = res?.message || res?.detail || "No questions found for this competition assessment.";
+        throw new Error(errorMsg);
+      }
+
+      // Success! Set initialExamData and ONLY then navigate to exam screen
+      setInitialExamData(res);
+      setActiveExamComp(comp);
+      setWaitingRoomComp(null);
+    } catch (err: any) {
+      console.error("Failed to start competition assessment:", err);
+      const errorMsg =
+        err?.response?.data?.message ||
+        err?.response?.data?.detail ||
+        (typeof err?.response?.data === 'string' ? err?.response?.data : null) ||
+        err?.message ||
+        "Failed to start competition assessment. Please try again.";
+
+      // Do NOT navigate to exam screen. Show error in custom popup modal!
+      setStartErrorModal({
+        title: "Unable to Start Competition",
+        message: errorMsg
+      });
+    } finally {
+      setIsStartingExam(false);
+      setStartingExamId(null);
+    }
+  };
 
   // Auto slide poster banner
   useEffect(() => {
@@ -710,8 +795,7 @@ export const Competitions: React.FC = () => {
       <CompetitionWaitingRoom
         comp={waitingRoomComp}
         onStartExam={() => {
-          setActiveExamComp(waitingRoomComp);
-          setWaitingRoomComp(null);
+          handleStartExam(waitingRoomComp);
         }}
         onExit={() => setWaitingRoomComp(null)}
       />
@@ -724,8 +808,10 @@ export const Competitions: React.FC = () => {
       <CompetitionExamScreen
         comp={activeExamComp}
         userId={activeUserId}
+        initialData={initialExamData}
         onExit={() => {
           setActiveExamComp(null);
+          setInitialExamData(null);
           if (activeUserId) {
             fetchRegisteredCompetitions(activeUserId);
           }
@@ -735,6 +821,7 @@ export const Competitions: React.FC = () => {
         }}
         onComplete={(result) => {
           setActiveExamComp(null);
+          setInitialExamData(null);
           setToastMessage({
             type: 'success',
             text: 'Competition submitted successfully!'
@@ -946,15 +1033,20 @@ export const Competitions: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-              {registeredCompetitions.map((comp) => (
-                <RegisteredCompCard
-                  key={comp.competition_id || comp.id}
-                  comp={comp}
-                  onViewDetails={() => setSelectedModalComp(comp)}
-                  onStart={() => setActiveExamComp(comp)}
-                  onEnterWaitingRoom={() => setWaitingRoomComp(comp)}
-                />
-              ))}
+              {registeredCompetitions.map((comp) => {
+                const compId = comp.competition_id || comp.id;
+                const isStartingThis = isStartingExam && String(startingExamId) === String(compId);
+                return (
+                  <RegisteredCompCard
+                    key={compId}
+                    comp={comp}
+                    isStarting={isStartingThis}
+                    onViewDetails={() => setSelectedModalComp(comp)}
+                    onStart={() => handleStartExam(comp)}
+                    onEnterWaitingRoom={() => setWaitingRoomComp(comp)}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -1091,6 +1183,31 @@ export const Competitions: React.FC = () => {
         />
       )}
 
+      {/* 6.5. Start Competition Error Modal */}
+      {startErrorModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full overflow-hidden shadow-2xl p-6 space-y-4 my-auto">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-2.5 rounded-full bg-red-100 shrink-0">
+                <AlertCircle className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">{startErrorModal.title}</h3>
+            </div>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              {startErrorModal.message}
+            </p>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setStartErrorModal(null)}
+                className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white transition-all cursor-pointer shadow-md shadow-blue-600/20"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 7. Toast Feedback Notification */}
       {toastMessage && (
         <div
@@ -1162,10 +1279,11 @@ const OfferCard: React.FC<{ offer: OfferItem; onCopy: (id: string, code: string)
 // Sub-Component: Registered Competition Card with Admit Card & Launch Timer - Light Theme
 const RegisteredCompCard: React.FC<{
   comp: CompetitionItem;
+  isStarting?: boolean;
   onViewDetails: () => void;
   onStart?: () => void;
   onEnterWaitingRoom?: () => void;
-}> = ({ comp, onViewDetails, onStart, onEnterWaitingRoom }) => {
+}> = ({ comp, isStarting, onViewDetails, onStart, onEnterWaitingRoom }) => {
   const nowMs = useNetworkNow(1000);
 
   const startTimeMs = comp.start_time ? new Date(comp.start_time).getTime() : 0;
@@ -1353,9 +1471,18 @@ const RegisteredCompCard: React.FC<{
           {isLive && !isCompleted && (
             <button
               onClick={onStart || onViewDetails}
-              className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1 cursor-pointer animate-pulse flex-1 sm:flex-none"
+              disabled={isStarting}
+              className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold text-white shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer flex-1 sm:flex-none disabled:opacity-60"
             >
-              <Play className="w-3.5 h-3.5 fill-current shrink-0" /> Start
+              {isStarting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> Starting...
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current shrink-0 animate-pulse" /> Start
+                </>
+              )}
             </button>
           )}
         </div>

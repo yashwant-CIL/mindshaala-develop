@@ -28,6 +28,7 @@ import {
 export interface ConceptualExamRendererProps {
   comp: CompetitionItem;
   userId?: string | number;
+  initialData?: any;
   onExit: () => void;
   onComplete: (resultData?: any) => void;
 }
@@ -35,6 +36,7 @@ export interface ConceptualExamRendererProps {
 export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   comp,
   userId,
+  initialData,
   onExit,
   onComplete
 }) => {
@@ -151,26 +153,29 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
     const initConceptualCompetition = async () => {
       setIsLoading(true);
       try {
-        const parseNum = (val: any) => {
-          if (val === null || val === undefined || val === '') return 0;
-          const num = Number(val);
-          return isNaN(num) ? val : num;
-        };
+        let res: any = initialData;
+        if (!res) {
+          const parseNum = (val: any) => {
+            if (val === null || val === undefined || val === '') return 0;
+            const num = Number(val);
+            return isNaN(num) ? val : num;
+          };
 
-        const payload: Record<string, any> = {
-          module_type: comp.module_type || 'TAM',
-          user_id: parseNum(currentUserId),
-          competition_id: parseNum(competitionId),
-          course_id: parseNum(comp.course_id),
-          subject_id: parseNum(comp.subject_id),
-          chapter_id: comp.chapter_id ?? '',
-          viva_type: comp.viva_type ?? '',
-          topic_id: comp.topic_id ? String(comp.topic_id) : ''
-        };
+          const payload: Record<string, any> = {
+            module_type: comp.module_type || 'TAM',
+            user_id: parseNum(currentUserId),
+            competition_id: parseNum(competitionId),
+            course_id: parseNum(comp.course_id),
+            subject_id: parseNum(comp.subject_id),
+            chapter_id: comp.chapter_id ?? '',
+            viva_type: comp.viva_type ?? '',
+            topic_id: comp.topic_id ? String(comp.topic_id) : ''
+          };
 
-        console.log("Submitting Start Conceptual TAM payload:", payload);
-        const res = await CompetitionService.StartCompetition(payload);
-        console.log("Start Conceptual TAM response:", res);
+          console.log("Submitting Start Conceptual TAM payload:", payload);
+          res = await CompetitionService.StartCompetition(payload);
+          console.log("Start Conceptual TAM response:", res);
+        }
 
         const sId = extractSessionId(res) || competitionId;
         const firstQ = extractQuestionObj(res);
@@ -181,13 +186,19 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
             setCurrentQuestion(firstQ);
             voiceStartTimeRef.current = new Date().toISOString();
           } else {
-            alert(res?.message || "No initial question received for TAM assessment.");
+            const msg = res?.message || res?.detail || "No initial question received for TAM assessment.";
+            toast.error(msg);
             onExit();
           }
         }
       } catch (err: any) {
         console.error("Failed to start Conceptual assessment:", err);
-        alert("Failed to start Conceptual assessment.");
+        const errorMsg =
+          err?.response?.data?.message ||
+          err?.response?.data?.detail ||
+          err?.message ||
+          "Failed to start Conceptual assessment.";
+        toast.error(errorMsg);
         if (isMounted) onExit();
       } finally {
         if (isMounted) setIsLoading(false);
@@ -196,7 +207,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
 
     initConceptualCompetition();
     return () => { isMounted = false; };
-  }, [competitionId, currentUserId, comp]);
+  }, [competitionId, currentUserId, comp, initialData]);
 
   // 2. Auto-Submit on Time Expiry
   useEffect(() => {

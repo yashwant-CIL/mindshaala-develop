@@ -20,6 +20,7 @@ import {
 export interface GKExamRendererProps {
   comp: CompetitionItem;
   userId?: string | number;
+  initialData?: any;
   onExit: () => void;
   onComplete: (resultData?: any) => void;
 }
@@ -27,6 +28,7 @@ export interface GKExamRendererProps {
 export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
   comp,
   userId,
+  initialData,
   onExit,
   onComplete
 }) => {
@@ -96,34 +98,37 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
     const initGKCompetition = async () => {
       setIsLoading(true);
       try {
-        const parseNum = (val: any) => {
-          if (val === null || val === undefined || val === '') return 0;
-          const num = Number(val);
-          return isNaN(num) ? val : num;
-        };
+        let res: any = initialData;
+        if (!res) {
+          const parseNum = (val: any) => {
+            if (val === null || val === undefined || val === '') return 0;
+            const num = Number(val);
+            return isNaN(num) ? val : num;
+          };
 
-        const toInt = (val: any): number => {
-          const num = parseInt(String(val), 10);
-          return isNaN(num) ? 0 : num;
-        };
+          const toInt = (val: any): number => {
+            const num = parseInt(String(val), 10);
+            return isNaN(num) ? 0 : num;
+          };
 
-        let catIds: number[] = [];
-        if (Array.isArray(comp.category_ids) && comp.category_ids.length > 0) {
-          catIds = comp.category_ids.map(toInt);
-        } else if (comp.category_id != null && String(comp.category_id) !== '') {
-          catIds = [toInt(comp.category_id)];
+          let catIds: number[] = [];
+          if (Array.isArray(comp.category_ids) && comp.category_ids.length > 0) {
+            catIds = comp.category_ids.map(toInt);
+          } else if (comp.category_id != null && String(comp.category_id) !== '') {
+            catIds = [toInt(comp.category_id)];
+          }
+
+          const payload: Record<string, any> = {
+            module_type: comp.module_type || 'GK',
+            user_id: parseNum(currentUserId),
+            competition_id: parseNum(competitionId),
+            ...(comp.gk_assessment_type ? { gk_assessment_type: comp.gk_assessment_type } : {}),
+            ...(comp.gk_creation_mode ? { gk_creation_mode: comp.gk_creation_mode } : {}),
+            ...(catIds.length > 0 ? { category_ids: catIds } : {})
+          };
+
+          res = await CompetitionService.StartCompetition(payload);
         }
-
-        const payload: Record<string, any> = {
-          module_type: comp.module_type || 'GK',
-          user_id: parseNum(currentUserId),
-          competition_id: parseNum(competitionId),
-          ...(comp.gk_assessment_type ? { gk_assessment_type: comp.gk_assessment_type } : {}),
-          ...(comp.gk_creation_mode ? { gk_creation_mode: comp.gk_creation_mode } : {}),
-          ...(catIds.length > 0 ? { category_ids: catIds } : {})
-        };
-
-        const res = await CompetitionService.StartCompetition(payload);
 
         const gkAssId: string | number = res?.gk_user_ass_id || res?.data?.gk_user_ass_id || res?.gk_assessment_id || '';
         const sId: string | number = res?.session_id || res?.competition_session_id || res?.data?.session_id || competitionId;
@@ -147,7 +152,7 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
         if (isMounted) {
           if (!qList || qList.length === 0) {
             const msg = res?.message || res?.detail || "No questions found for this GK competition assessment.";
-            alert(msg);
+            toast.error(msg);
             onExit();
             return;
           }
@@ -161,7 +166,7 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
           (typeof err?.response?.data === 'string' ? err?.response?.data : null) ||
           err?.message ||
           "Failed to start GK competition assessment.";
-        alert(errorMsg);
+        toast.error(errorMsg);
         if (isMounted) {
           onExit();
         }
@@ -175,7 +180,7 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [competitionId, currentUserId, comp]);
+  }, [competitionId, currentUserId, comp, initialData]);
 
   useEffect(() => {
     if (isTimeExpired && !isSubmitting && !isLoading) {
