@@ -52,6 +52,7 @@ export interface VivaSessionData {
   subject_id?: string | number;
   total_questions?: number;
   total_time?: number;
+  total_time_seconds?: number | string;
   user_id?: string | number;
   viva_type?: string;
 }
@@ -83,6 +84,17 @@ export interface VivaExamRendererProps {
   onComplete: (resultData?: any) => void;
 }
 
+const getNowLocalISO = (d: Date = new Date()): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+};
+
 export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   comp,
   userId,
@@ -94,7 +106,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
 
   // Refs for tracking timestamps
   const examStartMsRef = useRef<number>(Date.now());
-  const questionStartTimeRef = useRef<string>(new Date().toISOString());
+  const questionStartTimeRef = useRef<string>(getNowLocalISO());
   const questionStartMsRef = useRef<number>(Date.now());
 
   // Exam States
@@ -104,6 +116,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(new Set([0]));
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isAutoSubmit, setIsAutoSubmit] = useState<boolean>(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | number>('');
@@ -121,7 +134,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
-  const voiceStartTimeRef = useRef<string>(new Date().toISOString());
+  const voiceStartTimeRef = useRef<string>(getNowLocalISO());
 
   // Security / Anti-Cheat States
   const [tabSwitchWarnings, setTabSwitchWarnings] = useState<number>(0);
@@ -142,17 +155,27 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
     currentQ.title ||
     '';
 
+  const totalQuestions = sessionData?.total_questions || questions.length;
+
   // Dynamic Exam Countdown calculation
   const actualExamStartMs = (sessionData?.started_at && !isNaN(new Date(sessionData.started_at).getTime()))
     ? new Date(sessionData.started_at).getTime()
     : examStartMsRef.current;
 
   const totalExamSeconds = (() => {
-    if (sessionData?.total_time && Number(sessionData.total_time) > 0) {
-      return Number(sessionData.total_time);
-    }
-    if (comp.total_time && Number(comp.total_time) > 0) {
-      return Number(comp.total_time);
+    const rawTotalTime =
+      sessionData?.total_time ??
+      (sessionData as any)?.session?.total_time ??
+      initialData?.session?.total_time ??
+      initialData?.total_time ??
+      initialData?.data?.session?.total_time ??
+      initialData?.data?.total_time ??
+      sessionData?.total_time_seconds ??
+      comp.total_time;
+
+    if (rawTotalTime != null && Number(rawTotalTime) > 0) {
+      const num = Number(rawTotalTime);
+      return num < 100 ? num * 60 : num;
     }
     if (questions.length > 0) {
       const sum = questions.reduce((acc, q) => acc + (Number(q.time_per_question) || 120), 0);
@@ -175,7 +198,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
     setIsRecording(false);
     setRecordingSeconds(0);
     
-    const nowIso = new Date().toISOString();
+    const nowIso = getNowLocalISO();
     questionStartTimeRef.current = nowIso;
     questionStartMsRef.current = Date.now();
     voiceStartTimeRef.current = nowIso;
@@ -259,34 +282,54 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
           setSessionId(sId);
         }
 
-        if (isMounted && res?.session) {
-          setSessionData(res.session);
+        if (isMounted && res) {
+          const sData = res?.session || res?.data?.session || res?.data || res;
+          setSessionData(sData);
         }
 
         let qList: QuestionItem[] = [];
         const rawObj = res?.data || res;
 
-        if (rawObj) {
+        if (rawObj && typeof rawObj === 'object') {
           if (Array.isArray(rawObj.questions)) {
             qList = rawObj.questions;
           } else if (Array.isArray(rawObj)) {
             qList = rawObj;
-          } else if (typeof rawObj === 'object') {
+          } else if (rawObj.data && Array.isArray(rawObj.data)) {
+            qList = rawObj.data;
+          } else {
             const numericKeys = Object.keys(rawObj)
               .filter((k) => !isNaN(Number(k)))
               .sort((a, b) => Number(a) - Number(b));
 
             if (numericKeys.length > 0) {
               qList = numericKeys.map((k) => rawObj[k]);
-            } else if (rawObj.data && Array.isArray(rawObj.data)) {
-              qList = rawObj.data;
+            } else if (
+              rawObj.question ||
+              rawObj.question_transcrib ||
+              rawObj.question_transcribe ||
+              rawObj.question_text ||
+              rawObj.question_no ||
+              rawObj.session_id ||
+              rawObj.viva_q_id ||
+              (rawObj.data && (rawObj.data.question || rawObj.data.question_transcrib || rawObj.data.session_id))
+            ) {
+              qList = [rawObj.question || rawObj.question_transcrib ? rawObj : (rawObj.data || rawObj)];
             }
           }
         }
 
         if (isMounted) {
           if (!qList || qList.length === 0) {
-            const msg = res?.message || res?.detail || "No viva questions found for this competition.";
+            const msg =
+              res?.response?.data?.detail ||
+              res?.response?.data?.message ||
+              res?.detail ||
+              res?.message ||
+              res?.error ||
+              res?.data?.detail ||
+              res?.data?.message ||
+              "No viva questions found for this competition.";
             toast.error(msg);
             onExit();
             return;
@@ -296,8 +339,10 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
       } catch (err: any) {
         console.error("Error starting Viva competition:", err);
         const errorMsg =
-          err?.response?.data?.message ||
           err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          (typeof err?.response?.data === 'string' ? err?.response?.data : null) ||
           err?.message ||
           "Failed to start Viva competition assessment.";
         toast.error(errorMsg);
@@ -442,9 +487,9 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
     if (!audioBlob || isSubmittingAnswer) return;
     setIsSubmittingAnswer(true);
 
-    const endTimeStr = new Date().toISOString();
+    const endTimeStr = getNowLocalISO();
     const endMs = Date.now();
-    const startTimeStr = questionStartTimeRef.current || voiceStartTimeRef.current || new Date().toISOString();
+    const startTimeStr = questionStartTimeRef.current || voiceStartTimeRef.current || getNowLocalISO();
     const startMs = questionStartMsRef.current || endMs;
     const totalSecs = Math.max(1, Math.round((endMs - startMs) / 1000));
 
@@ -531,9 +576,9 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
 
     setIsSubmittingAnswer(true);
 
-    const endTimeStr = new Date().toISOString();
+    const endTimeStr = getNowLocalISO();
     const endMs = Date.now();
-    const startTimeStr = questionStartTimeRef.current || voiceStartTimeRef.current || new Date().toISOString();
+    const startTimeStr = questionStartTimeRef.current || voiceStartTimeRef.current || getNowLocalISO();
     const startMs = questionStartMsRef.current || endMs;
     const totalSecs = Math.max(1, Math.round((endMs - startMs) / 1000));
 
@@ -613,6 +658,9 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
 
   const handleFinalSubmitCompetition = async (isAuto: boolean = false) => {
     if (isSubmitting) return;
+    if (isAuto || isTimeExpired) {
+      setIsAutoSubmit(true);
+    }
     setIsSubmitting(true);
     setShowConfirmEndModal(false);
 
@@ -624,6 +672,9 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
 
       console.log("Submitting End Viva Competition payload:", payload);
       const res = await CompetitionService.EndCompetition(payload);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
       onComplete(res || { competition_id: competitionId, score: 0 });
     } catch (err: any) {
       console.error("Error ending Viva competition:", err);
@@ -639,13 +690,10 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
     }
   };
 
-  const totalQuestions = questions.length;
   const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
   const remainingMins = Math.floor((remainingMs / (1000 * 60)) % 60);
   const remainingSecs = Math.floor((remainingMs / 1000) % 60);
-  const timeRemainingStr = remainingHours > 0
-    ? `${String(remainingHours).padStart(2, '0')}:${String(remainingMins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`
-    : `${String(remainingMins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
+  const timeRemainingStr = `${String(remainingHours).padStart(2, '0')}:${String(remainingMins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
 
   const answerRecord = userAnswers[qTrackingKey] ?? userAnswers[currentQuestionIndex];
   const isQuestionSubmitted = Boolean(
@@ -660,6 +708,32 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-slate-50 text-slate-800 font-sans flex flex-col p-4 md:p-8 space-y-6">
+      {isSubmitting && (
+        <div className="fixed inset-0 z-[99999] backdrop-blur-md bg-black/60 flex flex-col items-center justify-center pointer-events-auto">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-[90%] mx-auto transform animate-in fade-in zoom-in duration-300 border border-slate-100 text-center space-y-4">
+            <div className="relative mb-2">
+              <div className="w-16 h-16 border-4 border-purple-100 border-solid rounded-full"></div>
+              <div className="w-16 h-16 border-4 border-purple-600 border-solid rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                {isAutoSubmit || isTimeExpired ? (
+                  <Clock className="w-6 h-6 text-amber-500 animate-pulse" />
+                ) : (
+                  <FileCheck className="w-6 h-6 text-purple-600" />
+                )}
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">
+              {isAutoSubmit || isTimeExpired ? "Time is Over!" : "Submitting Viva Competition"}
+            </h3>
+            <p className="text-slate-600 text-sm font-medium leading-relaxed">
+              {isAutoSubmit || isTimeExpired
+                ? "Time is over, so the competition is auto submitting. Please wait..."
+                : "Please wait while we process your responses securely..."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center gap-3">

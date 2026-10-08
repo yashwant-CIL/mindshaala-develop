@@ -42,6 +42,8 @@ export interface QuestionAttempt {
   topic: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   userTranscription?: string;
+  aiScore?: number;
+  ai_score?: number;
 }
 
 export interface CompetitionAttemptResult {
@@ -295,6 +297,9 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
             else incorrect++;
 
             const timeSec = Number(q.total_time_taken || q.time_taken_seconds || q.time_taken || q.timeSpent);
+            const questionAiScore = q.ai_score !== undefined && q.ai_score !== null
+              ? Number(q.ai_score)
+              : (rawModType === 'TAM' ? 10 : (q.score !== undefined ? Number(q.score) : undefined));
 
             return {
               id: String(q.question_id || q.gk_question_id || q.v_ans_id || q.id || `q-${idx + 1}`),
@@ -313,13 +318,15 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               timeSpent: timeSec > 0 ? `${timeSec}s` : (q.time_taken_seconds),
               topic: q.topic_name || q.subject || q.topic || sessionObj.subject_name || sessionObj.assessment_name || sessionObj.gk_assessment_name || 'General Knowledge',
               difficulty: q.difficulty || (idx % 3 === 0 ? 'Easy' : idx % 3 === 1 ? 'Medium' : 'Hard'),
-              userTranscription: q.user_transcription || undefined
+              userTranscription: q.user_transcription || undefined,
+              aiScore: questionAiScore,
+              ai_score: questionAiScore
             };
           });
 
           const totalQ = parsedQuestions.length > 0 ? parsedQuestions.length : Number(sessionObj.total_questions || sessionObj.total_marks || sessionObj.gk_total_marks || 10);
           const score = Number(sessionObj.total_score ?? sessionObj.score ?? sessionObj.marks_obtained ?? correct);
-          const maxScore = Number(sessionObj.gk_total_marks ?? sessionObj.max_score ?? sessionObj.total_marks ?? sessionObj.maxScore ?? (totalQ * 1));
+          const maxScore = Number(sessionObj.gk_total_marks ?? sessionObj.max_score ?? sessionObj.total_marks ?? sessionObj.maxScore ?? (rawModType === 'TAM' ? totalQ * 10 : totalQ * 1));
           
           const percentage = sessionObj.percentage !== undefined && sessionObj.percentage !== null
             ? Number(sessionObj.percentage)
@@ -349,7 +356,55 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               ? Number(sessionObj.skipped_count)
               : (sessionObj.skipCount !== undefined ? Number(sessionObj.skipCount) : skipped));
 
-          let timeTakenStr = sessionObj.time_taken || sessionObj.timeTaken;
+          let timeTakenStr = '';
+
+          // 1. Check numeric total_time / total_time_taken / time_taken_seconds from sessionObj or payload
+          const rawTotalSecs =
+            sessionObj?.total_time_taken ??
+            payload?.total_time_taken ??
+            sessionObj?.total_time ??
+            payload?.total_time ??
+            sessionObj?.time_taken_seconds ??
+            payload?.time_taken_seconds ??
+            sessionObj?.gk_total_time;
+
+          if (rawTotalSecs !== undefined && rawTotalSecs !== null && rawTotalSecs !== '') {
+            const numSecs = Number(rawTotalSecs);
+            if (!isNaN(numSecs) && numSecs >= 0) {
+              const m = Math.floor(numSecs / 60);
+              const s = numSecs % 60;
+              timeTakenStr = m > 0 ? (s > 0 ? `${m}m ${s}s` : `${m}m`) : `${s}s`;
+            }
+          }
+
+          // 2. Fallback to sessionObj.time_taken / sessionObj.timeTaken if present
+          if (!timeTakenStr && (sessionObj.time_taken || sessionObj.timeTaken)) {
+            const rawStr = String(sessionObj.time_taken || sessionObj.timeTaken).trim();
+            const numSecs = Number(rawStr);
+            if (!isNaN(numSecs) && numSecs >= 0) {
+              const m = Math.floor(numSecs / 60);
+              const s = numSecs % 60;
+              timeTakenStr = m > 0 ? (s > 0 ? `${m}m ${s}s` : `${m}m`) : `${s}s`;
+            } else {
+              timeTakenStr = rawStr;
+            }
+          }
+
+          // 3. Fallback to sum of question timeSpent from questions array
+          if (!timeTakenStr && parsedQuestions.length > 0) {
+            const sumSecs = parsedQuestions.reduce((acc, q) => {
+              const val = Number(String(q.timeSpent || '').replace(/[^0-9.]/g, ''));
+              return acc + (isNaN(val) ? 0 : val);
+            }, 0);
+
+            if (sumSecs > 0) {
+              const m = Math.floor(sumSecs / 60);
+              const s = sumSecs % 60;
+              timeTakenStr = m > 0 ? (s > 0 ? `${m}m ${s}s` : `${m}m`) : `${s}s`;
+            }
+          }
+
+          // 4. Fallback to completed_at - started_at timestamp difference
           if (!timeTakenStr && (sessionObj.completed_at || sessionObj.end_time) && (sessionObj.started_at || sessionObj.start_time)) {
             const startMs = new Date(sessionObj.started_at || sessionObj.start_time).getTime();
             const endMs = new Date(sessionObj.completed_at || sessionObj.end_time).getTime();
@@ -357,15 +412,10 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               const diffSec = Math.floor((endMs - startMs) / 1000);
               const m = Math.floor(diffSec / 60);
               const s = diffSec % 60;
-              timeTakenStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
+              timeTakenStr = m > 0 ? (s > 0 ? `${m}m ${s}s` : `${m}m`) : `${s}s`;
             }
           }
-          if (!timeTakenStr && (sessionObj.total_time || sessionObj.gk_total_time)) {
-            const totalSec = Number(sessionObj.total_time || sessionObj.gk_total_time);
-            const m = Math.floor(totalSec / 60);
-            const s = totalSec % 60;
-            timeTakenStr = m > 0 ? `${m}m ${s}s` : `${s}s`;
-          }
+
           if (!timeTakenStr) {
             timeTakenStr = `${Math.round(totalQ * 1.5)} mins`;
           }
@@ -655,10 +705,16 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-start sm:self-auto">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 self-start sm:self-auto flex-wrap">
           {question.timeSpent && (
             <span className="text-[11px] sm:text-xs text-slate-500 font-mono flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {question.timeSpent}
+            </span>
+          )}
+
+          {(question.aiScore !== undefined || moduleType === 'TAM') && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[11px] sm:text-xs font-extrabold">
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0" /> AI Score: {question.aiScore ?? 10} / 10
             </span>
           )}
 

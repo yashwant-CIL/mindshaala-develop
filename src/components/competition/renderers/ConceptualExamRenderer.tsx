@@ -33,6 +33,17 @@ export interface ConceptualExamRendererProps {
   onComplete: (resultData?: any) => void;
 }
 
+const getNowLocalISO = (d: Date = new Date()): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+};
+
 export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   comp,
   userId,
@@ -41,15 +52,8 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   onComplete
 }) => {
   const nowMs = useNetworkNow(1000);
-
-  const totalDurationMs = comp.total_time ? comp.total_time * 1000 : 3600000;
-  const startTimeMs = comp.start_time ? new Date(comp.start_time).getTime() : nowMs;
-  const endTimeMs = comp.end_time
-    ? new Date(comp.end_time).getTime()
-    : startTimeMs + totalDurationMs;
-
-  const remainingMs = Math.max(0, endTimeMs - nowMs);
-  const isTimeExpired = remainingMs <= 0;
+  const examStartMsRef = useRef<number>(Date.now());
+  const [sessionData, setSessionData] = useState<any>(null);
 
   // Exam / Question States
   const [currentQuestion, setCurrentQuestion] = useState<any>(null);
@@ -58,6 +62,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isAutoSubmit, setIsAutoSubmit] = useState<boolean>(false);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState<boolean>(false);
 
   // Audio Recording States
@@ -69,7 +74,9 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
-  const voiceStartTimeRef = useRef<string>(new Date().toISOString());
+  const voiceStartTimeRef = useRef<string>(getNowLocalISO());
+  const questionStartTimeRef = useRef<string>(getNowLocalISO());
+  const questionStartMsRef = useRef<number>(Date.now());
 
   const [isMuted, setIsMuted] = useState<boolean>(() => {
     return localStorage.getItem('conceptual_tts_muted') === 'true';
@@ -82,6 +89,35 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
 
   const competitionId: string | number = comp.competition_id ?? comp.id ?? '';
   const currentUserId: string | number = userId ?? localStorage.getItem('user_id') ?? 'guest';
+
+  // Dynamic Exam Countdown calculation
+  const actualExamStartMs = (sessionData?.started_at && !isNaN(new Date(sessionData.started_at).getTime()))
+    ? new Date(sessionData.started_at).getTime()
+    : (comp.start_time && !isNaN(new Date(comp.start_time).getTime()))
+      ? new Date(comp.start_time).getTime()
+      : examStartMsRef.current;
+
+  const totalExamSeconds = (() => {
+    const rawTotalTime =
+      sessionData?.total_time ??
+      sessionData?.session?.total_time ??
+      initialData?.session?.total_time ??
+      initialData?.total_time ??
+      initialData?.data?.session?.total_time ??
+      initialData?.data?.total_time ??
+      sessionData?.total_time_seconds ??
+      comp.total_time;
+
+    if (rawTotalTime != null && Number(rawTotalTime) > 0) {
+      const num = Number(rawTotalTime);
+      return num < 100 ? num * 60 : num;
+    }
+    return 1800;
+  })();
+
+  const actualExamEndMs = actualExamStartMs + (totalExamSeconds * 1000);
+  const remainingMs = Math.max(0, actualExamEndMs - nowMs);
+  const isTimeExpired = remainingMs <= 0;
 
   // Helper to extract question object from response
   const extractQuestionObj = (res: any) => {
@@ -110,6 +146,15 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
     currentQuestion?.id ??
     currentQuestion?.question_no ??
     (submittedCount + 1);
+
+  // Record start time when question is loaded/displayed on screen
+  useEffect(() => {
+    const nowIso = getNowLocalISO();
+    const nowMs = Date.now();
+    questionStartTimeRef.current = nowIso;
+    questionStartMsRef.current = nowMs;
+    voiceStartTimeRef.current = nowIso;
+  }, [currentQuestion]);
 
   // TTS Read Question
   useEffect(() => {
@@ -182,11 +227,23 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
 
         if (isMounted) {
           if (sId) setSessionId(sId);
-          if (firstQ && (firstQ.question || firstQ.question_transcrib || firstQ.question_no)) {
+          if (res) {
+            const sData = res?.session || res?.data?.session || res?.data || res;
+            setSessionData(sData);
+          }
+          if (firstQ && (firstQ.question || firstQ.question_transcrib || firstQ.question_transcribe || firstQ.question_text || firstQ.question_no || firstQ.title || firstQ.session_id || firstQ.id)) {
             setCurrentQuestion(firstQ);
-            voiceStartTimeRef.current = new Date().toISOString();
+            voiceStartTimeRef.current = getNowLocalISO();
           } else {
-            const msg = res?.message || res?.detail || "No initial question received for TAM assessment.";
+            const msg =
+              res?.response?.data?.detail ||
+              res?.response?.data?.message ||
+              res?.detail ||
+              res?.message ||
+              res?.error ||
+              res?.data?.detail ||
+              res?.data?.message ||
+              "No initial question received for TAM assessment.";
             toast.error(msg);
             onExit();
           }
@@ -194,8 +251,10 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
       } catch (err: any) {
         console.error("Failed to start Conceptual assessment:", err);
         const errorMsg =
-          err?.response?.data?.message ||
           err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          (typeof err?.response?.data === 'string' ? err?.response?.data : null) ||
           err?.message ||
           "Failed to start Conceptual assessment.";
         toast.error(errorMsg);
@@ -259,7 +318,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingSeconds(0);
-      voiceStartTimeRef.current = new Date().toISOString();
+      voiceStartTimeRef.current = getNowLocalISO();
 
       timerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
@@ -286,7 +345,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
     setRecordingSeconds(0);
-    voiceStartTimeRef.current = new Date().toISOString();
+    voiceStartTimeRef.current = getNowLocalISO();
   };
 
   // Submit Answer (Recorded Audio or Empty / Skip)
@@ -294,7 +353,11 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
     if (isSubmittingAnswer) return;
     setIsSubmittingAnswer(true);
 
-    const endTimeStr = new Date().toISOString();
+    const endTimeStr = getNowLocalISO();
+    const endMs = Date.now();
+    const startTimeStr = questionStartTimeRef.current || voiceStartTimeRef.current || getNowLocalISO();
+    const startMs = questionStartMsRef.current || endMs;
+    const totalSecs = Math.max(1, Math.round((endMs - startMs) / 1000));
     const targetSessionId = sessionId || currentQuestion?.session_id || competitionId;
 
     try {
@@ -311,15 +374,15 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
           ? audioBlob
           : new File([audioBlob], `answer_${questionId}.wav`, { type: 'audio/wav' });
         formData.append('audio_file', audioFile);
-        formData.append('start_time', voiceStartTimeRef.current);
+        formData.append('start_time', startTimeStr);
         formData.append('end_time', endTimeStr);
-        formData.append('total_time_taken', String(recordingSeconds));
+        formData.append('total_time_taken', String(totalSecs));
       } else {
         // Empty Audio / Skip Question response
         formData.append('audio_file', '');
-        formData.append('start_time', '');
-        formData.append('end_time', '');
-        formData.append('total_time_taken', '');
+        formData.append('start_time', startTimeStr);
+        formData.append('end_time', endTimeStr);
+        formData.append('total_time_taken', String(totalSecs));
       }
 
       payloadToSend = formData;
@@ -346,7 +409,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
         if (audioUrl) URL.revokeObjectURL(audioUrl);
         setAudioUrl(null);
         setRecordingSeconds(0);
-        voiceStartTimeRef.current = new Date().toISOString();
+        voiceStartTimeRef.current = getNowLocalISO();
         setSubmittedCount((prev) => prev + 1);
 
         if (!isEmptyAnswer && audioBlob) {
@@ -374,6 +437,9 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   // End Competition (Final Submit)
   const handleFinalSubmitCompetition = async (isAuto: boolean = false) => {
     if (isSubmitting) return;
+    if (isAuto || isTimeExpired) {
+      setIsAutoSubmit(true);
+    }
     setIsSubmitting(true);
     setShowConfirmEndModal(false);
 
@@ -386,6 +452,9 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
 
       console.log("Submitting End Conceptual TAM Competition payload:", payload);
       const res = await CompetitionService.EndCompetition(payload);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
       onComplete(res || { competition_id: competitionId });
     } catch (err: any) {
       console.error("Error ending Conceptual competition:", err);
@@ -414,6 +483,32 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] w-screen h-screen overflow-y-auto bg-slate-50 text-slate-800 font-sans flex flex-col p-3 sm:p-5 md:p-8 space-y-4 sm:space-y-6">
+      {isSubmitting && (
+        <div className="fixed inset-0 z-[99999] backdrop-blur-md bg-black/60 flex flex-col items-center justify-center pointer-events-auto">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-[90%] mx-auto transform animate-in fade-in zoom-in duration-300 border border-slate-100 text-center space-y-4">
+            <div className="relative mb-2">
+              <div className="w-16 h-16 border-4 border-emerald-100 border-solid rounded-full"></div>
+              <div className="w-16 h-16 border-4 border-emerald-600 border-solid rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                {isAutoSubmit || isTimeExpired ? (
+                  <Clock className="w-6 h-6 text-amber-500 animate-pulse" />
+                ) : (
+                  <FileCheck className="w-6 h-6 text-emerald-600" />
+                )}
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">
+              {isAutoSubmit || isTimeExpired ? "Time is Over!" : "Submitting Conceptual TAM Assessment"}
+            </h3>
+            <p className="text-slate-600 text-sm font-medium leading-relaxed">
+              {isAutoSubmit || isTimeExpired
+                ? "Time is over, so the competition is auto submitting. Please wait..."
+                : "Please wait while we process your responses securely..."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Bar Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-4 shadow-sm gap-3">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">

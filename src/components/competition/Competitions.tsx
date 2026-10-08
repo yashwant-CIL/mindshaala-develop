@@ -497,6 +497,7 @@ export const Competitions: React.FC = () => {
 
   // Pre-fetch StartCompetition API call before navigating to the exam screen
   const handleStartExam = async (comp: CompetitionItem) => {
+    if (isStartingExam) return;
     const compId = comp.competition_id || comp.id || '';
     setIsStartingExam(true);
     setStartingExamId(compId);
@@ -529,27 +530,52 @@ export const Competitions: React.FC = () => {
       let qList: any[] = [];
       const rawObj = res?.data || res;
 
-      if (rawObj) {
+      if (rawObj && typeof rawObj === 'object') {
         if (Array.isArray(rawObj.questions)) {
           qList = rawObj.questions;
         } else if (Array.isArray(rawObj)) {
           qList = rawObj;
-        } else if (typeof rawObj === 'object') {
+        } else if (rawObj.data && Array.isArray(rawObj.data)) {
+          qList = rawObj.data;
+        } else {
           const numericKeys = Object.keys(rawObj)
             .filter((k) => !isNaN(Number(k)))
             .sort((a, b) => Number(a) - Number(b));
 
           if (numericKeys.length > 0) {
             qList = numericKeys.map((k) => rawObj[k]);
-          } else if (rawObj.data && Array.isArray(rawObj.data)) {
-            qList = rawObj.data;
+          } else if (
+            rawObj.question ||
+            rawObj.question_transcrib ||
+            rawObj.question_transcribe ||
+            rawObj.question_text ||
+            rawObj.question_no ||
+            rawObj.session_id ||
+            rawObj.competition_session_id ||
+            rawObj.viva_q_id ||
+            rawObj.gk_user_ass_id ||
+            (rawObj.data && (rawObj.data.question || rawObj.data.question_transcrib || rawObj.data.session_id))
+          ) {
+            qList = [rawObj.question || rawObj.question_transcrib ? rawObj : (rawObj.data || rawObj)];
           }
         }
       }
 
+      const apiErrorMsg =
+        res?.detail ||
+        res?.message ||
+        res?.error ||
+        (typeof res?.data === 'string' ? res?.data : null) ||
+        res?.data?.detail ||
+        res?.data?.message ||
+        res?.data?.error;
+
+      if (res?.status === false || (res?.data && res?.data?.status === false)) {
+        throw new Error(apiErrorMsg || "Unable to start competition assessment.");
+      }
+
       if (!qList || qList.length === 0) {
-        const errorMsg = res?.message || res?.detail || "No questions found for this competition assessment.";
-        throw new Error(errorMsg);
+        throw new Error(apiErrorMsg || "No questions found for this competition assessment.");
       }
 
       // Success! Set initialExamData and ONLY then navigate to exam screen
@@ -559,8 +585,9 @@ export const Competitions: React.FC = () => {
     } catch (err: any) {
       console.error("Failed to start competition assessment:", err);
       const errorMsg =
-        err?.response?.data?.message ||
         err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
         (typeof err?.response?.data === 'string' ? err?.response?.data : null) ||
         err?.message ||
         "Failed to start competition assessment. Please try again.";
@@ -810,6 +837,9 @@ export const Competitions: React.FC = () => {
         userId={activeUserId}
         initialData={initialExamData}
         onExit={() => {
+          if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
           setActiveExamComp(null);
           setInitialExamData(null);
           if (activeUserId) {
@@ -820,6 +850,9 @@ export const Competitions: React.FC = () => {
           }
         }}
         onComplete={(result) => {
+          if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
           setActiveExamComp(null);
           setInitialExamData(null);
           setToastMessage({
@@ -1298,6 +1331,7 @@ const RegisteredCompCard: React.FC<{
 
   const statusUpper = comp.status ? String(comp.status).toUpperCase().trim() : '';
   const isCompleted = statusUpper === 'COMPLETE' || statusUpper === 'COMPLETED' || (statusUpper.includes('COMPLET') && !statusUpper.includes('UNCOMPLET'));
+  const isInProgress = statusUpper === 'IN_PROGRESS' || statusUpper === 'INPROGRESS' || statusUpper === 'IN PROGRESS';
 
   const diffToStart = startTimeMs > 0 ? startTimeMs - nowMs : 0;
   const isWaitingRoomActive = isBeforeStart && diffToStart <= 10 * 60 * 1000; // <= 10 minutes
@@ -1373,7 +1407,7 @@ const RegisteredCompCard: React.FC<{
             <Clock className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-[10px] uppercase font-bold text-slate-400">Start Time</div>
+            <div className="text-[10px] uppercase font-bold text-slate-400">Start Time - End Time</div>
             <div className="font-bold text-slate-800">
               {formatCompetitionTime(comp.start_time)}
               {comp.end_time && ` - ${formatCompetitionTime(comp.end_time)}`}
@@ -1392,6 +1426,16 @@ const RegisteredCompCard: React.FC<{
             </div>
             <div className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-extrabold uppercase">
               Completed
+            </div>
+          </>
+        ) : isInProgress ? (
+          <>
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
+              <Clock className="w-4 h-4 text-blue-600 animate-spin" />
+              <span className="font-bold">Assessment In Progress</span>
+            </div>
+            <div className="px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-extrabold uppercase">
+              In Progress
             </div>
           </>
         ) : isBeforeStart ? (
@@ -1447,7 +1491,7 @@ const RegisteredCompCard: React.FC<{
           </button>
 
           {/* Condition 1: Timer running -> Show Waiting Room button (active only when <= 10 mins before start) */}
-          {isBeforeStart && !isCompleted && (
+          {isBeforeStart && !isCompleted && !isInProgress && (
             <button
               onClick={isWaitingRoomActive ? (onEnterWaitingRoom || onViewDetails) : undefined}
               disabled={!isWaitingRoomActive}
@@ -1467,8 +1511,8 @@ const RegisteredCompCard: React.FC<{
             </button>
           )}
 
-          {/* Condition 2: Timer is 0 / Exam Live -> Show Start button until endtime (only if not completed) */}
-          {isLive && !isCompleted && (
+          {/* Condition 2: Timer is 0 / Exam Live -> Show Start button until endtime (only if not completed and not in_progress) */}
+          {isLive && !isCompleted && !isInProgress && (
             <button
               onClick={onStart || onViewDetails}
               disabled={isStarting}
@@ -1484,6 +1528,13 @@ const RegisteredCompCard: React.FC<{
                 </>
               )}
             </button>
+          )}
+
+          {/* Condition 3: Status is IN_PROGRESS -> Show In Progress badge indicator instead of Start button */}
+          {isInProgress && !isCompleted && (
+            <span className="px-3.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold flex items-center justify-center gap-1.5 cursor-default flex-1 sm:flex-none">
+              <Clock className="w-3.5 h-3.5 text-blue-600 animate-spin shrink-0" /> In Progress
+            </span>
           )}
         </div>
       </div>
@@ -1633,7 +1684,7 @@ const UpcomingCompCard: React.FC<{
         {targetDateStr && (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-center space-y-1.5">
             <div className="text-[10px] text-slate-500 uppercase font-semibold tracking-wider flex items-center justify-center gap-x-2 gap-y-1 flex-wrap">
-              {comp.start_time && (
+              {/* {comp.start_time && (
                 <span className="flex items-center gap-1">
                   <Timer className="w-3 h-3 text-blue-600 shrink-0" /> Start: {formatDateTime(comp.start_time)}
                 </span>
@@ -1642,7 +1693,33 @@ const UpcomingCompCard: React.FC<{
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3 text-indigo-600 shrink-0" /> End: {formatDateTime(comp.end_time)}
                 </span>
-              )}
+              )} */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          {/* <div className="p-2 rounded-lg bg-blue-100 text-blue-700 shrink-0">
+            <Calendar className="w-4 h-4" />
+          </div> */}
+          <div>
+            <div className="text-[10px] uppercase font-bold text-slate-400">Assessment Date</div>
+            <div className="font-bold text-slate-800">
+              {formatCompetitionDate(comp.start_time || comp.end_time)}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          {/* <div className="p-2 rounded-lg bg-indigo-100 text-indigo-700 shrink-0">
+            <Clock className="w-4 h-4" />
+          </div> */}
+          <div>
+            <div className="text-[10px] uppercase font-bold text-slate-400">Start Time - End Time</div>
+            <div className="font-bold text-slate-800">
+              {formatCompetitionTime(comp.start_time)}
+              {comp.end_time && ` - ${formatCompetitionTime(comp.end_time)}`}
+            </div>
+          </div>
+        </div>
+        </div>
               {!comp.start_time && !comp.end_time && (
                 <span className="flex items-center gap-1">
                   <Timer className="w-3 h-3 text-blue-600 shrink-0" /> Start: TBA

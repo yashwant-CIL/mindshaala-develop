@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { CompetitionItem, getModuleTypeLabel, getFeeInfo } from './Competitions';
 import { useNetworkNow } from '../../utils/networkTime';
 import {
@@ -23,6 +23,7 @@ export const CompetitionWaitingRoom: React.FC<CompetitionWaitingRoomProps> = ({
   onExit
 }) => {
   const nowMs = useNetworkNow(1000);
+  const hasLaunchedRef = useRef<boolean>(false);
 
   const startTimeMs = comp.start_time ? new Date(comp.start_time).getTime() : 0;
   const diffMs = startTimeMs > 0 ? startTimeMs - nowMs : 0;
@@ -37,9 +38,10 @@ export const CompetitionWaitingRoom: React.FC<CompetitionWaitingRoomProps> = ({
     }
   }, []);
 
-  // Auto-launch exam screen when countdown hits 0
+  // Auto-launch exam screen when countdown hits 0 (guaranteed single invocation)
   useEffect(() => {
-    if (isStarted) {
+    if (isStarted && !hasLaunchedRef.current) {
+      hasLaunchedRef.current = true;
       console.log("Waiting room timer reached 0! Auto-launching Competition Exam Screen...");
       onStartExam();
     }

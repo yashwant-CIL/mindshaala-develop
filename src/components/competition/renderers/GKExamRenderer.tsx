@@ -33,15 +33,8 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
   onComplete
 }) => {
   const nowMs = useNetworkNow(1000);
-
-  const totalDurationMs = comp.total_time ? comp.total_time * 1000 : 3600000;
-  const startTimeMs = comp.start_time ? new Date(comp.start_time).getTime() : nowMs;
-  const endTimeMs = comp.end_time
-    ? new Date(comp.end_time).getTime()
-    : startTimeMs + totalDurationMs;
-
-  const remainingMs = Math.max(0, endTimeMs - nowMs);
-  const isTimeExpired = remainingMs <= 0;
+  const examStartMsRef = useRef<number>(Date.now());
+  const [sessionData, setSessionData] = useState<any>(null);
 
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -50,6 +43,7 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
   const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(new Set([0]));
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isAutoSubmit, setIsAutoSubmit] = useState<boolean>(false);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | number>('');
   const [gkUserAssId, setGkUserAssId] = useState<string | number>('');
@@ -62,6 +56,44 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
 
   const [questionTimes, setQuestionTimes] = useState<Record<string | number, number>>({});
   const questionStartTimeRef = useRef<number>(Date.now());
+
+  // Dynamic Exam Countdown calculation
+  const actualExamStartMs = (sessionData?.started_at && !isNaN(new Date(sessionData.started_at).getTime()))
+    ? new Date(sessionData.started_at).getTime()
+    : (comp.start_time && !isNaN(new Date(comp.start_time).getTime()))
+      ? new Date(comp.start_time).getTime()
+      : examStartMsRef.current;
+
+  const totalExamSeconds = (() => {
+    const rawTotalTime =
+      sessionData?.total_time ??
+      sessionData?.session?.total_time ??
+      initialData?.session?.total_time ??
+      initialData?.total_time ??
+      initialData?.data?.session?.total_time ??
+      initialData?.data?.total_time ??
+      sessionData?.total_time_seconds ??
+      comp.total_time;
+
+    if (rawTotalTime != null && Number(rawTotalTime) > 0) {
+      const num = Number(rawTotalTime);
+      return num < 100 ? num * 60 : num;
+    }
+    if (questions.length > 0) {
+      const sum = questions.reduce((acc, q) => acc + (Number(q.time_per_question) || 120), 0);
+      if (sum > 0) return sum;
+    }
+    return 1800;
+  })();
+
+  const actualExamEndMs = actualExamStartMs + (totalExamSeconds * 1000);
+  const remainingMs = Math.max(0, actualExamEndMs - nowMs);
+  const isTimeExpired = remainingMs <= 0;
+
+  const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+  const remainingMins = Math.floor((remainingMs / (1000 * 60)) % 60);
+  const remainingSecs = Math.floor((remainingMs / 1000) % 60);
+  const timeRemainingStr = `${String(remainingHours).padStart(2, '0')}:${String(remainingMins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
 
   const competitionId: string | number = comp.competition_id ?? comp.id ?? '';
   const currentUserId: string | number = userId ?? localStorage.getItem('user_id') ?? 'guest';
@@ -138,6 +170,10 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
           if (gkAssId) setGkUserAssId(gkAssId);
           if (sId) setSessionId(sId);
           if (gkAssName) setAssessmentTitle(gkAssName);
+          if (res) {
+            const sData = res?.session || res?.data?.session || res?.data || res;
+            setSessionData(sData);
+          }
         }
 
         let qList: QuestionItem[] = [];
@@ -289,6 +325,9 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
   const handleFinalSubmitCompetition = async (isAuto: boolean = false) => {
     if (isSubmitting) return;
     recordCurrentQuestionTime(currentQuestionIndex);
+    if (isAuto || isTimeExpired) {
+      setIsAutoSubmit(true);
+    }
     setIsSubmitting(true);
     setShowConfirmEndModal(false);
 
@@ -326,6 +365,9 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
 
       console.log("Submitting End GK Competition payload:", payload);
       const res = await CompetitionService.EndCompetition(payload);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
       onComplete(res || { competition_id: competitionId, score: 0 });
     } catch (err: any) {
       console.error("Error ending GK competition:", err);
@@ -376,11 +418,6 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
   const isCurrentMarkedReview = checkReview(reviewMarked, currentQId);
   const hasSelection = currentAnswer !== null && currentAnswer !== undefined && currentAnswer !== '';
 
-  const remainingHours = Math.floor((remainingMs / (1000 * 60 * 60)) % 24);
-  const remainingMins = Math.floor((remainingMs / 1000 / 60) % 60);
-  const remainingSecs = Math.floor((remainingMs / 1000) % 60);
-  const timeRemainingStr = `${String(remainingHours).padStart(2, '0')}:${String(remainingMins).padStart(2, '0')}:${String(remainingSecs).padStart(2, '0')}`;
-
   let answeredCount = 0;
   let reviewCount = 0;
   let reviewAnsweredCount = 0;
@@ -404,17 +441,27 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
   return (
     <div className="fixed inset-0 z-[100] w-screen h-screen overflow-hidden bg-white text-slate-800 font-sans flex flex-col justify-between select-none font-[Arial,sans-serif]">
       {isSubmitting && (
-        <div className="fixed inset-0 z-[99999] backdrop-blur-md bg-black/40 flex flex-col items-center justify-center pointer-events-auto">
-          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-[90%] mx-auto transform animate-in fade-in zoom-in duration-300">
-            <div className="relative mb-6">
+        <div className="fixed inset-0 z-[99999] backdrop-blur-md bg-black/60 flex flex-col items-center justify-center pointer-events-auto">
+          <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-[90%] mx-auto transform animate-in fade-in zoom-in duration-300 border border-slate-100 text-center space-y-4">
+            <div className="relative mb-2">
               <div className="w-16 h-16 border-4 border-blue-100 border-solid rounded-full"></div>
               <div className="w-16 h-16 border-4 border-[#0079D1] border-solid rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
               <div className="absolute inset-0 flex items-center justify-center">
-                <FileCheck className="w-6 h-6 text-[#0079D1]" />
+                {isAutoSubmit || isTimeExpired ? (
+                  <Clock className="w-6 h-6 text-amber-500 animate-pulse" />
+                ) : (
+                  <FileCheck className="w-6 h-6 text-[#0079D1]" />
+                )}
               </div>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">Submitting GK Exam</h3>
-            <p className="text-slate-500 text-center font-medium">Please wait while we process your responses securely...</p>
+            <h3 className="text-xl font-bold text-slate-900">
+              {isAutoSubmit || isTimeExpired ? "Time is Over!" : "Submitting GK Competition"}
+            </h3>
+            <p className="text-slate-600 text-sm font-medium leading-relaxed">
+              {isAutoSubmit || isTimeExpired
+                ? "Time is over, so the competition is auto submitting. Please wait..."
+                : "Please wait while we process your responses securely..."}
+            </p>
           </div>
         </div>
       )}
