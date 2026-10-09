@@ -462,12 +462,35 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
         stream.getTracks().forEach((track) => track.stop());
       };
 
+      const limit = Number(
+        currentQ.timer_per_question ??
+        currentQ.time_per_question ??
+        currentQ.time_limit
+        // sessionData?.time_per_question ??
+        // 120
+      );
+
       mediaRecorder.start();
       setIsRecording(true);
-      setRecordingSeconds(0);
+      setRecordingSeconds(limit);
+
+      if (timerRef.current) clearInterval(timerRef.current);
 
       timerRef.current = setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
+        setRecordingSeconds((prev) => {
+          if (prev <= 1) {
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+              mediaRecorderRef.current.stop();
+            }
+            setIsRecording(false);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     } catch (err) {
       console.error("Microphone access denied:", err);
@@ -479,7 +502,10 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
   };
 
@@ -832,9 +858,9 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
               <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-[11px] font-black uppercase tracking-wider">
                 Oral Voice Question
               </span>
-              {currentQ.time_per_question && (
+              {(currentQ.timer_per_question || currentQ.time_per_question || currentQ.time_limit) && (
                 <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold flex items-center gap-1 border border-slate-200">
-                  <Clock className="w-3 h-3 text-purple-600" /> {currentQ.time_per_question}s time limit
+                  <Clock className="w-3 h-3 text-purple-600" /> {currentQ.timer_per_question ?? currentQ.time_per_question ?? currentQ.time_limit}s time limit
                 </span>
               )}
             </div>
@@ -909,7 +935,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
                       ))}
                     </div>
                     <div className="text-2xl font-mono font-black text-red-600 animate-pulse">
-                      Recording: {recordingSeconds}s
+                      Recording: {recordingSeconds}s remaining
                     </div>
                   </div>
                 ) : audioUrl ? (
