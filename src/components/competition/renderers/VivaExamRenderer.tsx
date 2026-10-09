@@ -117,6 +117,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isAutoSubmit, setIsAutoSubmit] = useState<boolean>(false);
+  const [submitReason, setSubmitReason] = useState<'time_expired' | 'tab_switch' | 'manual' | null>(null);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | number>('');
@@ -371,7 +372,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   useEffect(() => {
     if (isTimeExpired && !isSubmitting && !isLoading) {
       console.warn("Viva Competition time expired! Auto-submitting...");
-      handleFinalSubmitCompetition(true);
+      handleFinalSubmitCompetition(true, 'time_expired');
     }
   }, [isTimeExpired, isSubmitting, isLoading]);
 
@@ -397,7 +398,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
           setShowWarningModal(true);
 
           if (nextCount >= 3) {
-            handleFinalSubmitCompetition(true);
+            handleFinalSubmitCompetition(true, 'tab_switch');
           }
           return nextCount;
         });
@@ -412,7 +413,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
           setShowWarningModal(true);
 
           if (nextCount >= 3) {
-            handleFinalSubmitCompetition(true);
+            handleFinalSubmitCompetition(true, 'tab_switch');
           }
           return nextCount;
         });
@@ -684,11 +685,15 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
     }
   };
 
-  const handleFinalSubmitCompetition = async (isAuto: boolean = false) => {
+  const handleFinalSubmitCompetition = async (
+    isAuto: boolean = false,
+    reason: 'time_expired' | 'tab_switch' | 'manual' = isTimeExpired ? 'time_expired' : 'manual'
+  ) => {
     if (isSubmitting) return;
     if (isAuto || isTimeExpired) {
       setIsAutoSubmit(true);
     }
+    setSubmitReason(reason);
     setIsSubmitting(true);
     setShowConfirmEndModal(false);
 
@@ -741,10 +746,24 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
         <div className="fixed inset-0 z-[99999] backdrop-blur-md bg-black/60 flex flex-col items-center justify-center pointer-events-auto">
           <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-[90%] mx-auto transform animate-in fade-in zoom-in duration-300 border border-slate-100 text-center space-y-4">
             <div className="relative mb-2">
-              <div className="w-16 h-16 border-4 border-purple-100 border-solid rounded-full"></div>
-              <div className="w-16 h-16 border-4 border-purple-600 border-solid rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+              <div className={`w-16 h-16 border-4 border-solid rounded-full ${
+                submitReason === 'tab_switch'
+                  ? 'border-red-100'
+                  : submitReason === 'time_expired' || isTimeExpired
+                    ? 'border-amber-100'
+                    : 'border-purple-100'
+              }`}></div>
+              <div className={`w-16 h-16 border-4 border-solid rounded-full border-t-transparent animate-spin absolute top-0 left-0 ${
+                submitReason === 'tab_switch'
+                  ? 'border-red-600'
+                  : submitReason === 'time_expired' || isTimeExpired
+                    ? 'border-amber-500'
+                    : 'border-purple-600'
+              }`}></div>
               <div className="absolute inset-0 flex items-center justify-center">
-                {isAutoSubmit || isTimeExpired ? (
+                {submitReason === 'tab_switch' ? (
+                  <ShieldAlert className="w-6 h-6 text-red-600 animate-bounce" />
+                ) : submitReason === 'time_expired' || isTimeExpired ? (
                   <Clock className="w-6 h-6 text-amber-500 animate-pulse" />
                 ) : (
                   <FileCheck className="w-6 h-6 text-purple-600" />
@@ -752,12 +771,18 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
               </div>
             </div>
             <h3 className="text-xl font-bold text-slate-900">
-              {isAutoSubmit || isTimeExpired ? "Time is Over!" : "Submitting Viva Competition"}
+              {submitReason === 'tab_switch'
+                ? "Assessment Auto-Submitted!"
+                : submitReason === 'time_expired' || isTimeExpired
+                  ? "Time is Over!"
+                  : "Submitting Viva Competition"}
             </h3>
             <p className="text-slate-600 text-sm font-medium leading-relaxed">
-              {isAutoSubmit || isTimeExpired
-                ? "Time is over, so the competition is auto submitting. Please wait..."
-                : "Please wait while we process your responses securely..."}
+              {submitReason === 'tab_switch'
+                ? "Excessive tab switching detected (exceeded maximum allowed 3 security warnings). Your assessment is being automatically submitted."
+                : submitReason === 'time_expired' || isTimeExpired
+                  ? "Time is over, so the competition is auto submitting. Please wait..."
+                  : "Please wait while we process your responses securely..."}
             </p>
           </div>
         </div>

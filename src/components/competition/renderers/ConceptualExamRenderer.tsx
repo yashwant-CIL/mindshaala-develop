@@ -77,6 +77,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isAutoSubmit, setIsAutoSubmit] = useState<boolean>(false);
+  const [submitReason, setSubmitReason] = useState<'time_expired' | 'tab_switch' | 'manual' | null>(null);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState<boolean>(false);
 
   // Audio Recording States
@@ -105,11 +106,18 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   const currentUserId: string | number = userId ?? localStorage.getItem('user_id') ?? 'guest';
 
   // Dynamic Exam Countdown calculation
-  const actualExamStartMs = (sessionData?.started_at && !isNaN(new Date(sessionData.started_at).getTime()))
-    ? new Date(sessionData.started_at).getTime()
-    : (comp.start_time && !isNaN(new Date(comp.start_time).getTime()))
-      ? new Date(comp.start_time).getTime()
-      : examStartMsRef.current;
+  const sessionStartCandidate =
+    sessionData?.started_at ||
+    sessionData?.start_time ||
+    sessionData?.created_at ||
+    sessionData?.session_start_time ||
+    sessionData?.session?.started_at ||
+    sessionData?.session?.start_time ||
+    sessionData?.session?.created_at;
+
+  const actualExamStartMs = (sessionStartCandidate && !isNaN(new Date(sessionStartCandidate).getTime()))
+    ? new Date(sessionStartCandidate).getTime()
+    : examStartMsRef.current;
 
   const totalExamSeconds = (() => {
     const rawTotalTime =
@@ -283,7 +291,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   // 2. Auto-Submit on Time Expiry
   useEffect(() => {
     if (isTimeExpired && !isSubmitting && !isLoading) {
-      handleFinalSubmitCompetition(true);
+      handleFinalSubmitCompetition(true, 'time_expired');
     }
   }, [isTimeExpired, isSubmitting, isLoading]);
 
@@ -309,7 +317,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
           setShowWarningModal(true);
 
           if (nextCount >= 3) {
-            handleFinalSubmitCompetition(true);
+            handleFinalSubmitCompetition(true, 'tab_switch');
           }
           return nextCount;
         });
@@ -324,7 +332,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
           setShowWarningModal(true);
 
           if (nextCount >= 3) {
-            handleFinalSubmitCompetition(true);
+            handleFinalSubmitCompetition(true, 'tab_switch');
           }
           return nextCount;
         });
@@ -496,11 +504,15 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   };
 
   // End Competition (Final Submit)
-  const handleFinalSubmitCompetition = async (isAuto: boolean = false) => {
+  const handleFinalSubmitCompetition = async (
+    isAuto: boolean = false,
+    reason: 'time_expired' | 'tab_switch' | 'manual' = isTimeExpired ? 'time_expired' : 'manual'
+  ) => {
     if (isSubmitting) return;
     if (isAuto || isTimeExpired) {
       setIsAutoSubmit(true);
     }
+    setSubmitReason(reason);
     setIsSubmitting(true);
     setShowConfirmEndModal(false);
 
@@ -548,10 +560,24 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
         <div className="fixed inset-0 z-[99999] backdrop-blur-md bg-black/60 flex flex-col items-center justify-center pointer-events-auto">
           <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-md w-[90%] mx-auto transform animate-in fade-in zoom-in duration-300 border border-slate-100 text-center space-y-4">
             <div className="relative mb-2">
-              <div className="w-16 h-16 border-4 border-emerald-100 border-solid rounded-full"></div>
-              <div className="w-16 h-16 border-4 border-emerald-600 border-solid rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+              <div className={`w-16 h-16 border-4 border-solid rounded-full ${
+                submitReason === 'tab_switch'
+                  ? 'border-red-100'
+                  : submitReason === 'time_expired' || isTimeExpired
+                    ? 'border-amber-100'
+                    : 'border-emerald-100'
+              }`}></div>
+              <div className={`w-16 h-16 border-4 border-solid rounded-full border-t-transparent animate-spin absolute top-0 left-0 ${
+                submitReason === 'tab_switch'
+                  ? 'border-red-600'
+                  : submitReason === 'time_expired' || isTimeExpired
+                    ? 'border-amber-500'
+                    : 'border-emerald-600'
+              }`}></div>
               <div className="absolute inset-0 flex items-center justify-center">
-                {isAutoSubmit || isTimeExpired ? (
+                {submitReason === 'tab_switch' ? (
+                  <ShieldAlert className="w-6 h-6 text-red-600 animate-bounce" />
+                ) : submitReason === 'time_expired' || isTimeExpired ? (
                   <Clock className="w-6 h-6 text-amber-500 animate-pulse" />
                 ) : (
                   <FileCheck className="w-6 h-6 text-emerald-600" />
@@ -559,12 +585,18 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
               </div>
             </div>
             <h3 className="text-xl font-bold text-slate-900">
-              {isAutoSubmit || isTimeExpired ? "Time is Over!" : "Submitting Conceptual TAM Assessment"}
+              {submitReason === 'tab_switch'
+                ? "Assessment Auto-Submitted!"
+                : submitReason === 'time_expired' || isTimeExpired
+                  ? "Time is Over!"
+                  : "Submitting Conceptual TAM Assessment"}
             </h3>
             <p className="text-slate-600 text-sm font-medium leading-relaxed">
-              {isAutoSubmit || isTimeExpired
-                ? "Time is over, so the competition is auto submitting. Please wait..."
-                : "Please wait while we process your responses securely..."}
+              {submitReason === 'tab_switch'
+                ? "Excessive tab switching detected (exceeded maximum allowed 3 security warnings). Your assessment is being automatically submitted."
+                : submitReason === 'time_expired' || isTimeExpired
+                  ? "Time is over, so the competition is auto submitting. Please wait..."
+                  : "Please wait while we process your responses securely..."}
             </p>
           </div>
         </div>

@@ -58,11 +58,18 @@ export const GKExamRenderer: React.FC<GKExamRendererProps> = ({
   const questionStartTimeRef = useRef<number>(Date.now());
 
   // Dynamic Exam Countdown calculation
-  const actualExamStartMs = (sessionData?.started_at && !isNaN(new Date(sessionData.started_at).getTime()))
-    ? new Date(sessionData.started_at).getTime()
-    : (comp.start_time && !isNaN(new Date(comp.start_time).getTime()))
-      ? new Date(comp.start_time).getTime()
-      : examStartMsRef.current;
+  const sessionStartCandidate =
+    sessionData?.started_at ||
+    sessionData?.start_time ||
+    sessionData?.created_at ||
+    sessionData?.session_start_time ||
+    (sessionData as any)?.session?.started_at ||
+    (sessionData as any)?.session?.start_time ||
+    (sessionData as any)?.session?.created_at;
+
+  const actualExamStartMs = (sessionStartCandidate && !isNaN(new Date(sessionStartCandidate).getTime()))
+    ? new Date(sessionStartCandidate).getTime()
+    : examStartMsRef.current;
 
   const totalExamSeconds = (() => {
     const rawTotalTime =
