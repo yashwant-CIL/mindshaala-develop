@@ -54,10 +54,24 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
   const nowMs = useNetworkNow(1000);
   const examStartMsRef = useRef<number>(Date.now());
   const [sessionData, setSessionData] = useState<any>(null);
-
-  // Exam / Question States
   const [currentQuestion, setCurrentQuestion] = useState<any>(null);
-  const [sessionId, setSessionId] = useState<string | number>('');
+
+  // Helper to extract session_id
+  const extractSessionId = (res: any) => {
+    return (
+      res?.session_id ||
+      res?.session?.session_id ||
+      res?.data?.session_id ||
+      res?.data?.session?.session_id ||
+      res?.competition_session_id ||
+      res?.data?.competition_session_id ||
+      ''
+    );
+  };
+
+  const initialSessionId = extractSessionId(initialData) || comp.competition_id || comp.id || '';
+  const [sessionId, setSessionId] = useState<string | number>(initialSessionId);
+  const sessionIdRef = useRef<string | number>(initialSessionId);
   const [submittedCount, setSubmittedCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
@@ -127,11 +141,6 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
     if (Array.isArray(res.questions) && res.questions.length > 0) return res.questions[0];
     if (Array.isArray(res) && res.length > 0) return res[0];
     return res.data || res;
-  };
-
-  // Helper to extract session_id
-  const extractSessionId = (res: any) => {
-    return res?.session_id || res?.data?.session_id || res?.competition_session_id || res?.data?.competition_session_id || '';
   };
 
   const questionText =
@@ -226,7 +235,10 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
         const firstQ = extractQuestionObj(res);
 
         if (isMounted) {
-          if (sId) setSessionId(sId);
+          if (sId) {
+            setSessionId(sId);
+            sessionIdRef.current = sId;
+          }
           if (res) {
             const sData = res?.session || res?.data?.session || res?.data || res;
             setSessionData(sData);
@@ -275,22 +287,71 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
     }
   }, [isTimeExpired, isSubmitting, isLoading]);
 
-  // 3. Anti-Cheat Security
+  // 3. Anti-Cheat Security Listeners
   useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+    const handleCopyCutPaste = (e: ClipboardEvent) => e.preventDefault();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j')) ||
+        (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 'c' || e.key === 'C' || e.key === 'v' || e.key === 'V'))
+      ) {
+        e.preventDefault();
+      }
+    };
+
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setTabSwitchWarnings((prev) => {
           const nextCount = prev + 1;
           setWarningMessage(`Tab switching is prohibited! Warning (${nextCount}/3)`);
           setShowWarningModal(true);
-          if (nextCount >= 3) handleFinalSubmitCompetition(true);
+
+          if (nextCount >= 3) {
+            handleFinalSubmitCompetition(true);
+          }
           return nextCount;
         });
       }
     };
 
+    const handleFullScreenChange = () => {
+      if (!document.fullscreenElement) {
+        setTabSwitchWarnings((prev) => {
+          const nextCount = prev + 1;
+          setWarningMessage(`Exited fullscreen mode! Warning (${nextCount}/3).`);
+          setShowWarningModal(true);
+
+          if (nextCount >= 3) {
+            handleFinalSubmitCompetition(true);
+          }
+          return nextCount;
+        });
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('copy', handleCopyCutPaste);
+    document.addEventListener('cut', handleCopyCutPaste);
+    document.addEventListener('paste', handleCopyCutPaste);
+    document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+
+    if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('copy', handleCopyCutPaste);
+      document.removeEventListener('cut', handleCopyCutPaste);
+      document.removeEventListener('paste', handleCopyCutPaste);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+    };
   }, []);
 
   // Voice Recording Controls
@@ -444,7 +505,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
     setShowConfirmEndModal(false);
 
     try {
-      const targetSessionId = sessionId || currentQuestion?.session_id || 0;
+      const targetSessionId = sessionIdRef.current || sessionId || currentQuestion?.session_id || extractSessionId(initialData) || competitionId;
       const payload = {
         module_type: comp.module_type || 'TAM',
         session_id: targetSessionId

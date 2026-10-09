@@ -313,7 +313,9 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               isCorrect,
               isSkipped,
               isUnattempted,
-              explanation: q.answer_description || q.gk_answer || q.answer_explanation || q.explanation || q.gk_explanation || q.solution || 'Detailed solution for this question.',
+              explanation: (rawModType === 'TAM' && (q.reference_answer || q.reference_answers))
+                ? (q.reference_answer || q.reference_answers)
+                : (q.answer_description || q.gk_answer || q.answer_explanation || q.explanation || q.gk_explanation || q.solution || 'Detailed solution for this question.'),
               aiFeedback: q.ai_feedback || q.speech_transcript || q.feedback_text || (isCorrect ? 'Strong response precision!' : (isSkipped ? 'Question was skipped.' : (isUnattempted ? 'Question was not attempted.' : 'Review fundamental concepts for this question.'))),
               timeSpent: timeSec > 0 ? `${timeSec}s` : (q.time_taken_seconds),
               topic: q.topic_name || q.subject || q.topic || sessionObj.subject_name || sessionObj.assessment_name || sessionObj.gk_assessment_name || 'General Knowledge',

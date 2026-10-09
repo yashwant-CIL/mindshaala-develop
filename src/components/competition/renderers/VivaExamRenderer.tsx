@@ -120,6 +120,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [showConfirmEndModal, setShowConfirmEndModal] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | number>('');
+  const sessionIdRef = useRef<string | number>('');
   const [sessionData, setSessionData] = useState<VivaSessionData | null>(null);
 
   // Voice Recording States
@@ -280,6 +281,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
 
         if (isMounted && sId) {
           setSessionId(sId);
+          sessionIdRef.current = sId;
         }
 
         if (isMounted && res) {
@@ -691,9 +693,10 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
     setShowConfirmEndModal(false);
 
     try {
+      const targetSessionId = sessionIdRef.current || sessionId || competitionId;
       const payload = {
         module_type: comp.module_type || 'VIVA',
-        session_id: Number(sessionId || competitionId) || 0
+        session_id: Number(targetSessionId) || targetSessionId || 0
       };
 
       console.log("Submitting End Viva Competition payload:", payload);
