@@ -670,7 +670,7 @@ export const ConceptualExamRenderer: React.FC<ConceptualExamRendererProps> = ({
               <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
               Question #{currentQuestion?.question_no ?? (submittedCount + 1)}
             </span>
-            <span>Attempted: {submittedCount}</span>
+            {/* <span>Attempted: {submittedCount}</span> */}
           </div>
 
           {/* Question Display Card */}

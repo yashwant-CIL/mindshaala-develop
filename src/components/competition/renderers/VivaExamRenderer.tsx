@@ -840,7 +840,7 @@ export const VivaExamRenderer: React.FC<VivaExamRendererProps> = ({
           <div className="flex flex-col gap-3">
             <div className="flex justify-between items-center text-xs font-extrabold text-slate-500 uppercase tracking-widest px-1">
               <span>Question {currentQuestionIndex + 1} of {totalQuestions}</span>
-              <span>Completed: {Object.keys(userAnswers).length} / {totalQuestions}</span>
+              {/* <span>Completed: {Object.keys(userAnswers).length} / {totalQuestions}</span> */}
             </div>
 
             {/* Questions Jump Palette */}
