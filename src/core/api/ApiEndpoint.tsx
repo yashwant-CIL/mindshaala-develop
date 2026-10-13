@@ -287,6 +287,20 @@ export const API_ENDPOINT = {
 
     NOTES: {
         FETCH_NOTES: (user_id: number | string , subject_id: number | string , chapter_id: number | string) =>`/api/v3/mindshaala/notes/fetch?user_id=${user_id}&subject_id=${subject_id}&chapter_id=${chapter_id}`,
+    },
+
+    DYNAMIC_ASSESSMENT: {
+     GET_PATTERNS: (subscription_id?: number | string, pattern_id?: number | string, category?: string) => {
+         const params: string[] = [];
+         if (subscription_id) params.push(`subscription_id=${subscription_id}`);
+         if (category) params.push(`category=${category}`);
+         if (pattern_id) params.push(`pattern_id=${pattern_id}`);
+         return `/api/v3/mindshaala/dynamic/config/patterns${params.length > 0 ? `?${params.join('&')}` : ''}`;   
+     },
+     GENERATE_DYNAMIC_ASSESSMENT: `/api/v3/mindshaala/dynamic/generate-test`,
+     SUBMIT_DYNAMIC_ASSESSMENT_ANSWER: `/api/v3/mindshaala/dynamic/attempts/submit`,
+     GET_ATTEMPTED_ASSESSMENTS: (user_id: number,subscription_id: number) => `/api/v3/mindshaala/dynamic/result/user-assessments?user_id=${user_id}&subscription_id=${subscription_id}`,
+     GET_ATTEMPTED_ASSESSMENT_RESULT: (user_id:number , subscription_id: number, assessment_id:number) => `/api/v3/mindshaala/dynamic/results/assessment-details?user_id=${user_id}&subscription_id=${subscription_id}&assessment_id=${assessment_id}`,
     }
 
 
