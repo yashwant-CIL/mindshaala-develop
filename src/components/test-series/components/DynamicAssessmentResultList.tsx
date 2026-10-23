@@ -15,6 +15,7 @@ import {
 } from "../../ui/dialog";
 import { DynamicAssessmentService } from "../../../services/DynamicAssessmentService";
 import { useCourse } from "../../../context/CourseContext";
+import { DynamicAssessmentSolutions } from "./DynamicAssessmentSolutions";
 import Cookies from "js-cookie";
 
 export interface DynamicAssessmentResultListProps {
@@ -48,6 +49,9 @@ export function DynamicAssessmentResultList({
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("ALL");
+
+    // Full-page Dynamic Assessment Solution State
+    const [selectedAssessmentForSolution, setSelectedAssessmentForSolution] = useState<any>(null);
 
     // Modal state for detailed result
     const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
@@ -111,31 +115,9 @@ export function DynamicAssessmentResultList({
         return { submittedCount: submitted, inProgressCount: inProgress };
     }, [results]);
 
-    // Handle view result click
-    const handleViewResult = async (item: any) => {
-        const assessmentId = item.assessment_id || item.id || item.user_ass_id || item.dynamic_assessment_id;
-        setSelectedAssessment(item);
-        setIsDetailModalOpen(true);
-        setIsLoadingDetail(true);
-        setDetailData(null);
-
-        const userId = localStorage.getItem('user_id') || Cookies.get('user_id');
-        try {
-            if (userId && assessmentId) {
-                const res = await DynamicAssessmentService.GET_ATTEMPTED_ASSESSMENT_RESULT(
-                    Number(userId),
-                    Number(activeSubscriptionId),
-                    Number(assessmentId)
-                );
-                console.log("Dynamic assessment result details:", res);
-                const parsed = res?.data || res?.result || res || null;
-                setDetailData(parsed);
-            }
-        } catch (err) {
-            console.error("Failed to fetch dynamic assessment result details:", err);
-        } finally {
-            setIsLoadingDetail(false);
-        }
+    // Handle view result click - opens DynamicAssessmentSolutions page
+    const handleViewResult = (item: any) => {
+        setSelectedAssessmentForSolution(item);
     };
 
     // Filter logic
@@ -173,6 +155,22 @@ export function DynamicAssessmentResultList({
         return `${datePart} • ${timePart}`;
     };
 
+    // Render full solutions view if an assessment is selected
+    if (selectedAssessmentForSolution) {
+        return (
+            <DynamicAssessmentSolutions
+                assessment={selectedAssessmentForSolution}
+                assessmentId={
+                    selectedAssessmentForSolution.assessment_id ||
+                    selectedAssessmentForSolution.id ||
+                    selectedAssessmentForSolution.user_ass_id ||
+                    selectedAssessmentForSolution.dynamic_assessment_id
+                }
+                onBack={() => setSelectedAssessmentForSolution(null)}
+            />
+        );
+    }
+
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[400px]">
@@ -189,9 +187,9 @@ export function DynamicAssessmentResultList({
                 {!hideHeader && (
                     <div>
                         <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                            Custom <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Assessments</span>
+                            Dynamic <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">Assessments</span>
                         </h1>
-                        <p className="text-slate-500 text-sm mt-1">Review your custom generated dynamic assessment attempts.</p>
+                        <p className="text-slate-500 text-sm mt-1">Review your dynamic assessment attempts.</p>
                     </div>
                 )}
 
@@ -287,8 +285,16 @@ export function DynamicAssessmentResultList({
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: index * 0.04 }}
-                                onClick={() => handleViewResult(result)}
-                                className="bg-white border border-slate-100 p-4 md:px-6 md:py-5 rounded-2xl shadow-xs hover:shadow-md hover:border-indigo-100 transition-all cursor-pointer group"
+                                onClick={() => {
+                                    if (isSubmitted) {
+                                        handleViewResult(result);
+                                    }
+                                }}
+                                className={`bg-white border border-slate-100 p-4 md:px-6 md:py-5 rounded-2xl shadow-xs transition-all ${
+                                    isSubmitted 
+                                        ? "hover:shadow-md hover:border-indigo-100 cursor-pointer group" 
+                                        : "opacity-80 cursor-default"
+                                }`}
                             >
                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                                     {/* Index */}
@@ -362,18 +368,24 @@ export function DynamicAssessmentResultList({
 
                                     {/* Action Button */}
                                     <div className="md:col-span-1 flex justify-end">
-                                        <Button 
-                                            variant="default"
-                                            size="sm"
-                                            className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold h-8 px-3.5 transition-all shadow-xs flex items-center gap-1"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleViewResult(result);
-                                            }}
-                                        >
-                                            <Eye className="w-3.5 h-3.5" />
-                                            Result
-                                        </Button>
+                                        {isSubmitted ? (
+                                            <Button 
+                                                variant="default"
+                                                size="sm"
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold h-8 px-3.5 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleViewResult(result);
+                                                }}
+                                            >
+                                                <Eye className="w-3.5 h-3.5" />
+                                                Result
+                                            </Button>
+                                        ) : (
+                                            <span className="text-[11px] font-bold text-slate-400 italic">
+                                                In Progress
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </motion.div>
@@ -384,11 +396,11 @@ export function DynamicAssessmentResultList({
                         <div className="inline-flex p-4 bg-indigo-50 rounded-2xl text-indigo-600">
                             <Sparkles className="w-8 h-8" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-900">No custom assessments found</h3>
+                        <h3 className="text-xl font-bold text-slate-900">No dynamic assessments found</h3>
                         <p className="text-slate-400 text-sm max-w-sm mx-auto">
                             {searchQuery 
                                 ? "No results match your search criteria. Try a different query." 
-                                : "Generate and attempt tests from the Custom Assessments tab to view your performance analytics here."}
+                                : "Generate and attempt tests from the Dynamic Generator tab to view your performance analytics here."}
                         </p>
                     </div>
                 )}

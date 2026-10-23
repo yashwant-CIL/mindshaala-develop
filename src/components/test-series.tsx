@@ -22,16 +22,21 @@ import { AssessmentDashboard } from "./AssessmentDashboard";
 
 // Imported Data & Components
 import { subjects, mcqQuestions, theoryQuestions } from "../components/test-series/data";
-import { CustomTestGenerator, TestConfig } from "../components/test-series/components/CustomTestGenerator";
+import { DynamicTestGenerator, TestConfig } from "../components/test-series/components/DynamicTestGenerator";
 import { AvailableTestsList } from "../components/test-series/components/AvailableTestsList";
 import { TestInstructionPage } from "../components/test-series/components/TestInstructionPage";
+import { SectionDetailsPage } from "./test-series/components/SectionDetailsPage";
+import { MCQExamScreen } from "./test-series/components/ExamScreens/MCQExamScreen";
 import { AvailableTest } from "../services/TestServices";
 
-export default function TestSeries({ onNavigate, initialTest }: { onNavigate: (page: string) => void, initialTest?: AvailableTest | null }) {
+export default function TestSeries({ onNavigate, initialTest }: { onNavigate?: (page: string, params?: any) => void, initialTest?: AvailableTest | null }) {
   const { toast } = useToast();
-  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "SECTION_WISE">("setup");
+  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "SECTION_WISE" | "section_exam">("setup");
   const [activeTestConfig, setActiveTestConfig] = useState<TestConfig | null>(null);
   const [selectedTestForInstructions, setSelectedTestForInstructions] = useState<AvailableTest | null>(null);
+  const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
+  const [activeSectionName, setActiveSectionName] = useState<string>("");
+  const [activeSectionData, setActiveSectionData] = useState<any>(null);
 
   // MCQ State
   const [currentMcqIndex, setCurrentMcqIndex] = useState(0);
@@ -107,9 +112,36 @@ export default function TestSeries({ onNavigate, initialTest }: { onNavigate: (p
 
   const handleConfigSubmit = (config: TestConfig) => {
       setActiveTestConfig(config);
-      setTestMode(config.testType === "ai" ? "mcq" : config.testType); // AI defaults to MCQ for now
-      setTimeLeft(config.duration * 60);
-      setIsTestActive(true);
+      const isDynamic = Boolean(config.isDynamic || config.source === "dynamic");
+      const type = config.assessmentType?.toUpperCase();
+      
+      const hasPreFetchedQuestions = Boolean(
+          config.fullExamDetails && (
+              config.fullExamDetails.sub_division_data || 
+              config.fullExamDetails.question_bank_response_list || 
+              config.fullExamDetails.question_data ||
+              config.fullExamDetails.questions
+          )
+      );
+
+      if (hasPreFetchedQuestions) {
+          const firstSection = config.fullExamDetails?.sub_division_data?.[0];
+          setActiveSectionId(Number(firstSection?.sub_div_id || config.fullExamDetails?.user_ass_div_id || config.fullExamDetails?.sub_div_id || 0));
+          setActiveSectionName(firstSection?.sub_div_name || config.fullExamDetails?.sub_div_name || config.fullExamDetails?.assessment_name || "MCQ Assessment");
+          setActiveSectionData(config.fullExamDetails);
+          setTestMode("section_exam");
+      } else if (config.testType === "SECTION_WISE" || type === "SECTION_WISE") {
+          setTestMode("SECTION_WISE");
+      } else if (type === "STANDARD" || isDynamic) {
+          setActiveSectionId(Number(config.fullExamDetails?.user_ass_div_id || 0));
+          setActiveSectionName(config.fullExamDetails?.assessment_name || "MCQ Assessment");
+          setActiveSectionData(config.fullExamDetails);
+          setTestMode("section_exam");
+      } else {
+          setTestMode(config.testType === "ai" ? "mcq" : config.testType);
+          setTimeLeft(config.duration * 60);
+          setIsTestActive(true);
+      }
       
       // Reset states
       setCurrentMcqIndex(0);
@@ -297,6 +329,79 @@ export default function TestSeries({ onNavigate, initialTest }: { onNavigate: (p
               onStartTest={handleConfigSubmit}
               onBack={handleInstructionsBack}
           />
+      );
+  }
+
+  if (testMode === "SECTION_WISE") {
+      const isDynamic = Boolean(
+          activeTestConfig?.isDynamic || 
+          (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+      );
+      return (
+          <SectionDetailsPage 
+              userAssessmentId={activeTestConfig?.userAssessmentId}
+              assessmentName={activeTestConfig?.patternName || activeTestConfig?.selectedSubject || "Section Assessment"}
+              isDynamic={isDynamic}
+              source={isDynamic ? "dynamic" : "available"}
+              subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id || activeTestConfig?.subscription_id}
+              userId={activeTestConfig?.fullExamDetails?.user_id || activeTestConfig?.user_id}
+              onStartSection={(sectionId, sectionName, sections) => {
+                  setActiveSectionId(sectionId);
+                  setActiveSectionName(sectionName);
+                  setActiveSectionData(sections);
+                  setTestMode("section_exam");
+              }}
+              onBack={() => {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+              }}
+          />
+      );
+  }
+
+  if (testMode === "section_exam" && activeSectionId !== null) {
+      return (
+          <div className="fixed inset-0 z-[9999] bg-white overflow-hidden w-screen h-screen">
+            <MCQExamScreen 
+                sectionId={activeSectionId}
+                user_ass_div_id={activeSectionId}
+                sectionName={activeSectionName}
+                allSections={activeSectionData}
+                userAssessmentId={activeTestConfig?.userAssessmentId}
+                user_ass_id={activeTestConfig?.userAssessmentId}
+                user_id={activeTestConfig?.fullExamDetails?.user_id}
+                subscription_id={activeTestConfig?.fullExamDetails?.subscription_id}
+                isDynamic={activeTestConfig?.isDynamic}
+                source={activeTestConfig?.source}
+                onNavigate={onNavigate}
+                onSectionSubmit={(hasNext) => {
+                     if (hasNext) {
+                         setTestMode("SECTION_WISE");
+                         return;
+                     }
+                     setTestMode("setup");
+                     setActiveTestConfig(null);
+                     if (activeTestConfig?.isDynamic) {
+                         sessionStorage.setItem("test_result_active_tab", "custom");
+                         localStorage.setItem("test_result_active_tab", "custom");
+                         if (onNavigate) {
+                             onNavigate("test-history", { tab: "custom" });
+                         }
+                     }
+                }}
+                onCompleteExam={() => {
+                     setTestMode("setup");
+                     setActiveTestConfig(null);
+                     if (activeTestConfig?.isDynamic) {
+                         sessionStorage.setItem("test_result_active_tab", "custom");
+                         localStorage.setItem("test_result_active_tab", "custom");
+                         if (onNavigate) {
+                             onNavigate("test-history", { tab: "custom" });
+                         }
+                     }
+                }}
+            />
+          </div>
       );
   }
 
@@ -574,19 +679,19 @@ export default function TestSeries({ onNavigate, initialTest }: { onNavigate: (p
       <Tabs defaultValue="available" className="space-y-6">
         <TabsList className="bg-muted/50 p-1 rounded-lg">
             <TabsTrigger value="available" className="px-8 data-[state=active]:!bg-blue-600 data-[state=active]:!text-white data-[state=active]:!shadow-md transition-all">Available Tests</TabsTrigger>
-            <TabsTrigger value="custom" className="px-8 data-[state=active]:!bg-blue-600 data-[state=active]:!text-white data-[state=active]:!shadow-md transition-all">Custom Generator</TabsTrigger>
+            <TabsTrigger value="custom" className="px-8 data-[state=active]:!bg-blue-600 data-[state=active]:!text-white data-[state=active]:!shadow-md transition-all">Dynamic Generator</TabsTrigger>
         </TabsList>
 
         <TabsContent value="available" className="outline-none">
             <AvailableTestsList 
                 onStartTest={handleConfigSubmit} 
                 onTestSelect={handleTestSelect}
-                onNavigate={onNavigate}
+                onNavigate={onNavigate || (() => {})}
             />
         </TabsContent>
 
         <TabsContent value="custom" className="outline-none">
-             <CustomTestGenerator onStartTest={handleConfigSubmit} />
+             <DynamicTestGenerator onStartTest={handleConfigSubmit} onNavigate={onNavigate} />
         </TabsContent>
       </Tabs>
       

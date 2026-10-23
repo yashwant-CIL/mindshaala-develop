@@ -1,7 +1,7 @@
 import { Clock, FileText, BarChart, ArrowRight, Trophy, BookOpen, Target, Loader2, CheckCircle2, Lock } from "lucide-react";
 import { Button } from "../../../components/ui/button";
 import { useState, useEffect, forwardRef } from "react";
-import { TestConfig } from "./CustomTestGenerator";
+import { TestConfig } from "./DynamicTestGenerator";
 import { Combobox } from "../../../components/ui/combobox";
 import { useToast } from "../../../hooks/use-toast";
 import { TestService, AvailableTest } from "../../../services/TestServices"; 
@@ -162,6 +162,9 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
     const topicOptions = chapterList.map((c: any) => ({ value: c.chapter_id.toString(), label: c.chapter_name }));
 
     const handleStartClick = (test: AvailableTest) => {
+        if (typeof window !== "undefined") {
+            localStorage.setItem("is_dynamic_assessment", "false");
+        }
         // Navigate to instructions page instead of immediate start
         if (onTestSelect) {
             console.log("Navigating to instructions for test:", test.assessment_id);
@@ -182,7 +185,9 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
                 totalMarks: test.marks,
                 duration: test.duration,
                 includePreviousWrong: false,
-                randomizeOrder: true
+                randomizeOrder: true,
+                isDynamic: false,
+                source: "available"
             };
             onStartTest(config);
             

@@ -6,15 +6,19 @@ import { Badge } from '../../ui/badge';
 import { Lock, Clock, FileText, CheckCircle2, PlayCircle, Loader2 } from 'lucide-react';
 import { useToast } from '../../../hooks/use-toast';
 import { TestService } from '../../../services/TestServices';
+import { DynamicAssessmentService } from '../../../services/DynamicAssessmentService';
 import { useCourse } from '../../../context/CourseContext'
 
 interface SubDivision {
     sub_div_id: number;
+    user_ass_div_id?: number;
     sub_div_name: string;
     total_marks: string;
     total_time: string;
-    unlock_status: string | boolean;
+    unlock_status: string | boolean | number;
     total_question?: number;
+    section_details?: string;
+    [key: string]: any;
 }
 
 interface SectionDetailsPageProps {
@@ -22,34 +26,44 @@ interface SectionDetailsPageProps {
     assessmentName: string;
     onStartSection: (sectionId: number, sectionName: string, prefetchedData: any) => void;
     onBack?: () => void;
+    isDynamic?: boolean;
+    source?: "dynamic" | "available" | string;
+    subscriptionId?: number | string | null;
+    userId?: number | string | null;
 }
 
-export function SectionDetailsPage({ userAssessmentId, assessmentName, onStartSection, onBack }: SectionDetailsPageProps) {
+export function SectionDetailsPage({ 
+    userAssessmentId, 
+    assessmentName, 
+    onStartSection, 
+    onBack,
+    isDynamic,
+    source,
+    subscriptionId,
+    userId,
+}: SectionDetailsPageProps) {
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(true);
     const [sections, setSections] = useState<SubDivision[]>([]);
     const [assName, setAssName] = useState(assessmentName || "Section-Wise Assessment");
     const [startingSectionId, setStartingSectionId] = useState<number | null>(null);
-    const { userAssId } = useCourse();
+    const { userAssId, setUserAssId, subscriptionId: contextSubscriptionId } = useCourse();
     
+    // Sync incoming userAssessmentId immediately to context and localStorage
     useEffect(() => {
-        console.log("userAssId", userAssId);
+        if (userAssessmentId && userAssessmentId !== userAssId) {
+            setUserAssId?.(userAssessmentId);
+            if (typeof window !== "undefined") {
+                localStorage.setItem("user_ass_id", String(userAssessmentId));
+            }
+        }
+    }, [userAssessmentId, userAssId, setUserAssId]);
+
+    useEffect(() => {
         const fetchSections = async () => {
             try {
-                // const storedToken = Cookies.get('token') || localStorage.getItem('token');
-                // const storedUserId = Cookies.get('user_id') || localStorage.getItem('user_id');
-
-                // if (!storedToken || !storedUserId) {
-                //     toast({
-                //         title: "Authentication Required",
-                //         description: "Please login to view assessment details.",
-                //         variant: "destructive"
-                //     });
-                //     return;
-                // }
-
-                // Get user_ass_id
-                const userAssIdToUse = userAssId;
+                // Get user_ass_id prioritizing the direct userAssessmentId prop, then context, then localStorage
+                const userAssIdToUse = userAssessmentId || userAssId || (typeof window !== "undefined" ? localStorage.getItem("user_ass_id") : null);
                 if (!userAssIdToUse) {
                     toast({
                         title: "Error",
@@ -60,49 +74,56 @@ export function SectionDetailsPage({ userAssessmentId, assessmentName, onStartSe
                     return;
                 }
 
-                const data = await TestService.getSectionDetails(userAssIdToUse);
+                // Check if user came from dynamic section or available section
+                const isFromDynamic = Boolean(
+                    isDynamic || 
+                    source === "dynamic" || 
+                    (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+                );
+
+                console.log(`Fetching section details. Source: ${isFromDynamic ? "DYNAMIC" : "AVAILABLE"}, userAssId: ${userAssIdToUse}`);
+
+                // Call dynamic section details when dynamic; call old method when from available section
+                const data = isFromDynamic
+                    ? await DynamicAssessmentService.GET_DYNAMIC_ASSESSMENT_SECTION_DETAILS(Number(userAssIdToUse))
+                    : await TestService.getSectionDetails(userAssIdToUse);
+
                 console.log("Section Details API Response:", data);
 
                 if (data) {
-                    setAssName(data.assessment_name);
+                    setAssName(data.assessment_name || assessmentName || "Section-Wise Assessment");
                     
-                    if (data.section_details) {
-                         const formattedSections: SubDivision[] = data.section_details.map((sec: any) => ({
-                             sub_div_id: sec.ass_div_id,
-                             sub_div_name: sec.ass_div_name,
-                             section_details: sec.ass_div_desc,
-                             total_marks: sec.total_marks,
-                             total_question: sec.total_questions,
-                             total_time: sec.total_time,
-                             unlock_status: sec.unlock_status // Default to locked if undefined
-                         }));
+                    const rawSectionDetails = data.section_details || data.sections || data.sub_divisions || data.data?.section_details || data.data?.sections || data.data;
+                    if (rawSectionDetails && Array.isArray(rawSectionDetails)) {
+                         const formattedSections: SubDivision[] = rawSectionDetails.map((sec: any) => {
+                             const divId = sec.user_ass_div_id || sec.ass_div_id || sec.sub_div_id || sec.section_id || sec.id;
+                             return {
+                                 sub_div_id: Number(divId),
+                                 user_ass_div_id: Number(divId),
+                                 sub_div_name: sec.ass_div_name || sec.sub_div_name || sec.user_ass_div_name || sec.section_name || sec.name || "Section",
+                                 section_details: sec.ass_div_desc || sec.user_ass_div_desc || sec.section_details || sec.description,
+                                 total_marks: sec.total_marks !== undefined ? String(sec.total_marks) : "0",
+                                 total_question: sec.total_questions || sec.total_question,
+                                 total_time: sec.total_time !== undefined ? String(sec.total_time) : (sec.duration !== undefined ? String(sec.duration) : "0"),
+                                 unlock_status: sec.unlock_status !== undefined ? (sec.unlock_status === true || sec.unlock_status === 1 || sec.unlock_status === "1" || sec.unlock_status === "true") : true
+                             };
+                         });
                          console.log("formattedSections", formattedSections);
-                         // Determine unlock logic: If API doesn't return unlock_status, manually unlock first
-                        //  if (formattedSections.length > 0 && formattedSections[0].unlock_status === undefined) {
-                        //      formattedSections[0].unlock_status = 1;
-                        //  }
-
                          setSections(formattedSections);
                     }
                 }
             } catch (error) {
                 console.error("Error fetching section details:", error);
-                // Fallback mock data for demonstration purposes if API fails
-                // setSections([
-                //     { sub_div_id: 1, sub_div_name: "Physics", total_marks: "50", total_time: "60", unlock_status: 1 },
-                //     { sub_div_id: 2, sub_div_name: "Chemistry", total_marks: "50", total_time: "60", unlock_status: 0 },
-                //     { sub_div_id: 3, sub_div_name: "Mathematics", total_marks: "100", total_time: "90", unlock_status: 0 }
-                // ]);
             } finally {
                 setIsLoading(false);
             }
         };
 
         fetchSections();
-    }, [userAssessmentId]);
+    }, [userAssessmentId, userAssId, isDynamic, source]);
 
     const handleStart = async (section: SubDivision) => {
-        const isUnlocked = section.unlock_status === true ;
+        const isUnlocked = section.unlock_status === true || section.unlock_status === 1 || section.unlock_status === "1" || section.unlock_status === "true";
         if (!isUnlocked) {
             toast({
                 title: "Section Locked",
@@ -112,17 +133,59 @@ export function SectionDetailsPage({ userAssessmentId, assessmentName, onStartSe
             return;
         }
 
+        const targetDivId = section.user_ass_div_id || section.sub_div_id;
+
         try {
-            setStartingSectionId(section.sub_div_id);
-            if (!userAssessmentId) {
+            setStartingSectionId(targetDivId);
+            const userAssIdToUse = userAssessmentId || userAssId || (typeof window !== "undefined" ? localStorage.getItem("user_ass_id") : null);
+            if (!userAssIdToUse) {
                  throw new Error("Missing Assessment ID");
             }
-            // Fetch live API data before transitioning
-            const response = await TestService.getExamQuestions(userAssessmentId);
+            // Check if user came from dynamic section or available section
+            const isFromDynamic = Boolean(
+                isDynamic || 
+                source === "dynamic" || 
+                (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+            );
+
+            const userIdToUse = userId || (typeof window !== "undefined"
+                ? localStorage.getItem("user_id") || localStorage.getItem("userId") || Cookies.get("user_id") || Cookies.get("userId")
+                : null);
+
+            const subIdToUse = subscriptionId || contextSubscriptionId || (typeof window !== "undefined"
+                ? localStorage.getItem("subscription_id") || localStorage.getItem("subscriptionId") || Cookies.get("subscription_id") || Cookies.get("subscriptionId")
+                : null);
+
+            // When from dynamic screen: send subscription_id, user_id, user_ass_id, user_ass_div_id in request parameters (query params)
+            // with empty payload body {}
+            // Otherwise use previously set method (TestService.getExamQuestions)
+            let response: any = null;
+            if (isFromDynamic) {
+                const requestParams: Record<string, any> = {
+                    user_id: Number(userIdToUse),
+                    subscription_id: Number(subIdToUse),
+                    user_ass_id: Number(userAssIdToUse),
+                    user_ass_div_id: Number(targetDivId)
+                };
+                console.log("Calling DynamicAssessmentService.GENERATE_DYNAMIC_ASSESSMENT for SECTION_WISE with request parameters:", requestParams);
+                response = await DynamicAssessmentService.GENERATE_DYNAMIC_ASSESSMENT({}, requestParams);
+            } else {
+                response = await TestService.getExamQuestions(userAssIdToUse);
+            }
+
             console.log("getQuestions API Response (Pre-fetched):", response);
             
             // Pass the API response payload downstream to SectionExamScreen
-            onStartSection(section.sub_div_id, section.sub_div_name, response);
+            onStartSection(targetDivId, section.sub_div_name, {
+                ...(response || {}),
+                isDynamic: isFromDynamic,
+                source: isFromDynamic ? "dynamic" : "available",
+                user_ass_div_id: targetDivId,
+                sub_div_id: targetDivId,
+                user_ass_id: userAssIdToUse,
+                user_id: Number(userIdToUse),
+                subscription_id: Number(subIdToUse),
+            });
         } catch (error) {
             console.error("Error starting exam section:", error);
             toast({
@@ -157,7 +220,7 @@ export function SectionDetailsPage({ userAssessmentId, assessmentName, onStartSe
                     <div className="flex items-center justify-between">
                         {onBack && (
                             <Button variant="link" className="text-slate-400 hover:text-white pl-0 transition-colors tracking-wide text-sm font-medium" onClick={onBack}>
-                                &larr; Return to Instructions
+                                &larr; Return
                             </Button>
                         )}
                         <span className="text-teal-400 uppercase tracking-[0.2em] text-[10px] font-bold border border-teal-500/30 bg-teal-500/10 px-3 py-1.5 rounded-sm">
@@ -183,7 +246,7 @@ export function SectionDetailsPage({ userAssessmentId, assessmentName, onStartSe
                                 <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mt-1">Modules</span>
                             </div>
                             <div className="px-5 py-4 flex flex-col items-center justify-center min-w-[100px]">
-                                <span className="text-2xl font-black text-teal-400">{sections.filter(s => s.unlock_status === true).length}</span>
+                                <span className="text-2xl font-black text-teal-400">{sections.filter(s => s.unlock_status === true || s.unlock_status === 1 || s.unlock_status === '1' || s.unlock_status === 'true').length}</span>
                                 <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mt-1">Unlocked</span>
                             </div>
                         </div>
@@ -195,13 +258,13 @@ export function SectionDetailsPage({ userAssessmentId, assessmentName, onStartSe
             <div className="flex-1 w-full max-w-4xl mx-auto px-6 md:px-8 -mt-20 relative z-20 pb-20">
                 <div className="flex flex-col space-y-6 md:space-y-8">
                     {sections.map((section, index) => {
-                        const isUnlocked = section.unlock_status === true;
+                        const isUnlocked = section.unlock_status === true || section.unlock_status === 1 || section.unlock_status === '1' || section.unlock_status === 'true';
                         const isCompleted = false; // Logic for completed needs implementation based on actual API data
                         const isLocked = !isUnlocked && !isCompleted;
 
                         return (
                             <div 
-                                key={section.sub_div_id}
+                                key={section.user_ass_div_id || section.sub_div_id || index}
                                 className={`group relative bg-white rounded-2xl md:rounded-[2rem] overflow-hidden transition-all duration-300 ${
                                     isUnlocked ? "shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] ring-1 ring-slate-900/5 hover:-translate-y-1" :
                                     isCompleted ? "shadow-sm ring-1 ring-emerald-900/5 bg-emerald-50/10" :
@@ -280,10 +343,10 @@ export function SectionDetailsPage({ userAssessmentId, assessmentName, onStartSe
                                                 <Button 
                                                     size="lg" 
                                                     onClick={() => handleStart(section)}
-                                                    disabled={startingSectionId === section.sub_div_id}
+                                                    disabled={startingSectionId === (section.user_ass_div_id || section.sub_div_id)}
                                                     className="w-full h-14 bg-teal-600 hover:bg-teal-700 text-white font-bold text-base rounded-xl transition-all duration-300 shadow-md shadow-teal-600/20"
                                                 >
-                                                    {startingSectionId === section.sub_div_id ? (
+                                                    {startingSectionId === (section.user_ass_div_id || section.sub_div_id) ? (
                                                         <span className="flex items-center gap-2"><Loader2 className="w-5 h-5 animate-spin" /> Preparing</span>
                                                     ) : (
                                                         <span className="flex items-center justify-between w-full px-2">

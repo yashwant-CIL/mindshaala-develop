@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { QuestionMathJax, latexToText } from "../../../../shared/mathjaxconfig/QuestionMathJax";
 import { useToast } from "../../../../hooks/use-toast";
 import Cookies from 'js-cookie';
 import Swal from "sweetalert2";
 import { TestService } from "../../../../services/TestServices";
+import { DynamicAssessmentService } from "../../../../services/DynamicAssessmentService";
 import { useCourse } from "../../../../context/CourseContext";
 
 interface Question {
@@ -26,17 +27,85 @@ interface Section {
 
 interface MCQExamScreenProps {
     userAssessmentId?: number | string;
+    user_ass_id?: number | string;
     sectionId: number;
+    user_ass_div_id?: number | string;
     sectionName: string;
     allSections: any; // For tab generation if needed
     onSectionSubmit: (success: boolean) => void;
     onCompleteExam?: (userAssId: number | string) => void;
+    isDynamic?: boolean;
+    source?: string;
+    userId?: number | string | null;
+    user_id?: number | string | null;
+    subscriptionId?: number | string | null;
+    subscription_id?: number | string | null;
+    onNavigate?: (page: string, params?: any) => void;
 }
 
-export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSections, onSectionSubmit, onCompleteExam }: MCQExamScreenProps) {
+export function MCQExamScreen({ 
+    userAssessmentId, 
+    user_ass_id,
+    sectionId, 
+    user_ass_div_id,
+    sectionName, 
+    allSections, 
+    onSectionSubmit, 
+    onCompleteExam, 
+    isDynamic, 
+    source,
+    userId,
+    user_id,
+    subscriptionId,
+    subscription_id,
+    onNavigate
+}: MCQExamScreenProps) {
+    const effectiveUserAssId = user_ass_id || userAssessmentId || allSections?.user_ass_id;
+    const effectiveDivId = user_ass_div_id || sectionId || allSections?.user_ass_div_id || allSections?.sub_div_id;
     const { toast } = useToast();
-    const { userAssId: contextUserAssId } = useCourse();
+    const { userAssId: contextUserAssId, subscriptionId: contextSubscriptionId } = useCourse();
     const username = Cookies.get("username") || localStorage.getItem('username') || "Student";
+
+    const isFromDynamic = useMemo(() => {
+        return Boolean(
+            isDynamic || 
+            allSections?.isDynamic ||
+            allSections?.source === "dynamic" ||
+            source === "dynamic" ||
+            (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+        );
+    }, [isDynamic, allSections?.isDynamic, allSections?.source, source]);
+
+    const effectiveUserId = useMemo(() => {
+        if (userId) return Number(userId);
+        if (user_id) return Number(user_id);
+        if (allSections?.user_id) return Number(allSections.user_id);
+        if (typeof window !== "undefined") {
+            const stored =
+                localStorage.getItem("user_id") ||
+                localStorage.getItem("userId") ||
+                Cookies.get("user_id") ||
+                Cookies.get("userId");
+            if (stored) return Number(stored);
+        }
+        return 0;
+    }, [userId, user_id, allSections?.user_id]);
+
+    const effectiveSubscriptionId = useMemo(() => {
+        if (subscriptionId) return Number(subscriptionId);
+        if (subscription_id) return Number(subscription_id);
+        if (allSections?.subscription_id) return Number(allSections.subscription_id);
+        if (contextSubscriptionId) return Number(contextSubscriptionId);
+        if (typeof window !== "undefined") {
+            const stored =
+                localStorage.getItem("subscription_id") ||
+                localStorage.getItem("subscriptionId") ||
+                Cookies.get("subscription_id") ||
+                Cookies.get("subscriptionId");
+            if (stored) return Number(stored);
+        }
+        return 0;
+    }, [subscriptionId, subscription_id, allSections?.subscription_id, contextSubscriptionId]);
     
     // Log the entire exam payload
     // console.log("Exam Payload Data (allSections):", allSections);
@@ -64,6 +133,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
     const [examStartTime] = useState<number>(Date.now());
     const currentQuestionIdRef = useRef<number | null>(null);
     const questionStartTimeRef = useRef<number>(Date.now());
+    const hasAutoSubmittedRef = useRef<boolean>(false);
     const [visitedCounts, setVisitedCounts] = useState<Record<number, number>>({});
     const [attemptedTimestamps, setAttemptedTimestamps] = useState<Record<number, string>>({});
 
@@ -82,22 +152,22 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
     const streamRef = useRef<MediaStream | null>(null);
 
     const mapQuestion = (question: any) => ({
-        id: question.question_id,
-        type: question.question_type,
-        marks: question.marks,
-        que: question.question_latex,
-        que_diag: question.question_diagrams_url ? question.question_diagrams_url.filter((url: string) => url && url.length > 0) : [],
+        id: question.question_id || question.id,
+        type: question.question_type || question.type || "MCQ",
+        marks: question.marks !== undefined ? question.marks : 1,
+        que: question.question_latex || question.question_text || question.que || question.question || "",
+        que_diag: question.question_diagrams_url ? question.question_diagrams_url.filter((url: string) => url && url.length > 0) : (question.que_diag || []),
         options: [
-            question.option1_latex,
-            question.option2_latex,
-            question.option3_latex,
-            question.option4_latex
+            question.option1_latex !== undefined ? question.option1_latex : (question.options ? question.options[0] : question.option1),
+            question.option2_latex !== undefined ? question.option2_latex : (question.options ? question.options[1] : question.option2),
+            question.option3_latex !== undefined ? question.option3_latex : (question.options ? question.options[2] : question.option3),
+            question.option4_latex !== undefined ? question.option4_latex : (question.options ? question.options[3] : question.option4)
         ].filter(opt => opt !== undefined),
         options_diag: [
-            question.option1_img,
-            question.option2_img,
-            question.option3_img,
-            question.option4_img
+            question.option1_img || question.options_diag?.[0],
+            question.option2_img || question.options_diag?.[1],
+            question.option3_img || question.options_diag?.[2],
+            question.option4_img || question.options_diag?.[3]
         ]
     });
 
@@ -135,34 +205,74 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                 setIsLoading(false);
                 return;
             }
-            if (allSections?.assessment_type?.toUpperCase() === "STANDARD" && userAssessmentId) {
-                console.log("STANDARD assessment detected. Fetching questions directly...");
+            const rawType = (allSections?.assessment_type || allSections?.assessmentType || "").toUpperCase();
+            const isSectionWise = rawType === "SECTION_WISE" || rawType === "SECTIONWISE" || rawType.includes("SECTION");
+            const isStandard = rawType === "STANDARD" || rawType === "MOCK" || !isSectionWise;
+            const isFromDynamic = Boolean(
+                isDynamic || 
+                allSections?.isDynamic ||
+                allSections?.source === "dynamic" ||
+                source === "dynamic" ||
+                (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+            );
+
+            // Fetch questions directly with user_ass_id ONLY for STANDARD assessments
+            if (isStandard && !isSectionWise && effectiveUserAssId) {
+                console.log(`Standard assessment detected. isFromDynamic: ${isFromDynamic}. Fetching questions with user_ass_id: ${effectiveUserAssId}...`);
                 setIsDataFetching(true);
                 try {
-                    const directData = await TestService.getExamQuestions(userAssessmentId);
+                    let directData: any = null;
+                    if (isFromDynamic) {
+                        const requestParams = {
+                            user_id: Number(effectiveUserId),
+                            subscription_id: Number(effectiveSubscriptionId),
+                            user_ass_id: Number(effectiveUserAssId)
+                        };
+                        console.log("Calling DynamicAssessmentService.GENERATE_DYNAMIC_ASSESSMENT for STANDARD assessment with request params:", requestParams);
+                        directData = await DynamicAssessmentService.GENERATE_DYNAMIC_ASSESSMENT({}, requestParams);
+                    } else {
+                        directData = await TestService.getExamQuestions(effectiveUserAssId);
+                    }
+
                     if (directData) {
-                        console.log("Direct question data received:", directData);
+                        console.log("Direct question data received for STANDARD:", directData);
                         
                         let mappedSections = [];
+                        const rawPayload = directData.data || directData;
 
-                        // Check if it has sub_division_data (even if STANDARD, it might have 1 section)
-                        if (directData.sub_division_data && Array.isArray(directData.sub_division_data) && directData.sub_division_data.length > 0) {
-                            mappedSections = directData.sub_division_data.map((section: any) => ({
-                                id: section.sub_div_id || 0,
-                                name: section.sub_div_name || "Section",
+                        // Check if it has sub_division_data (even if STANDARD, it might have 1 or more sections)
+                        if (rawPayload.sub_division_data && Array.isArray(rawPayload.sub_division_data) && rawPayload.sub_division_data.length > 0) {
+                            mappedSections = rawPayload.sub_division_data.map((section: any) => ({
+                                id: section.sub_div_id || section.ass_div_id || 0,
+                                name: section.sub_div_name || section.ass_div_name || "Section",
                                 totalMarks: section.total_marks,
                                 totalTime: section.total_time,
-                                questions: (section.question_data || section.question_bank_response_list || []).map((q: any) => mapQuestion(q))
+                                questions: (section.question_data || section.question_bank_response_list || section.questions || section.assessment_questions || []).map((q: any) => mapQuestion(q))
+                            }));
+                        } else if (rawPayload.section_details && Array.isArray(rawPayload.section_details) && rawPayload.section_details.length > 0 && (rawPayload.section_details[0]?.question_data || rawPayload.section_details[0]?.questions || rawPayload.section_details[0]?.question_bank_response_list)) {
+                            mappedSections = rawPayload.section_details.map((section: any) => ({
+                                id: section.ass_div_id || section.sub_div_id || 0,
+                                name: section.ass_div_name || section.sub_div_name || "Section",
+                                totalMarks: section.total_marks,
+                                totalTime: section.total_time,
+                                questions: (section.question_data || section.question_bank_response_list || section.questions || section.assessment_questions || []).map((q: any) => mapQuestion(q))
                             }));
                         } else {
                             // Fallback to root level question data
-                            const questions = directData.question_bank_response_list || directData.question_data || [];
+                            const questions = 
+                                rawPayload.question_bank_response_list || 
+                                rawPayload.question_data || 
+                                rawPayload.questions || 
+                                rawPayload.assessment_questions ||
+                                rawPayload.assessment_question_list ||
+                                (Array.isArray(rawPayload) ? rawPayload : []);
+
                             if (questions.length > 0) {
                                 mappedSections = [{
-                                    id: directData.user_ass_div_id || 0,
-                                    name: directData.assessment_name || "Assessment",
-                                    totalMarks: directData.total_marks || 0,
-                                    totalTime: directData.total_time || 0,
+                                    id: rawPayload.user_ass_div_id || rawPayload.sub_div_id || 0,
+                                    name: rawPayload.assessment_name || "Assessment",
+                                    totalMarks: rawPayload.total_marks || 0,
+                                    totalTime: rawPayload.total_time || 0,
                                     questions: questions.map((q: any) => mapQuestion(q))
                                 }];
                             }
@@ -174,9 +284,9 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                             setNotVisitedCount(mappedSections[0].questions.length);
                             
                             // Only set time if not already set or specifically needed
-                            if (timeLeft === 0) {
+                            if (timeLeft === 0 || timeLeft === 3600) {
                                 const sectionMinutesSum = mappedSections.reduce((acc: number, sec: any) => acc + (parseInt(sec.totalTime) || 0), 0);
-                                const rootMinutes = parseInt(directData.total_time) || 0;
+                                const rootMinutes = parseInt(rawPayload.total_time) || 0;
                                 setTimeLeft((sectionMinutesSum > 0 ? sectionMinutesSum : rootMinutes) * 60 || 3600);
                             }
                         }
@@ -191,12 +301,12 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
         };
 
         fetchQuestionsDirectly();
-    }, [userAssessmentId, allSections?.assessment_type]);
+    }, [effectiveUserAssId, effectiveUserId, effectiveSubscriptionId, allSections?.assessment_type, isDynamic, source]);
 
 
     // Initial Data Load (from Prefetched Props)
     useEffect(() => {
-        const loadSectionData = () => {
+        const loadSectionData = async () => {
              if (!checkTokenAvailability()) {
                  setIsLoading(false);
                  return;
@@ -207,31 +317,87 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                     throw new Error("No prefetched data available.");
                 }
                 
-                // The 'allSections' prop currently holds the full API response payload from upstream
+                // The 'allSections' prop holds the API response payload from upstream
                 console.log("Exam Screen processing prefetched API data:", allSections);
                 
+                const rawPayload = allSections.data || allSections;
                 let mappedSections = [];
 
-                if (allSections.sub_division_data && Array.isArray(allSections.sub_division_data) && allSections.sub_division_data.length > 0) {
-                    // Mapping for SECTION_WISE assessments
-                    mappedSections = allSections.sub_division_data.map((section: any) => ({
-                        id: section.sub_div_id || 0,
-                        name: section.sub_div_name || "Section",
+                if (rawPayload.sub_division_data && Array.isArray(rawPayload.sub_division_data) && rawPayload.sub_division_data.length > 0) {
+                    // Mapping for SECTION_WISE assessments with sub_division_data
+                    mappedSections = rawPayload.sub_division_data.map((section: any) => ({
+                        id: section.sub_div_id || section.ass_div_id || 0,
+                        name: section.sub_div_name || section.ass_div_name || "Section",
                         totalMarks: section.total_marks,
                         totalTime: section.total_time,
-                        questions: section.question_data.map((q: any) => mapQuestion(q))
+                        questions: (section.question_data || section.question_bank_response_list || section.questions || section.assessment_questions || []).map((q: any) => mapQuestion(q))
+                    }));
+                } else if (rawPayload.section_details && Array.isArray(rawPayload.section_details) && rawPayload.section_details.length > 0 && (rawPayload.section_details[0]?.question_data || rawPayload.section_details[0]?.questions || rawPayload.section_details[0]?.question_bank_response_list)) {
+                    mappedSections = rawPayload.section_details.map((section: any) => ({
+                        id: section.ass_div_id || section.sub_div_id || 0,
+                        name: section.ass_div_name || section.sub_div_name || "Section",
+                        totalMarks: section.total_marks,
+                        totalTime: section.total_time,
+                        questions: (section.question_data || section.question_bank_response_list || section.questions || section.assessment_questions || []).map((q: any) => mapQuestion(q))
                     }));
                 } else {
-                    // Mapping for STANDARD assessments or single-section MCQ
-                    const questions = allSections.question_bank_response_list || allSections.question_data || [];
+                    // Mapping for STANDARD assessments or single-section MCQ (root questions)
+                    const questions = 
+                        rawPayload.question_bank_response_list || 
+                        rawPayload.question_data || 
+                        rawPayload.questions || 
+                        rawPayload.assessment_questions ||
+                        rawPayload.assessment_question_list ||
+                        (Array.isArray(rawPayload) ? rawPayload : []);
+
                     if (questions.length > 0) {
                         mappedSections = [{
-                            id: allSections.user_ass_div_id || 0,
-                            name: allSections.assessment_name || "Assessment",
-                            totalMarks: allSections.total_marks || 0,
-                            totalTime: allSections.total_time || 0,
+                            id: rawPayload.user_ass_div_id || rawPayload.sub_div_id || effectiveDivId || 0,
+                            name: rawPayload.sub_div_name || rawPayload.ass_div_name || rawPayload.assessment_name || sectionName || "Assessment",
+                            totalMarks: rawPayload.total_marks || 0,
+                            totalTime: rawPayload.total_time || 0,
                             questions: questions.map((q: any) => mapQuestion(q))
                         }];
+                    }
+                }
+
+                // If no questions found in prefetched payload and this is from dynamic screen with sectionId (user_ass_div_id), fetch it!
+                const isFromDynamic = Boolean(
+                    isDynamic || 
+                    allSections?.isDynamic ||
+                    allSections?.source === "dynamic" ||
+                    source === "dynamic" ||
+                    (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+                );
+
+                if (mappedSections.length === 0 && isFromDynamic && effectiveDivId) {
+                    const requestParams = {
+                        user_id: Number(effectiveUserId),
+                        subscription_id: Number(effectiveSubscriptionId),
+                        user_ass_id: Number(effectiveUserAssId),
+                        user_ass_div_id: Number(effectiveDivId)
+                    };
+                    console.log("No prefetched questions found. Calling GENERATE_DYNAMIC_ASSESSMENT for SECTION_WISE assessment with request params:", requestParams);
+                    const fetchedData = await DynamicAssessmentService.GENERATE_DYNAMIC_ASSESSMENT({}, requestParams);
+                    if (fetchedData) {
+                        const payloadData = fetchedData.data || fetchedData;
+                        const questions = 
+                            payloadData.question_bank_response_list || 
+                            payloadData.question_data || 
+                            payloadData.questions || 
+                            payloadData.assessment_questions ||
+                            payloadData.assessment_question_list ||
+                            (Array.isArray(payloadData) ? payloadData : []);
+
+                        if (questions.length > 0) {
+                            mappedSections = [{
+                                id: payloadData.user_ass_div_id || effectiveDivId || 0,
+                                name: payloadData.sub_div_name || payloadData.assessment_name || sectionName || "Section",
+                                totalMarks: payloadData.total_marks || 0,
+                                totalTime: payloadData.total_time || 0,
+                                questions: questions.map((q: any) => mapQuestion(q))
+                            }];
+                        }
                     }
                 }
 
@@ -239,7 +405,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                     setSections(mappedSections);
                     
                     const sectionMinutesSum = mappedSections.reduce((acc: number, sec: any) => acc + (parseInt(sec.totalTime) || 0), 0);
-                    const rootMinutes = parseInt(allSections.total_time) || 0;
+                    const rootMinutes = parseInt(rawPayload.total_time) || 0;
                     const finalMinutes = sectionMinutesSum > 0 ? sectionMinutesSum : rootMinutes;
                     
                     const totalSecs = finalMinutes > 0 ? finalMinutes * 60 : 3600;
@@ -248,16 +414,14 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                     setTotalQuestions(mappedSections[0].questions.length);
                     setNotVisitedCount(mappedSections[0].questions.length);
                 } else {
-                    // If it's a STANDARD assessment, we expect questions to come from the direct API call
-                    // So we don't throw an error here, just wait.
+                    // If it's a STANDARD assessment or dynamic assessment, questions will come from direct fetch
                     const isStandard = allSections?.assessment_type?.toUpperCase() === "STANDARD";
-                    if (!isStandard) {
+                    if (!isStandard && !isFromDynamic) {
                         throw new Error("No questions found in the assessment data.");
                     }
                 }
              } catch (error) {
                  console.log("Error loading assessment data:", error);
-                 // Only show toast if it's not a standard assessment (where we are still fetching)
                  if (allSections?.assessment_type?.toUpperCase() !== "STANDARD") {
                     toast({ title: "Load Error", description: "No questions found in this assessment.", variant: "destructive" });
                  }
@@ -267,12 +431,15 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
         };
 
         loadSectionData();
-    }, [allSections, sectionId, sectionName]);
+    }, [allSections, sectionId, sectionName, effectiveDivId, effectiveUserId, effectiveSubscriptionId, isDynamic, source]);
 
     // Timer Logic
     useEffect(() => {
         if (timeLeft <= 0) {
-            onTimeSubmit();
+            if (!hasAutoSubmittedRef.current) {
+                hasAutoSubmittedRef.current = true;
+                onTimeSubmit();
+            }
             return;
         }
         const timer = setInterval(() => {
@@ -369,6 +536,8 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
     };
 
     const submitResponses = async (): Promise<boolean> => {
+        if (isSubmitting) return false;
+
         const totalTimeTaken = Math.round((Date.now() - examStartTime) / 1000);
 
         // Update the current question's duration before submitting
@@ -409,14 +578,24 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
             });
         });
 
-        // Try getting user_ass_id from localStorage first just like ExamScreen.jsx might do through CourseContext
-        const localUserAssId = localStorage.getItem("user_ass_id");
-        const resolvedUserId = localUserAssId || contextUserAssId || userAssessmentId;
+        // Resolve user_ass_id properly from props, allSections, context, or localStorage
+        const localUserAssId = typeof window !== "undefined" ? localStorage.getItem("user_ass_id") : null;
+        const resolvedUserAssId = effectiveUserAssId || localUserAssId || contextUserAssId;
+
+        // Resolve assessment_type
+        const rawType = (allSections?.assessment_type || allSections?.assessmentType || "").toUpperCase();
+        const isSectionWise = rawType === "SECTION_WISE" || rawType === "SECTIONWISE" || rawType.includes("SECTION");
+        const resolvedAssessmentType = allSections?.assessment_type ? allSections.assessment_type.toString() : (isSectionWise ? "SECTION_WISE" : "STANDARD");
+
+        // Resolve user_ass_div_id
+        const resolvedDivId = !isSectionWise 
+            ? null 
+            : (allSections?.user_ass_div_id ? Number(allSections.user_ass_div_id) : (effectiveDivId && Number(effectiveDivId) !== 0 ? Number(effectiveDivId) : null));
         
         const formattedPayload = {
-            user_ass_id: resolvedUserId ? parseInt(resolvedUserId as string) : 0,
-            assessment_type: allSections?.assessment_type ? allSections.assessment_type.toString() : "",
-            user_ass_div_id: allSections?.user_ass_div_id || null,
+            user_ass_id: resolvedUserAssId ? Number(resolvedUserAssId) : 0,
+            assessment_type: resolvedAssessmentType,
+            user_ass_div_id: resolvedDivId,
             time_taken: totalTimeTaken,
             attempt_status: "SUBMITTED",
             end_time: formatDateTime(),
@@ -427,7 +606,14 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
 
         try {
             setIsSubmitting(true);
-            const response = await TestService.submitExam(formattedPayload);
+            let response: any = null;
+            if (isFromDynamic) {
+                console.log("Submitting Dynamic Assessment using DynamicAssessmentService.SUBMIT_DYNAMIC_ASSESSMENT:", formattedPayload);
+                response = await DynamicAssessmentService.SUBMIT_DYNAMIC_ASSESSMENT(formattedPayload);
+            } else {
+                console.log("Submitting Available Test using TestService.submitExam:", formattedPayload);
+                response = await TestService.submitExam(formattedPayload);
+            }
             console.log("Response Data:", response);
             console.log("Submit Data", formattedPayload);
             
@@ -436,16 +622,130 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                 document.exitFullscreen().catch(err => console.warn("Error exiting full screen:", err));
             }
 
-            if (response?.next_div_flag === true) {
+            // -----------------------------------------------------------------------------------
+            // DYNAMIC ASSESSMENT SPECIFIC FLOW (SECTION_WISE vs STANDARD)
+            // -----------------------------------------------------------------------------------
+            if (isFromDynamic) {
+                const isDynamicSectionWise = Boolean(
+                    resolvedAssessmentType === "SECTION_WISE" ||
+                    isSectionWise ||
+                    (effectiveDivId && Number(effectiveDivId) !== 0) ||
+                    allSections?.user_ass_div_id ||
+                    allSections?.sub_div_id
+                );
+
+                if (isDynamicSectionWise) {
+                    // Check next_div_flag from API response (defensively supports boolean, string, or number)
+                    const isNextDiv = Boolean(
+                        response?.next_div_flag === true ||
+                        response?.next_div_flag === "true" ||
+                        response?.next_div_flag === 1 ||
+                        response?.next_div_flag === "1" ||
+                        response?.data?.next_div_flag === true ||
+                        response?.data?.next_div_flag === "true" ||
+                        response?.data?.next_div_flag === 1 ||
+                        response?.data?.next_div_flag === "1"
+                    );
+
+                    console.log(`[MCQExamScreen] Dynamic SECTION_WISE submission finished. next_div_flag: ${isNextDiv}`, response);
+
+                    if (isNextDiv) {
+                        toast({ 
+                            title: "Section Submitted", 
+                            description: "Section submitted successfully! Please proceed to the next section.", 
+                            variant: "default" 
+                        });
+
+                        // Navigate user back to the section details page so they can view details and start next section
+                        onSectionSubmit(true);
+                        return true;
+                    } else {
+                        // next_div_flag is false: All sections completed, navigate to result page with Dynamic Assessment Result active
+                        toast({ 
+                            title: "Exam Completed", 
+                            description: "Dynamic Assessment Completed Successfully!", 
+                            variant: "default" 
+                        });
+
+                        // Mark Dynamic Assessments Results tab as active for TestResultListPage
+                        sessionStorage.setItem("test_result_active_tab", "custom");
+                        localStorage.setItem("test_result_active_tab", "custom");
+
+                        // Clear any cached takeTest states
+                        localStorage.removeItem("takeTest_testMode");
+                        localStorage.removeItem("takeTest_activeTestConfig");
+                        localStorage.removeItem("takeTest_selectedTestForInstructions");
+
+                        // Dispatch global event for App.tsx navigation to scorecard / test-history
+                        window.dispatchEvent(
+                            new CustomEvent("app:navigate", {
+                                detail: { page: "test-history", params: { tab: "custom" } }
+                            })
+                        );
+
+                        // Navigate directly to result list page if onNavigate is provided
+                        if (onNavigate) {
+                            onNavigate("test-history", { tab: "custom" });
+                        }
+
+                        // Complete exam callback to close modal in parents
+                        if (onCompleteExam && formattedPayload.user_ass_id) {
+                            onCompleteExam(formattedPayload.user_ass_id);
+                        } else {
+                            onSectionSubmit(false);
+                        }
+                        return true;
+                    }
+                } else {
+                    // Dynamic Standard assessment (single exam) completed
+                    toast({ 
+                        title: "Exam Completed", 
+                        description: "Dynamic Assessment Completed Successfully!", 
+                        variant: "default" 
+                    });
+
+                    sessionStorage.setItem("test_result_active_tab", "custom");
+                    localStorage.setItem("test_result_active_tab", "custom");
+
+                    localStorage.removeItem("takeTest_testMode");
+                    localStorage.removeItem("takeTest_activeTestConfig");
+                    localStorage.removeItem("takeTest_selectedTestForInstructions");
+
+                    window.dispatchEvent(
+                        new CustomEvent("app:navigate", {
+                            detail: { page: "test-history", params: { tab: "custom" } }
+                        })
+                    );
+
+                    if (onNavigate) {
+                        onNavigate("test-history", { tab: "custom" });
+                    }
+
+                    if (onCompleteExam && formattedPayload.user_ass_id) {
+                        onCompleteExam(formattedPayload.user_ass_id);
+                    } else {
+                        onSectionSubmit(false);
+                    }
+                    return true;
+                }
+            }
+
+            // -----------------------------------------------------------------------------------
+            // ORIGINAL OLD FLOW FOR NON-DYNAMIC / AVAILABLE ASSESSMENTS (COMPLETELY UNDISTURBED)
+            // -----------------------------------------------------------------------------------
+            const isNextDiv = response?.next_div_flag === true || response?.data?.next_div_flag === true;
+            if (isNextDiv) {
                 toast({ title: "Success", description: "Section Submitted Successfully!", variant: "default" });
                 // We let the parent component (TakeTest) handle the visual transition back to details page
                 onSectionSubmit(true);
                 return true;
             } else {
                 toast({ title: "Completed", description: "Exam Completed Successfully!", variant: "default" });
-                // Full assessment is complete. Wait for result generation
+
                 if (onCompleteExam && formattedPayload.user_ass_id) {
                     onCompleteExam(formattedPayload.user_ass_id);
+                } else {
+                    onSectionSubmit(false);
                 }
                 return true;
             }
@@ -492,11 +792,13 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
             </div>
         `;
 
-        const result = await Swal.fire({
+        await Swal.fire({
           title: "Sorry, Time is Up",
           icon: "warning",
           html: htmlContent,
           confirmButtonText: "Submit",
+          allowOutsideClick: false,
+          allowEscapeKey: false,
           customClass: {
             container: "!z-[99999]",
             popup: "!z-[99999]",
@@ -504,10 +806,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
             cancelButton: "text-sm p-2.5 bg-gray-500 text-white rounded ml-2"
           }
         });
-        if (result.isConfirmed) {
-            const success = await submitResponses();
-            // onSectionSubmit is securely handled conditionally inside submitResponses upon API success
-        }
+        await submitResponses();
     };
 
     const handleSubmitConfirm = async () => {
@@ -570,6 +869,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                 console.log("User Responses (Question ID -> Option Index):", responses);
                 console.log("Section Analytics:", sectionCounts);
                 
+                hasAutoSubmittedRef.current = true;
                 await submitResponses();
                 // onSectionSubmit is securely handled conditionally inside submitResponses upon API success
             }
@@ -946,7 +1246,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                             {currentQuestionIndex < totalQuestions - 1 ? (
                                 <button className="cursor-pointer px-4 py-2 rounded-lg bg-[#0079D1] text-white border-none text-xs font-bold transition-all hover:bg-[#034d82] hover:scale-[1.02] active:scale-95 min-w-[70px]" onClick={handleNext}>Next</button>
                             ) : (
-                                <button className="cursor-pointer px-4 py-2 rounded-lg bg-[#17ab07] text-white border-none text-xs font-bold transition-all hover:bg-[#0f7204] hover:scale-[1.02] active:scale-95 min-w-[80px]" onClick={handleSubmitConfirm}>Submit</button>
+                                <button disabled={isSubmitting} className="cursor-pointer px-4 py-2 rounded-lg bg-[#17ab07] text-white border-none text-xs font-bold transition-all hover:bg-[#0f7204] hover:scale-[1.02] active:scale-95 min-w-[80px] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmitConfirm}>{isSubmitting ? "Submitting..." : "Submit"}</button>
                             )}
                         </div>
                     </div>
@@ -1036,7 +1336,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                             {currentQuestionIndex < totalQuestions - 1 ? (
                                 <button className="cursor-pointer px-4 py-2.5 sm:px-8 sm:py-3 rounded-lg sm:rounded-[10px] bg-[#0079D1] text-white border-none text-xs sm:text-base md:text-lg font-bold transition-all hover:bg-[#034d82] hover:scale-[1.02] active:scale-95 flex-1 max-w-[100px] sm:max-w-[150px]" onClick={handleNext}>Next</button>
                             ) : (
-                                <button className="cursor-pointer px-4 py-2.5 sm:px-8 sm:py-3 rounded-lg sm:rounded-[10px] bg-[#17ab07] text-white border-none text-xs sm:text-base md:text-lg font-bold transition-all hover:bg-[#0f7204] hover:scale-[1.02] active:scale-95 flex-1 max-w-[120px] sm:max-w-[180px]" onClick={handleSubmitConfirm}>Submit</button>
+                                <button disabled={isSubmitting} className="cursor-pointer px-4 py-2.5 sm:px-8 sm:py-3 rounded-lg sm:rounded-[10px] bg-[#17ab07] text-white border-none text-xs sm:text-base md:text-lg font-bold transition-all hover:bg-[#0f7204] hover:scale-[1.02] active:scale-95 flex-1 max-w-[120px] sm:max-w-[180px] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmitConfirm}>{isSubmitting ? "Submitting..." : "Submit"}</button>
                             )}
                          </div>
                     </div>
@@ -1123,7 +1423,7 @@ export function MCQExamScreen({ userAssessmentId, sectionId, sectionName, allSec
                         </div>
 
                         <div className="shrink-0 text-xl bg-[#E5F6FD] flex justify-center items-center w-full p-4 border-t border-black">
-                            <button className="cursor-pointer px-6 py-3 rounded-[10px] bg-[#0079D1] text-white border-none font-bold text-lg w-full max-w-[200px] transition-all hover:bg-[#034d82] hover:scale-105 active:scale-95 shadow-lg" onClick={handleSubmitConfirm}>Submit Exam</button>
+                            <button disabled={isSubmitting} className="cursor-pointer px-6 py-3 rounded-[10px] bg-[#0079D1] text-white border-none font-bold text-lg w-full max-w-[200px] transition-all hover:bg-[#034d82] hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmitConfirm}>{isSubmitting ? "Submitting..." : "Submit Exam"}</button>
                         </div>
                     </div>
                 </div>

@@ -297,9 +297,24 @@ export const API_ENDPOINT = {
          if (pattern_id) params.push(`pattern_id=${pattern_id}`);
          return `/api/v3/mindshaala/dynamic/config/patterns${params.length > 0 ? `?${params.join('&')}` : ''}`;   
      },
-     GENERATE_DYNAMIC_ASSESSMENT: `/api/v3/mindshaala/dynamic/generate-test`,
+
+     GET_GENERATED_DYNAMIC_ASSESSMENTS: (user_id:number , subscription_id:number) => `/api/v3/mindshaala/dynamic/assessments?user_id=${user_id}&subscription_id=${subscription_id}`,
+     GENERATE_DYNAMIC_ASSESSMENT: `/api/v3/mindshaala/dynamic/assessments/start`,
      SUBMIT_DYNAMIC_ASSESSMENT_ANSWER: `/api/v3/mindshaala/dynamic/attempts/submit`,
-     GET_ATTEMPTED_ASSESSMENTS: (user_id: number,subscription_id: number) => `/api/v3/mindshaala/dynamic/result/user-assessments?user_id=${user_id}&subscription_id=${subscription_id}`,
+     DYNAMIC_SECTION_DETAILS: (user_ass_id?: number | string, user_ass_div_id?: number | string) => {
+         const params: string[] = [];
+         if (user_ass_id !== undefined && user_ass_id !== null && user_ass_id !== '') {
+             params.push(`user_ass_id=${user_ass_id}`);
+         }
+         if (user_ass_div_id !== undefined && user_ass_div_id !== null && user_ass_div_id !== '') {
+             params.push(`user_ass_div_id=${user_ass_div_id}`);
+         }
+         return `/api/v3/mindshaala/dynamic/get/section/details${params.length > 0 ? `?${params.join('&')}` : ''}`;
+     },
+
+     SUBMIT_DYNAMIC_ASSESSMENT: "/api/v3/mindshaala/dynamic/attempts/submit",
+
+     GET_ATTEMPTED_ASSESSMENTS: (user_id: number,subscription_id: number) => `/api/v3/mindshaala/dynamic/results/user-assessments?user_id=${user_id}&subscription_id=${subscription_id}`,
      GET_ATTEMPTED_ASSESSMENT_RESULT: (user_id:number , subscription_id: number, assessment_id:number) => `/api/v3/mindshaala/dynamic/results/assessment-details?user_id=${user_id}&subscription_id=${subscription_id}&assessment_id=${assessment_id}`,
     }
 

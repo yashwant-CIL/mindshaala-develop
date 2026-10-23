@@ -1,14 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MCQResultList } from "./test-series/components/MCQResultList";
 import { DynamicAssessmentResultList } from "./test-series/components/DynamicAssessmentResultList";
 
 export interface TestResultListPageProps {
     onViewResult: (userAssId: number | string, assessmentMethod?: string) => void;
     onStartTest?: (test: any) => void;
+    initialTab?: "available" | "custom";
 }
 
-export function TestResultListPage({ onViewResult, onStartTest }: TestResultListPageProps) {
-    const [activeTab, setActiveTab] = useState<"available" | "custom">("available");
+export function TestResultListPage({ onViewResult, onStartTest, initialTab }: TestResultListPageProps) {
+    const [activeTab, setActiveTab] = useState<"available" | "custom">(() => {
+        if (initialTab) return initialTab;
+        const stored = sessionStorage.getItem("test_result_active_tab") || localStorage.getItem("test_result_active_tab");
+        if (stored === "custom" || stored === "available") {
+            sessionStorage.removeItem("test_result_active_tab");
+            localStorage.removeItem("test_result_active_tab");
+            return stored;
+        }
+        return "available";
+    });
+
+    useEffect(() => {
+        const stored = sessionStorage.getItem("test_result_active_tab") || localStorage.getItem("test_result_active_tab");
+        if (stored === "custom" || stored === "available") {
+            setActiveTab(stored);
+            sessionStorage.removeItem("test_result_active_tab");
+            localStorage.removeItem("test_result_active_tab");
+        }
+    }, [initialTab]);
 
     return (
         <div className="p-6 mx-auto space-y-8 animate-in fade-in duration-500 font-sans">
@@ -46,7 +65,7 @@ export function TestResultListPage({ onViewResult, onStartTest }: TestResultList
                     }`}
                 >
                     <div className={`w-2 h-2 rounded-full ${activeTab === "custom" ? "bg-blue-400" : "bg-slate-300"}`} />
-                    Custom Assessments Results
+                    Dynamic Assessments Results
                 </button>
             </div>
 
