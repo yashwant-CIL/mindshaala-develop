@@ -299,26 +299,44 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
             item.attempt_date
           );
 
-          const score = Number(item.total_score ?? item.score ?? item.marks_obtained ?? 0);
+          const score = Number(item.obtained_marks ?? item.marks_obtained ?? item.total_score ?? item.score ?? 0);
           
-          const correctCount = item.correct_count !== undefined && item.correct_count !== null ? Number(item.correct_count) : undefined;
-          const incorrectCount = item.incorrect_count !== undefined && item.incorrect_count !== null ? Number(item.incorrect_count) : undefined;
+          const correctCount = item.correct_count !== undefined && item.correct_count !== null
+            ? Number(item.correct_count)
+            : (item.correct_answers !== undefined && item.correct_answers !== null ? Number(item.correct_answers) : undefined);
+          const incorrectCount = item.incorrect_count !== undefined && item.incorrect_count !== null
+            ? Number(item.incorrect_count)
+            : (item.wrong_count !== undefined && item.wrong_count !== null
+              ? Number(item.wrong_count)
+              : (item.incorrect_answers !== undefined && item.incorrect_answers !== null ? Number(item.incorrect_answers) : undefined));
           const skippedCount = item.skip_count !== undefined && item.skip_count !== null
             ? Number(item.skip_count)
-            : (item.skipped_count !== undefined && item.skipped_count !== null ? Number(item.skipped_count) : undefined);
+            : (item.skipped_count !== undefined && item.skipped_count !== null
+              ? Number(item.skipped_count)
+              : (item.unattempted_count !== undefined && item.unattempted_count !== null
+                ? Number(item.unattempted_count)
+                : (item.unattempted !== undefined && item.unattempted !== null ? Number(item.unattempted) : undefined)));
           const attemptedCount = item.attempted_count !== undefined && item.attempted_count !== null ? Number(item.attempted_count) : undefined;
           const unattemptedCount = item.unattempted_count !== undefined && item.unattempted_count !== null ? Number(item.unattempted_count) : undefined;
           
           const totalQ = Number(item.total_questions || item.max_score || item.total_marks || 0);
 
           const maxScore = totalQ > 0 ? totalQ : 100;
-          const accuracy = item.accuracy !== undefined && item.accuracy !== null ? Number(item.accuracy) : undefined;
+          const accuracy = item.accuracy !== undefined && item.accuracy !== null
+            ? Number(item.accuracy)
+            : (correctCount !== undefined && totalQ > 0 ? Number(((correctCount / totalQ) * 100).toFixed(2)) : undefined);
 
           const percentage = item.percentage !== undefined && item.percentage !== null
-            ? Number(Number(item.percentage).toFixed(1))
+            ? Number(Number(item.percentage).toFixed(2))
             : (accuracy !== undefined
-              ? Number(accuracy.toFixed(1))
-              : (maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(1)) : 0));
+              ? Number(Number(accuracy).toFixed(2))
+              : (maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(2)) : 0));
+
+          const finalSkippedCount = skippedCount !== undefined
+            ? skippedCount
+            : (totalQ > 0 && correctCount !== undefined && incorrectCount !== undefined
+              ? Math.max(0, totalQ - (correctCount + incorrectCount))
+              : undefined);
 
           const rank = item.rank !== undefined && item.rank !== null ? Number(item.rank) : (item.user_rank !== undefined && item.user_rank !== null ? Number(item.user_rank) : undefined);
           const totalParticipants = item.total_participants !== undefined && item.total_participants !== null ? Number(item.total_participants) : (item.participants !== undefined && item.participants !== null ? Number(item.participants) : undefined);
@@ -370,7 +388,7 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
             moduleType: item.module_type || selectedModuleType,
             correctCount,
             incorrectCount,
-            skippedCount,
+            skippedCount: finalSkippedCount,
             accuracy,
             attemptedCount,
             unattemptedCount,
@@ -581,23 +599,23 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
                   </div>
                 </div>
 
-                {/* Score, Accuracy, Rank & Percentile Overview Box */}
-                <div className="bg-slate-50 border border-slate-200 p-3 sm:p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">
-                  {/* My Score */}
+                {/* Score, Accuracy & Percentage Overview Box (Row 1) */}
+                <div className="bg-slate-50 border border-slate-200 p-3 sm:p-4 rounded-2xl grid grid-cols-3 gap-2.5 sm:gap-3 text-center">
+                  {/* Obtained Marks */}
                   <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100">
-                    <div className="text-[10px] text-slate-400 uppercase font-semibold">My Score</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">Obtained Marks</div>
                     <div className="text-sm sm:text-base font-extrabold text-slate-900 truncate">
                       {attempt.score} <span className="text-[10px] text-slate-400 font-normal">/ {attempt.maxScore}</span>
                     </div>
                   </div>
 
-                  {/* Accuracy */}
+                  {/* Accuracy (up to 2 decimals) */}
                   <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-2">
                     <div className="text-[10px] text-slate-400 uppercase font-semibold">Accuracy</div>
-                    {attempt.accuracy !== undefined && attempt.accuracy !== null ? (
+                    {attempt.accuracy !== undefined && attempt.accuracy !== null && !isNaN(Number(attempt.accuracy)) ? (
                       <>
                         <div className="text-sm sm:text-base font-extrabold text-blue-600 truncate">
-                          {attempt.accuracy}%
+                          {Number(attempt.accuracy).toFixed(2)}%
                         </div>
                         <div className="text-[10px] text-blue-700 font-bold">Precision</div>
                       </>
@@ -608,32 +626,13 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
                     )}
                   </div>
 
-                  {/* National Rank */}
-                  <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-2">
-                    <div className="text-[10px] text-slate-400 uppercase font-semibold">National Rank</div>
-                    {attempt.rank !== undefined && attempt.rank !== null ? (
-                      <>
-                        <div className="text-sm sm:text-base font-extrabold text-amber-600 truncate">
-                          Rank #{attempt.rank}
-                        </div>
-                        {attempt.totalParticipants !== undefined && (
-                          <div className="text-[10px] text-slate-500 truncate">{attempt.totalParticipants} Candidates</div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-xs font-semibold text-slate-400 py-0.5">
-                        Not Declared
-                      </div>
-                    )}
-                  </div>
-
                   {/* Percentage */}
                   <div className="bg-white sm:bg-transparent p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-slate-100 sm:border-l sm:border-slate-200 sm:pl-2">
                     <div className="text-[10px] text-slate-400 uppercase font-semibold">Percentage</div>
-                    {attempt.percentage !== undefined && attempt.percentage !== null ? (
+                    {attempt.percentage !== undefined && attempt.percentage !== null && !isNaN(Number(attempt.percentage)) ? (
                       <>
                         <div className="text-sm sm:text-base font-extrabold text-emerald-600 truncate">
-                          {attempt.percentage}%
+                          {Number(attempt.percentage).toFixed(2)}%
                         </div>
                         <div className="text-[10px] text-emerald-700 font-bold">Overall Score</div>
                       </>
@@ -645,27 +644,18 @@ export const CompetitionHistory: React.FC<CompetitionHistoryProps> = ({
                   </div>
                 </div>
 
-                {/* Correct / Incorrect / Skipped / Attempted Breakdown if available */}
-                {(attempt.attemptedCount !== undefined || attempt.correctCount !== undefined || attempt.skippedCount !== undefined) && (
-                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-start sm:justify-between text-xs bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-slate-600 font-medium gap-2">
-                    {attempt.correctCount !== undefined && (
-                      <span className="text-emerald-700 font-bold whitespace-nowrap truncate">✓ {attempt.correctCount} Correct</span>
-                    )}
-                    {attempt.incorrectCount !== undefined && (
-                      <span className="text-red-600 font-bold whitespace-nowrap truncate">✗ {attempt.incorrectCount} Incorrect</span>
-                    )}
-                    {attempt.attemptedCount !== undefined && (
-                      <span className="text-blue-700 font-bold whitespace-nowrap truncate">🎙 {attempt.attemptedCount} Attempted</span>
-                    )}
-                    {attempt.skippedCount !== undefined && (
-                      <span className="text-amber-600 font-bold whitespace-nowrap truncate">⊘ {attempt.skippedCount} Skipped</span>
-                    )}
-                    {attempt.unattemptedCount !== undefined && (
-                      <span className="text-slate-500 font-bold whitespace-nowrap truncate">… {attempt.unattemptedCount} Unattempted</span>
-                    )}
-                    {attempt.accuracy !== undefined && (
-                      <span className="text-blue-700 font-extrabold whitespace-nowrap truncate">{attempt.accuracy}% Accuracy</span>
-                    )}
+                {/* Correct / Incorrect / Skipped Breakdown (Row 2) */}
+                {(attempt.correctCount !== undefined || attempt.incorrectCount !== undefined || attempt.skippedCount !== undefined) && (
+                  <div className="grid grid-cols-3 items-center text-xs bg-slate-50 border border-slate-200 px-3.5 py-2.5 rounded-xl text-slate-600 font-medium gap-2 text-center">
+                    <span className="text-emerald-700 font-bold whitespace-nowrap truncate">
+                      ✓ {attempt.correctCount ?? 0} Correct
+                    </span>
+                    <span className="text-red-600 font-bold whitespace-nowrap truncate">
+                      ✗ {attempt.incorrectCount ?? 0} Incorrect
+                    </span>
+                    <span className="text-amber-600 font-bold whitespace-nowrap truncate">
+                      ⊘ {attempt.skippedCount ?? 0} Skipped
+                    </span>
                   </div>
                 )}
               </div>

@@ -17,6 +17,7 @@ import {
   ChevronDown,
   TrendingUp,
   User,
+  Users,
   Sparkles,
   School,
   Star,
@@ -242,12 +243,16 @@ export const Leaderboard: React.FC<{
     // optional catch if outside CourseProvider
   }
 
-  // Active User ID resolution
+  // Active User ID resolution - Prioritize Cookies
   const getActiveUserId = (): string | number => {
+    // 1. Direct Cookies check as specified
+    const cookieId = Cookies.get('user_id') || Cookies.get('userId');
+    if (cookieId) return cookieId;
+
     if (userId) return userId;
     const directKeys = ['user_id', 'userId'];
     for (const key of directKeys) {
-      const val = localStorage.getItem(key) || Cookies.get(key);
+      const val = Cookies.get(key) || localStorage.getItem(key);
       if (val) return val;
     }
     const objectKeys = ['user', 'userData', 'userInfo', 'profile'];
@@ -501,7 +506,11 @@ export const Leaderboard: React.FC<{
       );
 
       console.log("GetCompetitionRankings API response:", res);
-      const payload = res?.data?.data || res?.data || res?.result || res;
+      // Preserve full API response object containing competition_title, data, module_type, total_participants, etc.
+      let payload = res;
+      if (res && res.data && typeof res.data === 'object' && !Array.isArray(res.data) && (res.data.data || res.data.ranking)) {
+        payload = res.data;
+      }
 
       if (!payload) {
         throw new Error("No competition ranking data returned from server.");
@@ -577,6 +586,7 @@ export const Leaderboard: React.FC<{
           competition={selectedCompetition}
           detailedResult={detailedResultData}
           isLoadingResult={isLoadingResult}
+          currentUserId={activeUserId}
           onBack={() => {
             setSelectedCompetition(null);
             setDetailedResultData(null);
@@ -665,7 +675,7 @@ export const Leaderboard: React.FC<{
             /* BRAND NEW DISTINCT LEADERBOARD COMPETITION CARDS DESIGN */
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
               {filteredAttempts.map((attempt) => {
-                const isRankDeclared = attempt.rank !== undefined && attempt.rank !== null;
+                const _isRankDeclared = attempt.rank !== undefined && attempt.rank !== null;
                 return (
                   <div
                     key={attempt.attemptId}
@@ -686,8 +696,8 @@ export const Leaderboard: React.FC<{
                           </span>
                         </div>
 
-                        {/* Rank Ribbon Badge */}
-                        {isRankDeclared ? (
+                        {/* Rank Ribbon Badge (Commented Out) */}
+                        {/* {_isRankDeclared ? (
                           <div className="px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-black text-xs shadow-md shadow-amber-500/20 flex items-center gap-1.5">
                             <Crown className="w-3.5 h-3.5 fill-slate-950" />
                             Rank #{attempt.rank}
@@ -696,7 +706,25 @@ export const Leaderboard: React.FC<{
                           <div className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px] font-bold border border-slate-200">
                             Rank Pending
                           </div>
-                        )}
+                        )} */}
+
+                        {/* Status Badge */}
+                        <div className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                          String(attempt.status).toUpperCase().includes('UNATTEMPT')
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : String(attempt.status).toUpperCase().includes('PROGRESS')
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          <CheckCircle2 className={`w-3.5 h-3.5 ${
+                            String(attempt.status).toUpperCase().includes('UNATTEMPT')
+                              ? 'text-red-600'
+                              : String(attempt.status).toUpperCase().includes('PROGRESS')
+                              ? 'text-blue-600'
+                              : 'text-emerald-600'
+                          }`} />
+                          {attempt.status || 'Completed'}
+                        </div>
                       </div>
 
                       {/* Contest Main Title */}
@@ -733,27 +761,36 @@ export const Leaderboard: React.FC<{
                           </div>
                         </div>
 
-                        {/* XP Earned Chip */}
-                        <div className="bg-indigo-50/70 border border-indigo-200/70 p-2.5 rounded-2xl flex flex-col items-center justify-center text-center">
+                        {/* XP Earned Chip (Commented Out) */}
+                        {/* <div className="bg-indigo-50/70 border border-indigo-200/70 p-2.5 rounded-2xl flex flex-col items-center justify-center text-center">
                           <div className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">XP Earned</div>
                           <div className="text-sm sm:text-base font-black text-indigo-700 mt-0.5 truncate">
                             +{attempt.xpEarned || 150} XP
+                          </div>
+                        </div> */}
+
+                        {/* Percentage Chip */}
+                        <div className="bg-indigo-50/70 border border-indigo-200/70 p-2.5 rounded-2xl flex flex-col items-center justify-center text-center">
+                          <div className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">Percentage</div>
+                          <div className="text-sm sm:text-base font-black text-indigo-700 mt-0.5 truncate">
+                            {attempt.percentage !== undefined && attempt.percentage !== null ? `${attempt.percentage}%` : '0%'}
                           </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Bottom Action Bar with Gradient Button */}
-                    <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-3">
-                      <span className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
+                    <div className="px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-end gap-3">
+                      {/* Status indicator previously here; now displayed in top badge */}
+                      {/* <span className="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
                         <Activity className="w-3.5 h-3.5 text-emerald-600" />
                         Status: <strong className="text-slate-800 font-extrabold">{attempt.status}</strong>
-                      </span>
+                      </span> */}
 
                       {/* Prominent View Rank Table CTA Button */}
                       <button
                         onClick={() => handleOpenRankTable(attempt)}
-                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02]"
+                        className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02]"
                       >
                         <Trophy className="w-3.5 h-3.5 text-yellow-200 shrink-0" />
                         View Rank Table
@@ -781,7 +818,8 @@ const IndividualCompetitionRankTable: React.FC<{
   detailedResult?: any;
   isLoadingResult: boolean;
   onBack: () => void;
-}> = ({ competition, detailedResult, isLoadingResult, onBack }) => {
+  currentUserId?: string | number;
+}> = ({ competition, detailedResult, isLoadingResult, onBack, currentUserId: propUserId }) => {
   const [tableSearch, setTableSearch] = useState('');
 
   if (isLoadingResult) {
@@ -805,28 +843,62 @@ const IndividualCompetitionRankTable: React.FC<{
     );
   }
 
-  // Parse API payload parameters returned by GetCompetitionRankings:
-  // { competition_id, competition_title, competition_type, start_time, end_time, current_user, ranking }
-  const compTitle = detailedResult?.competition_title || detailedResult?.title || competition.title || "Competition Standings";
-  const compType = detailedResult?.competition_type || detailedResult?.moduleType || competition.moduleType || "Competition";
-  const currentUserObj = detailedResult?.current_user || null;
+  // 1. Prioritize user_id from Cookies to represent and highlight the current user
+  const cookieUserId =
+    Cookies.get('user_id') ||
+    Cookies.get('userId') ||
+    propUserId ||
+    localStorage.getItem('user_id') ||
+    localStorage.getItem('userId') ||
+    '';
 
-  const formatArrayDate = (arr?: number[]) => {
-    if (Array.isArray(arr) && arr.length >= 3) {
-      const [year, month, day, hour = 0, minute = 0] = arr;
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const monthStr = months[(month - 1) % 12] || String(month);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      return `${day} ${monthStr} ${year}${arr.length >= 5 ? `, ${pad(hour)}:${pad(minute)}` : ''}`;
-    }
-    return null;
-  };
+  // 2. Parse API parameters:
+  // { competition_id: 49, competition_title: "GK COMPETITION TEST - 2", data: Array(2), module_type: "GK", total_participants: 2, status: "success" }
+  const compTitle =
+    detailedResult?.competition_title ||
+    detailedResult?.gk_assessment_name ||
+    detailedResult?.title ||
+    competition.title ||
+    "Competition Standings";
 
-  const formattedStartDate = formatArrayDate(detailedResult?.start_time) || competition.attemptDate;
+  const compType =
+    detailedResult?.module_type ||
+    detailedResult?.competition_type ||
+    competition.moduleType ||
+    "GK";
 
-  // Extract User info from current_user
+  // Rankings array from detailedResult.data (or ranking / rankings)
+  const rawRankings: any[] = Array.isArray(detailedResult?.data)
+    ? detailedResult.data
+    : Array.isArray(detailedResult?.ranking)
+    ? detailedResult.ranking
+    : Array.isArray(detailedResult?.rankings)
+    ? detailedResult.rankings
+    : Array.isArray(detailedResult)
+    ? detailedResult
+    : [];
+
+  const totalParticipants =
+    Number(detailedResult?.total_participants) ||
+    rawRankings.length ||
+    competition.totalParticipants ||
+    0;
+
+  // 3. Find current user from data array using cookie user_id
+  const currentUserFromList = rawRankings.find((item: any) =>
+    (cookieUserId && String(item.user_id) === String(cookieUserId)) ||
+    (cookieUserId && String(item.id) === String(cookieUserId)) ||
+    item.is_current_user ||
+    item.isCurrentUser
+  );
+
+  const currentUserObj = currentUserFromList || detailedResult?.current_user || null;
+
+  const formattedStartDate = competition.attemptDate;
+
+  // Extract User info from currentUserObj
   const userRank = currentUserObj
-    ? Number(currentUserObj.rank || currentUserObj.user_rank || currentUserObj.position || competition.rank || 0)
+    ? Number(currentUserObj.user_rank ?? currentUserObj.rank ?? currentUserObj.position ?? competition.rank ?? 0)
     : (competition.rank ?? 0);
 
   const maxScore = currentUserObj
@@ -837,47 +909,64 @@ const IndividualCompetitionRankTable: React.FC<{
     ? Number(currentUserObj.score || currentUserObj.total_score || currentUserObj.marks_obtained || currentUserObj.marks || competition.score || 0)
     : (competition.score || 0);
 
-  const userPercentage = currentUserObj
-    ? Number(currentUserObj.percentage || currentUserObj.accuracy || (maxScore > 0 ? Math.round((userScore / maxScore) * 100) : 0))
+  const rawUserAccuracy = currentUserObj?.accuracy ?? currentUserObj?.percentage;
+  const userAccuracy = rawUserAccuracy !== undefined && rawUserAccuracy !== null && rawUserAccuracy !== ''
+    ? Number(parseFloat(String(rawUserAccuracy)).toFixed(1))
     : (competition.percentage || 0);
 
   // Generate structured standings entries strictly from API response payload
   const generateStandingsList = (): IndividualParticipantStanding[] => {
-    const rawRankings: any[] = Array.isArray(detailedResult?.ranking)
-      ? detailedResult.ranking
-      : (Array.isArray(detailedResult?.rankings) ? detailedResult.rankings : []);
-
     const list: IndividualParticipantStanding[] = [];
 
     if (rawRankings.length > 0) {
       rawRankings.forEach((item: any, idx: number) => {
-        const r = Number(item.rank || item.user_rank || item.position || idx + 1);
-        const name = item.name || item.user_name || item.student_name || [item.first_name, item.last_name].filter(Boolean).join(' ') || `Participant #${r}`;
-        const school = item.school_name || item.school || item.college || 'School / Academy';
-        const city = item.city || item.location || 'India';
+        const r = Number(item.user_rank ?? item.rank ?? item.position ?? idx + 1);
+
+        // Name from first_name and last_name (e.g. "Shruti" + "Gunjal")
+        const fullName = [item.first_name, item.last_name].filter(Boolean).join(' ').trim();
+        const studentName = fullName || item.name || item.user_name || item.student_name || `Participant #${r}`;
+
+        const school = item.school_name || item.school || item.college || (item.module_type ? `${item.module_type} Contestant` : 'School / Academy');
+        const city = item.city || item.location || (item.user_id ? `ID: ${item.user_id}` : 'India');
+
         const score = Number(item.score || item.total_score || item.marks || item.marks_obtained || 0);
         const itemMaxScore = Number(item.max_score || item.total_marks || item.maxScore || maxScore);
-        const percentage = Number(item.percentage || item.accuracy || (itemMaxScore > 0 ? Math.round((score / itemMaxScore) * 100) : 0));
-        const timeSpent = item.time_taken || item.time_spent || item.duration || 'N/A';
-        const xpEarned = Number(item.xp_earned || item.xp || Math.round(percentage * 15));
+
+        // Accuracy parameter formatted (e.g. "52.38100" -> "52.4%")
+        const rawAccuracy = item.accuracy !== undefined && item.accuracy !== null && item.accuracy !== ''
+          ? parseFloat(String(item.accuracy))
+          : (item.percentage !== undefined ? parseFloat(String(item.percentage)) : undefined);
+
+        const metricValue = rawAccuracy !== undefined && !isNaN(rawAccuracy)
+          ? `${rawAccuracy.toFixed(1)}%`
+          : (itemMaxScore > 0 && score > 0 ? `${Math.round((score / itemMaxScore) * 100)}%` : '-');
+
+        const timeSpent = item.time_taken || item.time_spent || item.duration || '-';
+        const xpEarned = Number(item.xp_earned || item.xp || (rawAccuracy ? Math.round(rawAccuracy * 15) : 100));
+
         const badges = Array.isArray(item.badges)
           ? item.badges
-          : (item.badge ? [item.badge] : (r === 1 ? ['Gold Medal', 'Top Topper'] : r === 2 ? ['Silver Medal'] : r === 3 ? ['Bronze Medal'] : ['Participant']));
-        const isCurrentUser = currentUserObj
-          ? (item.user_id === currentUserObj.user_id || item.id === currentUserObj.id || item.is_current_user)
-          : (item.is_current_user || Boolean(item.isCurrentUser));
+          : (item.badge ? [item.badge] : (r === 1 ? ['🥇 Gold Winner', 'Top Ranker'] : r === 2 ? ['🥈 Silver Medal'] : r === 3 ? ['🥉 Bronze Medal'] : ['Participant']));
+
+        // Highlight matching user_id from Cookies
+        const isCurrentUser = Boolean(
+          (cookieUserId && String(item.user_id) === String(cookieUserId)) ||
+          (cookieUserId && String(item.id) === String(cookieUserId)) ||
+          item.is_current_user ||
+          Boolean(item.isCurrentUser)
+        );
 
         list.push({
           rank: r,
           id: String(item.user_id || item.id || `rank-${r}`),
-          name: isCurrentUser ? `${name} (You)` : name,
+          name: isCurrentUser ? `${studentName} (You)` : studentName,
           school,
           city,
-          activityTitle: compTitle,
+          activityTitle: item.gk_assessment_name || detailedResult?.competition_title || compTitle,
           score,
           maxScore: itemMaxScore,
           metricLabel: 'Accuracy',
-          metricValue: `${percentage}%`,
+          metricValue,
           timeSpent,
           xpEarned,
           badges,
@@ -887,34 +976,25 @@ const IndividualCompetitionRankTable: React.FC<{
     }
 
     if (currentUserObj && !list.some(entry => entry.isCurrentUser)) {
-      const cName = currentUserObj.name || currentUserObj.user_name || [currentUserObj.first_name, currentUserObj.last_name].filter(Boolean).join(' ') || 'You (Current Participant)';
+      const cFullName = [currentUserObj.first_name, currentUserObj.last_name].filter(Boolean).join(' ').trim();
+      const cName = cFullName || currentUserObj.name || currentUserObj.user_name || 'You (Current Participant)';
       list.push({
         rank: userRank || list.length + 1,
-        id: String(currentUserObj.user_id || currentUserObj.id || 'current-user'),
+        id: String(currentUserObj.user_id || currentUserObj.id || cookieUserId || 'current-user'),
         name: `${cName} (You)`,
         school: currentUserObj.school_name || currentUserObj.school || 'Academy Student',
-        city: currentUserObj.city || currentUserObj.location || 'India',
-        activityTitle: compTitle,
+        city: currentUserObj.city || currentUserObj.location || (cookieUserId ? `ID: ${cookieUserId}` : 'India'),
+        activityTitle: currentUserObj.gk_assessment_name || compTitle,
         score: userScore,
         maxScore,
         metricLabel: 'Accuracy',
-        metricValue: `${userPercentage}%`,
-        timeSpent: currentUserObj.time_taken || currentUserObj.time_spent || competition.timeTaken || '0m',
-        xpEarned: Number(currentUserObj.xp_earned || currentUserObj.xp || Math.round(userPercentage * 15)),
+        metricValue: `${userAccuracy}%`,
+        timeSpent: currentUserObj.time_taken || currentUserObj.time_spent || competition.timeTaken || '-',
+        xpEarned: Number(currentUserObj.xp_earned || currentUserObj.xp || Math.round(userAccuracy * 15)),
         badges: [currentUserObj.badge || competition.badge || 'National Competitor'],
         isCurrentUser: true
       });
     }
-
-    /* ========================================================================
-       PREVIOUS STATIC FALLBACK DATA (COMMENTED OUT FOR NO STATIC DATA DEMAND)
-       ========================================================================
-       const list: IndividualParticipantStanding[] = [
-         { rank: 1, id: 'p1', name: 'Aarav Sharma', school: 'DPS R.K. Puram', city: 'New Delhi', ... },
-         { rank: 2, id: 'p2', name: 'Ananya Verma', school: 'National Public School', city: 'Bengaluru', ... },
-         ...
-       ];
-       ======================================================================== */
 
     return list.sort((a, b) => a.rank - b.rank);
   };
@@ -966,6 +1046,7 @@ const IndividualCompetitionRankTable: React.FC<{
 
           {/* User Score & Rank Cards for this competition */}
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2.5 sm:gap-4 w-full lg:w-auto">
+            {/* Rank Card */}
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 sm:px-5 sm:py-4 flex items-center gap-2.5 sm:gap-3.5 shadow-sm flex-1 sm:flex-none">
               <div className="p-2 sm:p-3 rounded-xl bg-amber-500 text-white font-black shadow-md shadow-amber-500/20 shrink-0">
                 <Trophy className="w-4 h-4 sm:w-6 sm:h-6" />
@@ -975,36 +1056,72 @@ const IndividualCompetitionRankTable: React.FC<{
                 <div className="text-base sm:text-xl font-black text-amber-700 truncate">
                   {userRank ? `Rank #${userRank}` : 'Not Declared'}
                 </div>
+                {totalParticipants > 0 && (
+                  <div className="text-[10px] text-amber-800 font-medium truncate">
+                    out of {totalParticipants} contestants
+                  </div>
+                )}
               </div>
             </div>
 
+            {/* Accuracy / Score Card */}
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 sm:px-5 sm:py-4 flex items-center gap-2.5 sm:gap-3.5 shadow-sm flex-1 sm:flex-none">
               <div className="p-2 sm:p-3 rounded-xl bg-blue-600 text-white font-black shadow-md shadow-blue-500/20 shrink-0">
                 <Award className="w-4 h-4 sm:w-6 sm:h-6" />
               </div>
               <div className="min-w-0">
-                <div className="text-[10px] sm:text-[11px] text-slate-500 uppercase font-semibold truncate">Your Score</div>
+                <div className="text-[10px] sm:text-[11px] text-slate-500 uppercase font-semibold truncate">Your Accuracy</div>
                 <div className="text-base sm:text-xl font-black text-slate-900 truncate">
-                  {userScore} <span className="text-xs text-slate-500 font-normal">/ {maxScore}</span>
+                  {userAccuracy !== undefined ? `${userAccuracy}%` : (userScore > 0 ? `${userScore} pts` : '-')}
                 </div>
-                <div className="text-[10px] text-blue-700 font-bold truncate">{userPercentage}% Percentage</div>
+                {userScore > 0 && (
+                  <div className="text-[10px] text-blue-700 font-bold truncate">{userScore} / {maxScore} Score</div>
+                )}
               </div>
             </div>
+
+            {/* Total Participants Card */}
+            {totalParticipants > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 sm:px-5 sm:py-4 flex items-center gap-2.5 sm:gap-3.5 shadow-sm flex-1 sm:flex-none">
+                <div className="p-2 sm:p-3 rounded-xl bg-emerald-600 text-white font-black shadow-md shadow-emerald-500/20 shrink-0">
+                  <Users className="w-4 h-4 sm:w-6 sm:h-6" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] sm:text-[11px] text-slate-500 uppercase font-semibold truncate">Total Contestants</div>
+                  <div className="text-base sm:text-xl font-black text-emerald-800 truncate">
+                    {totalParticipants}
+                  </div>
+                  <div className="text-[10px] text-emerald-700 font-medium truncate">Participants</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Top 3 Podium for this Competition (Photos Removed) */}
-      {top3.length >= 3 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 items-end max-w-5xl mx-auto">
-          {/* 2nd Place */}
-          {top3[1] && <PodiumCard entry={top3[1]} place={2} />}
-
-          {/* 1st Place (Gold) */}
-          {top3[0] && <PodiumCard entry={top3[0]} place={1} />}
-
-          {/* 3rd Place */}
-          {top3[2] && <PodiumCard entry={top3[2]} place={3} />}
+      {/* Top Podium for this Competition (1, 2, or 3 participants) */}
+      {top3.length >= 1 && (
+        <div className={`grid gap-4 sm:gap-6 pt-2 items-end max-w-5xl mx-auto ${
+          top3.length === 1
+            ? 'grid-cols-1 max-w-xs'
+            : top3.length === 2
+            ? 'grid-cols-1 sm:grid-cols-2 max-w-xl'
+            : 'grid-cols-1 md:grid-cols-3'
+        }`}>
+          {top3.length === 1 && <PodiumCard entry={top3[0]} place={1} />}
+          {top3.length === 2 && (
+            <>
+              <PodiumCard entry={top3[0]} place={1} />
+              <PodiumCard entry={top3[1]} place={2} />
+            </>
+          )}
+          {top3.length >= 3 && (
+            <>
+              <PodiumCard entry={top3[1]} place={2} />
+              <PodiumCard entry={top3[0]} place={1} />
+              <PodiumCard entry={top3[2]} place={3} />
+            </>
+          )}
         </div>
       )}
 
@@ -1100,9 +1217,9 @@ const IndividualCompetitionRankTable: React.FC<{
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        {/* <div className="text-xs text-slate-500">
                           {student.school} • <span className="text-slate-400">{student.city}</span>
-                        </div>
+                        </div> */}
                       </div>
                     </td>
 
@@ -1115,13 +1232,19 @@ const IndividualCompetitionRankTable: React.FC<{
 
                     {/* Score */}
                     <td className="py-4 px-4 text-center font-extrabold text-amber-600">
-                      {student.score}{' '}
-                      <span className="text-[10px] text-slate-400 font-normal">/ {student.maxScore}</span>
+                      {student.score > 0 ? (
+                        <>
+                          {student.score}{' '}
+                          <span className="text-[10px] text-slate-400 font-normal">/ {student.maxScore}</span>
+                        </>
+                      ) : (
+                        <span className="text-xs font-semibold text-slate-600">{student.metricValue}</span>
+                      )}
                     </td>
 
                     {/* Metric */}
                     <td className="py-4 px-4 text-center font-semibold text-emerald-700 text-xs">
-                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 font-bold">
                         {student.metricValue}
                       </span>
                     </td>
@@ -1221,10 +1344,14 @@ const PodiumCard: React.FC<{ entry: IndividualParticipantStanding; place: 1 | 2 
 
       {/* Score Pill */}
       <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
-        <div className="text-[10px] text-slate-500 uppercase font-semibold">Top Score</div>
-        <div className="text-xl font-black text-amber-600">{entry.score} pts</div>
+        <div className="text-[10px] text-slate-500 uppercase font-semibold">
+          {entry.score > 0 ? 'Top Score' : 'Accuracy'}
+        </div>
+        <div className="text-xl font-black text-amber-600">
+          {entry.score > 0 ? `${entry.score} pts` : entry.metricValue}
+        </div>
         <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200">
-          <span>{entry.metricValue}</span>
+          <span>Accuracy: {entry.metricValue}</span>
           <span>{entry.timeSpent}</span>
         </div>
       </div>

@@ -532,7 +532,9 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
               {activeResult.competitionTitle}
             </h1>
             <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-              Detailed performance analysis, topic breakdown, AI feedback, and step-by-step question solutions.
+              {activeModuleUpper === 'GK'
+                ? 'Detailed performance analysis, topic breakdown, and step-by-step question solutions.'
+                : 'Detailed performance analysis, topic breakdown, AI feedback, and step-by-step question solutions.'}
             </p>
           </div>
 
@@ -615,9 +617,13 @@ export const CompetitionResult: React.FC<CompetitionResultProps> = ({
           <div>
             <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-indigo-600 shrink-0" />
-              Attempted Questions, AI Feedback & Solutions
+              {activeModuleUpper === 'GK' ? 'Attempted Questions & Solutions' : 'Attempted Questions, AI Feedback & Solutions'}
             </h2>
-            <p className="text-xs text-slate-500">Review selected choices, correct answers, step-by-step reasoning, and AI feedback.</p>
+            <p className="text-xs text-slate-500">
+              {activeModuleUpper === 'GK'
+                ? 'Review selected choices, correct answers, and step-by-step reasoning.'
+                : 'Review selected choices, correct answers, step-by-step reasoning, and AI feedback.'}
+            </p>
           </div>
 
           {/* Filter Pills */}
@@ -799,8 +805,8 @@ const QuestionReviewCard: React.FC<{ question: QuestionAttempt; moduleType?: str
         </div>
       )}
 
-      {/* AI Feedback Section */}
-      {question.aiFeedback && (
+      {/* AI Feedback Section (Hidden for GK module) */}
+      {moduleType?.toUpperCase() !== 'GK' && question.aiFeedback && (
         <div className="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-3.5 sm:p-4 space-y-1.5 mt-3">
           <div className="flex items-center gap-2 text-[10px] sm:text-xs font-extrabold text-indigo-900 uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0" /> AI Feedback & Evaluation
