@@ -15,6 +15,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { MapPracticeService } from '../../services/MapPracticeService';
+import { useCourse } from '../../context/CourseContext';
 import Cookies from 'js-cookie';
 
 interface MapPracticeSelectionProps {
@@ -22,6 +23,14 @@ interface MapPracticeSelectionProps {
 }
 
 export default function MapPracticeSelection({ onNavigate }: MapPracticeSelectionProps) {
+  // Active/selected subscription ID directly from CourseContext
+  const { subscriptionId, selectedCourse } = useCourse();
+  const activeSubscriptionId = subscriptionId || 
+    selectedCourse?.subscription_id || 
+    selectedCourse?.id || 
+    (typeof window !== 'undefined' ? localStorage.getItem('selectedCourseId') : undefined) || 
+    undefined;
+
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -129,7 +138,7 @@ export default function MapPracticeSelection({ onNavigate }: MapPracticeSelectio
       setIsLoadingApi(true);
       setApiError(null);
       try {
-        const response = await MapPracticeService.getMapAssessments();
+        const response = await MapPracticeService.getMapAssessments(activeSubscriptionId);
         const assessmentsList = 
           response?.assessments || 
           response?.data?.assessments || 
@@ -160,7 +169,7 @@ export default function MapPracticeSelection({ onNavigate }: MapPracticeSelectio
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [activeSubscriptionId]);
 
   // Map API data parameters to UI fields
   const mergedMaps = apiAssessments.map((item: any, idx: number) => {
@@ -215,7 +224,8 @@ export default function MapPracticeSelection({ onNavigate }: MapPracticeSelectio
 
     const payload = {
       assessment_id: Number(assessmentId),
-      user_id: userId
+      user_id: userId,
+      subscription_id: activeSubscriptionId ? (isNaN(Number(activeSubscriptionId)) ? activeSubscriptionId : Number(activeSubscriptionId)) : undefined
     };
 
     console.log("Start Assessment Payload:", payload);

@@ -1,5 +1,5 @@
 import {API_ENDPOINT} from "../core/api/ApiEndpoint";
-import axiosClient, { axiosFastApiClient } from "../core/api/AxiosClient";
+import axiosClient, { axiosMindShaalaClient } from "../core/api/AxiosClient";
 import Cookies from 'js-cookie';
 
 export interface AvailableTest {
@@ -135,9 +135,9 @@ export const TestService = {
         }
     },
 
-    getPyqTests: async (userId: number | string | undefined, packageId: number | string, subjectId: number | string): Promise<any[]> => {
+    getPyqTests: async (subscriptionId: number ): Promise<any[]> => {
         try {
-            const response = await axiosClient.get(API_ENDPOINT.AVAILABLE_TESTS.PYQ_TESTS(userId, packageId, subjectId));
+            const response = await axiosClient.get(API_ENDPOINT.AVAILABLE_TESTS.PYQ_TESTS(subscriptionId));
             return response.data;
         } catch (error) {
             console.error("Error fetching PYQ tests:", error);
@@ -364,7 +364,7 @@ export const TestService = {
     getTheoryResult: async (user_ass_id: number | string): Promise<any> => {
         try {
             console.log(`Fetching theory result for user assessment: ${user_ass_id}`);
-            const response = await axiosFastApiClient.post(API_ENDPOINT.TESTRESULT.THEORY_RESULT_DETAILS, {
+            const response = await axiosMindShaalaClient.post(API_ENDPOINT.TESTRESULT.THEORY_RESULT_DETAILS, {
                 user_ass_id: user_ass_id
             });
             console.log(response.data);

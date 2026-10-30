@@ -7,26 +7,72 @@ import { Button } from "../../../components/ui/button";
 
 interface ResultCountdownProps {
     userAssId: number | string;
+    assessmentType?: string;
+    assessmentMethod?: string;
     onResultFetched: (data: any) => void;
     onCancel?: () => void;
 }
 
-export function ResultCountdown({ userAssId, onResultFetched, onCancel }: ResultCountdownProps) {
+export function ResultCountdown({ 
+    userAssId, 
+    assessmentType,
+    assessmentMethod,
+    onResultFetched, 
+    onCancel 
+}: ResultCountdownProps) {
     const [timeLeft, setTimeLeft] = useState(60);
     const [isChecking, setIsChecking] = useState(false);
     const [statusMessage, setStatusMessage] = useState("Generating your report...");
+
+    const isTheoryAssessment = () => {
+        const method = (assessmentMethod || assessmentType || "").toUpperCase();
+        if (method === "TH" || method === "THEORY") return true;
+
+        try {
+            const savedMethod = localStorage.getItem("selectedAssessmentMethod");
+            if (savedMethod) {
+                const parsed = JSON.parse(savedMethod);
+                if (typeof parsed === "string" && (parsed.toUpperCase() === "TH" || parsed.toUpperCase() === "THEORY")) {
+                    return true;
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        try {
+            const savedConfig = localStorage.getItem("takeTest_activeTestConfig");
+            if (savedConfig) {
+                const parsed = JSON.parse(savedConfig);
+                const configMethod = (parsed?.assessmentMethod || parsed?.assessmentType || parsed?.testType || "").toUpperCase();
+                if (configMethod === "TH" || configMethod === "THEORY") {
+                    return true;
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        return false;
+    };
 
     const checkResult = async () => {
         setIsChecking(true);
         try {
             // First update the competitive paper result
-            await TestresultService.checkCompetitivePaper(userAssId);
+            // await TestresultService.checkCompetitivePaper(userAssId);
             
+            // If the assessment type = TH then call this api first
+            if (isTheoryAssessment()) {
+                console.log("Checking result for Theory Assessment", isTheoryAssessment());
+                await TestService.getTheoryResult(userAssId);
+            }
+
             // Then get the exam result status
             const response = await TestService.getExamResult(userAssId);
             
             // Success condition based on user's manual requirement
-            if (response && response.attribute2 === "Result generated successfully") {
+            if (response && response.attribute2 === "Result generated successfully" || response.result_status === "COMPLETED" ) {
                 setStatusMessage("Result ready!");
                 setTimeout(() => {
                     onResultFetched(response.data || response);
@@ -126,12 +172,12 @@ export function ResultCountdown({ userAssId, onResultFetched, onCancel }: Result
                         >
                             Go to Test Result Page
                         </Button>
-                        <button 
+                        {/* <button 
                             onClick={() => window.location.reload()}
                             className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"
                         >
                             Re-check status manually
-                        </button>
+                        </button> */}
                     </div>
                 )}
                 

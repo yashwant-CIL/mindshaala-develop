@@ -1,6 +1,15 @@
 import { API_ENDPOINT } from "../core/api/ApiEndpoint";
 import { axiosMindShaalaClient } from "../core/api/AxiosClient";
 
+const getActiveSubscriptionId = (subId?: string | number) => {
+  if (subId !== undefined && subId !== null && subId !== '') return subId;
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('selectedCourseId') || 
+      localStorage.getItem('subscription_id') || 
+      undefined;
+  }
+  return undefined;
+};
 
 export const MapPracticeService = {
 
@@ -32,9 +41,17 @@ export const MapPracticeService = {
     },
 
 
-    getMapAssessments: async () => {
+    getMapAssessments: async (subscription_id?: string | number) => {
     try {
-      const response = await axiosMindShaalaClient.get(API_ENDPOINT.MAP_PRACTICE.GET_ALL_ASSESSMENTS);
+      const activeSubId = getActiveSubscriptionId(subscription_id);
+      const endpoint = typeof API_ENDPOINT.MAP_PRACTICE.GET_ALL_ASSESSMENTS === 'function'
+        ? API_ENDPOINT.MAP_PRACTICE.GET_ALL_ASSESSMENTS(activeSubId)
+        : (activeSubId 
+            ? `${API_ENDPOINT.MAP_PRACTICE.GET_ALL_ASSESSMENTS}?subscription_id=${activeSubId}`
+            : API_ENDPOINT.MAP_PRACTICE.GET_ALL_ASSESSMENTS);
+
+      console.log("Fetching map assessments for subscription_id:", activeSubId);
+      const response = await axiosMindShaalaClient.get(endpoint);
       console.log("Fetched Assessments: ", response.data);
       return response.data;
     } catch (error) {
@@ -45,8 +62,14 @@ export const MapPracticeService = {
 
     startMapAssessment: async (payload: any) => {
     try {
-      const response = await axiosMindShaalaClient.post(API_ENDPOINT.MAP_PRACTICE.START_MAP_ASSESSMENT, payload);
-      console.log("Started the assessment:",response.data);
+      const activeSubId = getActiveSubscriptionId(payload?.subscription_id);
+      const formattedPayload = {
+        ...payload,
+        ...(activeSubId ? { subscription_id: isNaN(Number(activeSubId)) ? activeSubId : Number(activeSubId) } : {})
+      };
+      console.log("Starting map assessment with payload:", formattedPayload);
+      const response = await axiosMindShaalaClient.post(API_ENDPOINT.MAP_PRACTICE.START_MAP_ASSESSMENT, formattedPayload);
+      console.log("Started the assessment:", response.data);
       return response.data;
     } catch (error) {
       console.error('Error starting map assessment:', error);

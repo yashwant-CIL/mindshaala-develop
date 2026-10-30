@@ -12,14 +12,38 @@ import { QuestionMathJax } from '../../../shared/mathjaxconfig/QuestionMathJax';
 import { getDeterministicShuffle } from '../../../shared/utils/ShuffleUtils';
 import { Badge } from '../../../components/ui/badge'; 
 
-const sanitizeLatex = (val: string | null | undefined): string => {
-    if (!val) return "";
-    return val
+const sanitizeLatex = (val: any): string => {
+    if (val === null || val === undefined) return "";
+    const str = typeof val === "string" ? val : String(val);
+    return str
         .replace(/\\\\n/g, "\n")
         .replace(/\\\\r/g, "\r")
         .replace(/\\\\t/g, "\t")
         .replace(/\\\\\\/g, "\\")
         .trim();
+};
+
+const normalizeOptionText = (val: any): string => {
+  if (val === null || val === undefined) return "";
+  const str = typeof val === "string" ? val : String(val);
+  return str
+    .replace(/\\text\s*\{([^}]*)\}/g, "$1")
+    .replace(/\\mathrm\s*\{([^}]*)\}/g, "$1")
+    .replace(/\\textbf\s*\{([^}]*)\}/g, "$1")
+    .replace(/\\mathbf\s*\{([^}]*)\}/g, "$1")
+    .replace(/\\%/g, "%")
+    .replace(/\\/g, "")
+    .replace(/\$/g, "")
+    .replace(/\s+/g, "")
+    .trim()
+    .toLowerCase();
+};
+
+const stripOptionPrefix = (val: string): string => {
+  if (!val) return "";
+  return val
+    .replace(/^[\s\(\[\{]*[a-eA-E0-9][\.\)\:\-\]\}\s]+/g, "")
+    .trim();
 };
 
 const HeaderMetric = ({ icon: Icon, label, value, total, color }: any) => {
@@ -84,7 +108,7 @@ export default function TheorySolutionScreen() {
           name: section.section_heading || "Untitled Section",
           questions: (section.solution_details || []).map((q: any) => ({
             id: q.question_id,
-            que: sanitizeLatex(q.question_latex),
+            que: sanitizeLatex(q.question_latex || q.que),
             question_type_name: q.question_type_name?.toLowerCase().trim() || "",
             que_diag: (q.question_diagrams_url || []).filter((url: string) => url && url.length > 0),
             options: (q.question_type_name?.toLowerCase().includes("true or false")) ? ["True", "False"] : [
@@ -103,7 +127,9 @@ export default function TheorySolutionScreen() {
             user_answer: q.user_answer,
             user_answer_image: q.user_answer_image,
             answer_remark: q.answer_remark,
-            correct_option: q.answer_latex || q.correct_option,
+            raw_correct_option: q.correct_option,
+            correct_option: q.correct_option || q.answer_latex,
+            answer_latex: q.answer_latex,
             answer_description: q.answer_description,
             marks: q.total_marks,
             obtained_marks: q.obtained_marks,
@@ -191,7 +217,9 @@ export default function TheorySolutionScreen() {
                {group.map((q, idx) => (
                    <div key={`left-${idx}`} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-4">
                        <span className="bg-slate-900 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">{startIdx + idx + 1}</span>
-                       <div className="text-sm font-medium leading-relaxed text-slate-700 break-words w-full">{q.que}</div>
+                       <div className="text-sm font-medium leading-relaxed text-slate-700 break-words w-full">
+                           <QuestionMathJax content={sanitizeLatex(q.que)} skipInternalLoading />
+                       </div>
                    </div>
                ))}
            </div>
@@ -200,7 +228,9 @@ export default function TheorySolutionScreen() {
                {shuffled.map((ans, idx) => (
                    <div key={`right-${idx}`} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-start gap-4">
                        <span className="bg-indigo-600 text-white w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">{String.fromCharCode(65 + idx)}</span>
-                       <div className="text-sm font-medium leading-relaxed text-slate-700 break-words w-full">{ans}</div>
+                       <div className="text-sm font-medium leading-relaxed text-slate-700 break-words w-full">
+                           <QuestionMathJax content={sanitizeLatex(ans)} skipInternalLoading />
+                       </div>
                    </div>
                ))}
            </div>
@@ -250,9 +280,74 @@ export default function TheorySolutionScreen() {
     );
   };
 
+  const getCorrectOptionLetter = (q: any) => {
+    if (!q) return "";
+
+    const targets = [
+      q.answer_latex,
+      q.raw_correct_option,
+      q.correct_option,
+      q.answer_description
+    ].filter(Boolean);
+
+    // 1. Exact Content Match against q.options (highest priority to match exact latex or text)
+    // E.g. answer_latex "2.5 %" matches options[1] "2.5 %" -> index 1 -> 'B'
+    if (q.options && Array.isArray(q.options) && q.options.length > 0) {
+      for (const target of targets) {
+        const normTarget = normalizeOptionText(target);
+        const strippedTarget = normalizeOptionText(stripOptionPrefix(target));
+        if (!normTarget) continue;
+
+        const exactIdx = q.options.findIndex((opt: string) => {
+          const normOpt = normalizeOptionText(opt);
+          const strippedOpt = normalizeOptionText(stripOptionPrefix(opt));
+          return (
+            normOpt === normTarget ||
+            strippedOpt === normTarget ||
+            normOpt === strippedTarget ||
+            strippedOpt === strippedTarget
+          );
+        });
+
+        if (exactIdx !== -1) {
+          return String.fromCharCode(65 + exactIdx);
+        }
+      }
+    }
+
+    // 2. Direct single letter check on raw_correct_option or correct_option or answer_latex
+    // (e.g. "A", "B", "C", "D", "E" or "Option B", "(B)")
+    for (const t of targets) {
+      if (typeof t === 'string') {
+        const trimmed = t.trim();
+        if (/^[a-e]$/i.test(trimmed)) {
+          return trimmed.toUpperCase();
+        }
+        const m = trimmed.match(/^(?:option|ans|answer|choice)?\s*[\(\[\{]?([a-e])[\)\]\}]?\.?$/i);
+        if (m) {
+          return m[1].toUpperCase();
+        }
+      }
+    }
+
+    // 3. Numeric index check if raw_correct_option is 0, 1, 2, 3
+    if (q.raw_correct_option !== undefined && q.raw_correct_option !== null && q.raw_correct_option !== "") {
+      const num = Number(q.raw_correct_option);
+      if (!isNaN(num) && Number.isInteger(num)) {
+        if (num >= 0 && num < (q.options?.length || 4)) {
+          return String.fromCharCode(65 + num);
+        }
+      }
+    }
+
+    return q.raw_correct_option || q.correct_option || "";
+  };
+
   const renderStandardQuestionUI = (question: any, idx: number) => {
     const qType = question.question_type_name || "";
-    const isMcqLike = qType === "theory mcq 1 marks" || qType === "assertion&reasoning" || qType.includes("true or false");
+    const isMcq = qType === "theory mcq 1 marks" || qType === "assertion&reasoning" || qType.includes("mcq");
+    const isMcqLike = isMcq || qType.includes("true or false");
+    const correctLetter = isMcq ? getCorrectOptionLetter(question) : "";
 
     // Handle string matching properly for letters vs actual contents
     const normalizeCheck = (val: string) => (val || "").trim().toLowerCase();
@@ -266,9 +361,9 @@ export default function TheorySolutionScreen() {
                 <span className="flex items-center justify-center w-10 h-10 rounded-2xl bg-indigo-600 text-white font-black text-lg shadow-lg shadow-indigo-200 shrink-0">
                     {idx + 1}
                 </span>
-                  <div className="text-lg font-bold text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
-                {question.que}
-            </div>
+                <div className="text-lg font-bold text-slate-800 leading-relaxed whitespace-pre-wrap break-words flex-1">
+                    <QuestionMathJax content={sanitizeLatex(question.que)} skipInternalLoading />
+                </div>
                 {/* <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded-full bg-indigo-50">
                     {question.question_type_name || "Theory Question"}
                 </span> */}
@@ -311,13 +406,22 @@ export default function TheorySolutionScreen() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {question.options.map((opt: string, optIdx: number) => {
                     const optLetter = String.fromCharCode(65 + optIdx).toLowerCase();
+                    const normOpt = normalizeOptionText(opt);
                     
                     const userVal = normalizeCheck(question.user_answer);
-                    const isUserAnswer = userVal === optLetter || userVal === normalizeCheck(opt);
+                    const normUserAnswer = normalizeOptionText(question.user_answer);
+                    const isUserAnswer = 
+                        userVal === optLetter || 
+                        normUserAnswer === optLetter || 
+                        normOpt === normUserAnswer;
                     
-                    const correctVal1 = normalizeCheck(question.correct_option);
-                    const correctVal2 = normalizeCheck(question.answer_description);
-                    const isCorrectAnswer = correctVal1 === optLetter || correctVal1 === normalizeCheck(opt) || correctVal2 === optLetter || correctVal2 === normalizeCheck(opt);
+                    const isCorrectAnswer = correctLetter 
+                        ? (optLetter === correctLetter.toLowerCase())
+                        : (
+                            normOpt === normalizeOptionText(question.answer_latex) ||
+                            normOpt === normalizeOptionText(question.correct_option) ||
+                            normOpt === normalizeOptionText(question.answer_description)
+                          );
                     
                     let optionClass = "bg-slate-50 border-slate-100 text-slate-700";
                     let icon = null;
@@ -340,7 +444,9 @@ export default function TheorySolutionScreen() {
                             }`}>
                                 {String.fromCharCode(65 + optIdx)}
                             </div>
-                            <div className="flex-1 font-medium">{opt}</div>
+                            <div className="flex-1 font-medium">
+                                <QuestionMathJax content={sanitizeLatex(opt)} skipInternalLoading />
+                            </div>
                             {icon}
                         </div>
                     );
@@ -353,57 +459,79 @@ export default function TheorySolutionScreen() {
             <div className="p-6 md:p-8 bg-slate-50/30 grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* Your Answer */}
-            <div className="space-y-4">
+            <div className="space-y-4 min-w-0">
                 <h4 className="flex items-center gap-2 text-[11px] font-black tracking-widest uppercase text-slate-500 bg-white w-fit px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
                 <MessageSquare className="w-3.5 h-3.5" />
                 Your Evaluation
                 </h4>
                 
-                <div className={`bg-white rounded-2xl p-6 min-h-[150px] border shadow-sm ${question.user_answer || question.user_answer_image ? 'border-indigo-100 hover:border-indigo-300' : 'border-slate-200'} transition-colors`}>
-                {!question.user_answer && !question.user_answer_image ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 mt-4">
-                        <XCircle className="w-8 h-8 opacity-20" />
-                        <span className="font-bold text-sm uppercase tracking-wide">Not Attempted</span>
+                <div className={`bg-white rounded-2xl min-h-[150px] max-h-[500px] overflow-auto border shadow-sm ${question.user_answer || question.user_answer_image ? 'border-indigo-100 hover:border-indigo-300' : 'border-slate-200'} transition-colors`}>
+                    <div className="p-6 w-fit min-w-full min-h-full">
+                        {!question.user_answer && !question.user_answer_image ? (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 mt-4">
+                                <XCircle className="w-8 h-8 opacity-20" />
+                                <span className="font-bold text-sm uppercase tracking-wide">Not Attempted</span>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                            {question.user_answer && (
+                                <div className="text-slate-700 font-medium whitespace-pre-wrap leading-relaxed text-[15px]">
+                                    <QuestionMathJax content={sanitizeLatex(question.user_answer)} skipInternalLoading />
+                                </div>
+                            )}
+                            {question.user_answer_image && (
+                                <div className="flex flex-wrap gap-4">
+                                {question.user_answer_image.split(',').map((imgUrl: string, idx: number) => (
+                                    <a href={`${import.meta.env.VITE_API_URL}/api/v1/cil/images/${imgUrl.trim()}`} target="_blank" rel="noreferrer" key={idx}>
+                                    <img 
+                                        src={`${import.meta.env.VITE_API_URL}/api/v1/cil/images/${imgUrl.trim()}`} 
+                                        className="h-40 rounded-xl shadow-md border-[3px] border-white ring-1 ring-slate-200 object-cover cursor-zoom-in hover:ring-indigo-400 transition-all"
+                                        alt="User Upload"
+                                    />
+                                    </a>
+                                ))}
+                                </div>
+                            )}
+                            </div>
+                        )}
                     </div>
-                ) : (
-                    <div className="space-y-6">
-                    {question.user_answer && (
-                        <div className="text-slate-700 font-medium whitespace-pre-wrap break-words leading-relaxed text-[15px]">
-                        {question.user_answer}
-                        </div>
-                    )}
-                    {question.user_answer_image && (
-                        <div className="flex flex-wrap gap-4">
-                        {question.user_answer_image.split(',').map((imgUrl: string, idx: number) => (
-                            <a href={`${import.meta.env.VITE_API_URL}/api/v1/cil/images/${imgUrl.trim()}`} target="_blank" rel="noreferrer" key={idx}>
-                            <img 
-                                src={`${import.meta.env.VITE_API_URL}/api/v1/cil/images/${imgUrl.trim()}`} 
-                                className="h-40 rounded-xl shadow-md border-[3px] border-white ring-1 ring-slate-200 object-cover cursor-zoom-in hover:ring-indigo-400 transition-all"
-                                alt="User Upload"
-                            />
-                            </a>
-                        ))}
-                        </div>
-                    )}
-                    </div>
-                )}
                 </div>
             </div>
 
             {/* Actual Answer */}
-            <div className="space-y-4">
+            <div className="space-y-4 min-w-0">
                 <h4 className="flex items-center gap-2 text-[11px] font-black tracking-widest uppercase text-emerald-600 bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Model Rubric Correct Answer
+                Correct Answer
                 </h4>
-                <div className="bg-emerald-50/50 rounded-2xl p-6 min-h-[150px] border border-emerald-100/60 shadow-sm flex flex-col justify-between">
-                    {!question.answer_description && !question.correct_option ? (
-                    <div className="text-slate-500 italic font-medium mt-4">No rubric provided by the examiner.</div>
-                    ) : (
-                    <div className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed text-[15px] [&_img]:max-w-full [&_img]:rounded-lg [&_img]:shadow-sm [&_img]:border [&_img]:border-slate-200 break-words">
-                      {question.answer_description || question.correct_option}
+                <div className="bg-emerald-50/50 rounded-2xl min-h-[150px] max-h-[500px] border border-emerald-100/60 shadow-sm overflow-auto">
+                    <div className="p-6 w-fit min-w-full min-h-full flex flex-col justify-between">
+                        {isMcq ? (
+                            <div className="space-y-4">
+                                <div className="text-slate-700 font-medium whitespace-pre-wrap leading-relaxed text-[15px]">
+                                    {correctLetter ? (
+                                        correctLetter
+                                    ) : (
+                                        <QuestionMathJax content={sanitizeLatex(question.raw_correct_option || question.correct_option)} skipInternalLoading />
+                                    )}
+                                </div>
+                                {question.answer_description && 
+                                 !question.options?.some((opt: string) => opt?.trim() === question.answer_description?.trim()) &&
+                                 question.answer_description?.trim() !== correctLetter && (
+                                    <div className="text-xs text-slate-500 pt-3 border-t border-emerald-100/80 leading-relaxed">
+                                        <span className="font-bold text-slate-700">Explanation: </span>
+                                        <QuestionMathJax content={sanitizeLatex(question.answer_description)} skipInternalLoading />
+                                    </div>
+                                )}
+                            </div>
+                        ) : !question.answer_description && !question.correct_option ? (
+                        <div className="text-slate-500 italic font-medium mt-4">No rubric provided by the examiner.</div>
+                        ) : (
+                        <div className="text-slate-800 font-medium whitespace-pre-wrap leading-relaxed text-[15px] [&_img]:max-w-full [&_img]:rounded-lg [&_img]:shadow-sm [&_img]:border [&_img]:border-slate-200">
+                          <QuestionMathJax content={sanitizeLatex(question.answer_description || question.correct_option)} skipInternalLoading />
+                        </div>
+                        )}
                     </div>
-                    )}
                 </div>
             </div>
 
@@ -430,7 +558,7 @@ export default function TheorySolutionScreen() {
                     </div>
                     {question.feedback && (
                         <div className="bg-indigo-50/30 rounded-2xl p-6 border border-indigo-100/50 text-slate-700 font-medium whitespace-pre-wrap leading-relaxed text-[15px] mt-4">
-                            <QuestionMathJax content={question.feedback} />
+                            <QuestionMathJax content={sanitizeLatex(question.feedback)} skipInternalLoading />
                         </div>
                     )}
                 </div>

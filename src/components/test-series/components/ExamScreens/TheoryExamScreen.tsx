@@ -307,7 +307,7 @@ export function TheoryExamScreen({ onComplete, onSkipSubmission, onExit }: Theor
         user_ass_id: effectiveUserAssId.toString(),
         assessment_id: (questionPaperData?.assessment_id || "").toString(),
         ass_start_time: startTime || "",
-        assessment_status: "SUBMITTED",
+        assessment_status: "COMPLETED",
         time_taken: formattedTimeTaken,
         ass_end_time: ass_end_time
     };
@@ -316,7 +316,7 @@ export function TheoryExamScreen({ onComplete, onSkipSubmission, onExit }: Theor
     try {
       const response = await TestService.submitTheoryExam(payload, effectiveUserAssId.toString());
       console.log("Submission Response:", response);
-      if (response) {
+      if (isSelfCheck) {
         Swal.fire({
           title: "Exam Submitted",
           text: "Your exam has been submitted directly. You can now self-evaluate your performance.",
@@ -329,12 +329,20 @@ export function TheoryExamScreen({ onComplete, onSkipSubmission, onExit }: Theor
             onComplete();
           }
         });
+      } else {
+        if (effectiveUserAssId) localStorage.setItem("userAssId", effectiveUserAssId.toString());
+        onComplete();
       }
     } catch (err) {
       console.error("Submission failed:", err);
-      if (onSkipSubmission) {
-        onSkipSubmission();
+      if (isSelfCheck) {
+        if (onSkipSubmission) {
+          onSkipSubmission();
+        } else {
+          onComplete();
+        }
       } else {
+        if (effectiveUserAssId) localStorage.setItem("userAssId", effectiveUserAssId.toString());
         onComplete();
       }
     } finally {
@@ -350,9 +358,9 @@ export function TheoryExamScreen({ onComplete, onSkipSubmission, onExit }: Theor
     }
 
     if (typeof Swal === 'undefined') {
-        console.error("TheoryExam: Swal is not defined! Navigating to submission portal directly.");
+        console.error("TheoryExam: Swal is not defined! Submitting and navigating to submission portal.");
         if (effectiveUserAssId) localStorage.setItem("userAssId", effectiveUserAssId.toString());
-        onComplete();
+        handleFinalSubmit("MANUAL", false);
         return;
     }
 
@@ -368,9 +376,9 @@ export function TheoryExamScreen({ onComplete, onSkipSubmission, onExit }: Theor
       returnFocus: true,
     }).then((result: any) => {
       if (result === true || (result && result.isConfirmed)) {
-        console.log("TheoryExam: Confirmation received. Navigating to submission portal...");
+        console.log("TheoryExam: Confirmation received. Submitting and navigating to submission portal...");
         if (effectiveUserAssId) localStorage.setItem("userAssId", effectiveUserAssId.toString());
-        onComplete();
+        handleFinalSubmit("MANUAL", false);
       }
     });
   };

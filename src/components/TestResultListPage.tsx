@@ -18,6 +18,22 @@ export function TestResultListPage({ onViewResult, onStartTest }: TestResultList
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
 
+    const getAttemptTimestamp = (item: any): number => {
+        if (!item) return 0;
+        const dateVal = item.ass_start_time || item.ass_end_time || item.created_at || item.submitted_at || item.date;
+        if (dateVal) {
+            if (typeof dateVal === "number") return dateVal;
+            if (!isNaN(Number(dateVal)) && Number(dateVal) > 1000000000) {
+                return Number(dateVal);
+            }
+            const dateStr = typeof dateVal === "string" ? dateVal.trim().replace(" ", "T") : dateVal;
+            const parsed = new Date(dateStr).getTime();
+            if (!isNaN(parsed)) return parsed;
+        }
+        const idVal = Number(item.user_ass_id || item.user_assessment_id || item.id);
+        return !isNaN(idVal) ? idVal : 0;
+    };
+
     useEffect(() => {
         const fetchHistory = async () => {
             const userId = localStorage.getItem('user_id') || Cookies.get('user_id');
@@ -29,7 +45,13 @@ export function TestResultListPage({ onViewResult, onStartTest }: TestResultList
                 const response = await TestService.getSubmittedExams(userId);
                 // Ensure results is an array
                 const data = Array.isArray(response) ? response : (response.data || []);
-                setResults(data);
+                const sorted = [...data].sort((a: any, b: any) => {
+                    const timeA = getAttemptTimestamp(a);
+                    const timeB = getAttemptTimestamp(b);
+                    if (timeB !== timeA) return timeB - timeA;
+                    return (Number(b.user_ass_id || 0) - Number(a.user_ass_id || 0));
+                });
+                setResults(sorted);
             } catch (error) {
                 console.error("Failed to fetch test history:", error);
             } finally {
@@ -39,13 +61,21 @@ export function TestResultListPage({ onViewResult, onStartTest }: TestResultList
         fetchHistory();
     }, []);
 
-    const filteredResults = results.filter(res => 
-        (res.assessment_name || "").toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredResults = results
+        .filter(res => 
+            (res.assessment_name || "").toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        .sort((a: any, b: any) => {
+            const timeA = getAttemptTimestamp(a);
+            const timeB = getAttemptTimestamp(b);
+            if (timeB !== timeA) return timeB - timeA;
+            return (Number(b.user_ass_id || 0) - Number(a.user_ass_id || 0));
+        });
 
     const formatDate = (dateString: string) => {
         if (!dateString) return "N/A";
-        const date = new Date(dateString);
+        const dateStr = typeof dateString === "string" ? dateString.trim().replace(" ", "T") : dateString;
+        const date = new Date(dateStr);
         if (isNaN(date.getTime())) return dateString; // Fallback to raw string if invalid
         
         const datePart = date.toLocaleDateString('en-GB', {
@@ -107,109 +137,104 @@ export function TestResultListPage({ onViewResult, onStartTest }: TestResultList
             {/* Results List */}
             <div className="space-y-3">
                 {filteredResults.length > 0 ? (
-                    filteredResults.map((result, index) => (
-                        <motion.div 
-                            key={result.user_ass_id || index}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            onClick={() => onViewResult(result.user_ass_id, result.assessment_method)}
-                            className="bg-white border border-slate-100 p-4 md:px-6 md:py-5 rounded-2xl shadow-sm hover:shadow-md hover:border-indigo-100 transition-all cursor-pointer group"
-                        >
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                                {/* Index */}
-                                <div className="hidden md:block col-span-1 text-sm font-bold text-slate-400">
-                                    {(index + 1).toString().padStart(2, '0')}
-                                </div>
+                    filteredResults.map((result, index) => {
+                        const isPending = (result.result_status || "").toUpperCase() === "PENDING";
+                        const isOngoing = result.assessment_status === 'INITIALIZED' || result.assessment_status === 'IN_PROGRESS';
+                        const showResultButton = !isPending && !isOngoing;
 
-                                {/* Name & Type */}
-                                <div className="col-span-3 flex flex-col">
-                                    <span className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
-                                        {result.assessment_name}
-                                    </span>
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
-                                        {result.assessment_type || "Standard Test"}
-                                    </span>
-                                </div>
+                        return (
+                            <motion.div 
+                                key={result.user_ass_id || index}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                onClick={() => showResultButton && onViewResult(result.user_ass_id, result.assessment_method)}
+                                className={`bg-white border border-slate-100 p-4 md:px-6 md:py-5 rounded-2xl shadow-sm hover:shadow-md hover:border-indigo-100 transition-all ${showResultButton ? "cursor-pointer group" : "cursor-default"}`}
+                            >
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                    {/* Index */}
+                                    <div className="hidden md:block col-span-1 text-sm font-bold text-slate-400">
+                                        {(index + 1).toString().padStart(2, '0')}
+                                    </div>
 
-                                {/* Method */}
-                                <div className="md:col-span-2 flex items-center md:justify-center">
-                                    <span className="px-3 py-1 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-slate-100">
-                                        {result.assessment_method || "Mock"}
-                                    </span>
-                                </div>
-
-                                {/* Date */}
-                                <div className="md:col-span-2 flex items-center md:justify-center gap-2">
-                                    <Calendar className="w-3.5 h-3.5 text-slate-400 md:hidden" />
-                                    <span className="text-sm font-medium text-slate-600">
-                                        {formatDate(result.ass_start_time)}
-                                    </span>
-                                </div>
-
-                                {/* Score */}
-                                <div className="md:col-span-1 flex items-center md:justify-center">
-                                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-                                        (result.obtained_marks / result.total_marks) >= 0.4 
-                                        ? 'bg-emerald-50 text-emerald-700' 
-                                        : 'bg-rose-50 text-rose-700'
-                                    }`}>
-                                        <Trophy className={`w-3.5 h-3.5 ${
-                                            (result.obtained_marks / result.total_marks) >= 0.4 
-                                            ? 'text-emerald-600' 
-                                            : 'text-rose-600'
-                                        }`} />
-                                        <span className="text-sm font-black">
-                                            {result.obtained_marks || 0}/{result.total_marks || 0}
+                                    {/* Name & Type */}
+                                    <div className="col-span-3 flex flex-col">
+                                        <span className={`text-base font-bold text-slate-900 transition-colors line-clamp-1 ${showResultButton ? "group-hover:text-indigo-600" : ""}`}>
+                                            {result.assessment_name}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mt-0.5">
+                                            {result.assessment_type || "Standard Test"}
                                         </span>
                                     </div>
-                                </div>
 
-                                {/* Status */}
-                                <div className="md:col-span-2 flex items-center md:justify-center">
-                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
-                                        result.assessment_status === 'SUBMITTED' 
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                                        : result.assessment_status === 'INITIALIZED' || result.assessment_status === 'IN_PROGRESS'
-                                        ? 'bg-blue-50 text-blue-700 border-blue-100'
-                                        : 'bg-amber-50 text-amber-700 border-amber-100'
-                                    }`}>
-                                        {result.assessment_status || "In Progress"}
-                                    </span>
-                                </div>
+                                    {/* Method */}
+                                    <div className="md:col-span-2 flex items-center md:justify-center">
+                                        <span className="px-3 py-1 bg-slate-50 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-wider border border-slate-100">
+                                            {result.assessment_method || "Mock"}
+                                        </span>
+                                    </div>
 
-                                {/* Action Button */}
-                                <div className="md:col-span-1 flex justify-end">
-                                    {(result.assessment_status === 'INITIALIZED' || result.assessment_status === 'IN_PROGRESS') ? (
-                                        // <Button 
-                                        //     variant="default"
-                                        //     size="lg"
-                                        //     className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold h-8 px-4 transition-all shadow-sm"
-                                        //     onClick={(e) => {
-                                        //         e.stopPropagation();
-                                        //         onStartTest?.(result);
-                                        //     }}
-                                        // >
-                                        //     Start Test
-                                        // </Button>
-                                        ""
-                                    ) : (
-                                        <Button 
-                                            variant="default"
-                                            size="lg"
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold h-8 px-4 transition-all shadow-sm"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onViewResult(result.user_ass_id, result.assessment_method);
-                                            }}
-                                        >
-                                            View Result
-                                        </Button>
-                                    )}
+                                    {/* Date */}
+                                    <div className="md:col-span-2 flex items-center md:justify-center gap-2">
+                                        <Calendar className="w-3.5 h-3.5 text-slate-400 md:hidden" />
+                                        <span className="text-sm font-medium text-slate-600">
+                                            {formatDate(result.ass_start_time)}
+                                        </span>
+                                    </div>
+
+                                    {/* Score */}
+                                    <div className="md:col-span-1 flex items-center md:justify-center">
+                                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+                                            (result.obtained_marks / result.total_marks) >= 0.4 
+                                            ? 'bg-emerald-50 text-emerald-700' 
+                                            : 'bg-rose-50 text-rose-700'
+                                        }`}>
+                                            <Trophy className={`w-3.5 h-3.5 ${
+                                                (result.obtained_marks / result.total_marks) >= 0.4 
+                                                ? 'text-emerald-600' 
+                                                : 'text-rose-600'
+                                            }`} />
+                                            <span className="text-sm font-black">
+                                                {result.obtained_marks || 0}/{result.total_marks || 0}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Status */}
+                                    <div className="md:col-span-2 flex items-center md:justify-center">
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                                            isPending
+                                            ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                            : result.assessment_status === 'SUBMITTED' 
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                            : result.assessment_status === 'INITIALIZED' || result.assessment_status === 'IN_PROGRESS'
+                                            ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                                        }`}>
+                                            {isPending ? "Pending" : (result.assessment_status || "In Progress")}
+                                        </span>
+                                    </div>
+
+                                    {/* Action Button */}
+                                    <div className="md:col-span-1 flex justify-end">
+                                        {showResultButton ? (
+                                            <Button 
+                                                variant="default"
+                                                size="lg"
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold h-8 px-4 transition-all shadow-sm"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onViewResult(result.user_ass_id, result.assessment_method);
+                                                }}
+                                            >
+                                                View Result
+                                            </Button>
+                                        ) : null}
+                                    </div>
                                 </div>
-                            </div>
-                        </motion.div>
-                    ))
+                            </motion.div>
+                        );
+                    })
                 ) : (
                     <div className="bg-white border-2 border-dashed border-slate-100 rounded-[2rem] p-20 text-center space-y-4">
                         <div className="inline-flex p-4 bg-slate-50 rounded-full">

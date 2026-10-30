@@ -366,6 +366,8 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
       return (
           <ResultCountdown 
             userAssId={activeTestConfig?.userAssessmentId || 0} 
+            assessmentMethod={activeTestConfig?.assessmentMethod}
+            assessmentType={activeTestConfig?.assessmentType}
             onResultFetched={(data: any) => {
               // Pass the fetched data to next state
               // If assessment method is TH, we go to theory_result

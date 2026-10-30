@@ -58,6 +58,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
   const recognitionRef = useRef<any>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
@@ -622,20 +623,72 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
     };
   }, []);
 
-  // Initialize Speech Recognition & Media Recorder
-  useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      const mediaRecorder = new MediaRecorder(stream);
+  // Safe helper to obtain audio stream and initialize MediaRecorder
+  const initAudioRecorder = async (): Promise<MediaRecorder | null> => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      return mediaRecorderRef.current;
+    }
+
+    if (typeof window === 'undefined') return null;
+
+    try {
+      let stream: MediaStream | null = null;
+
+      // Modern navigator.mediaDevices.getUserMedia (standard in secure contexts / HTTPS)
+      if (typeof navigator !== 'undefined' && navigator?.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } else if (typeof navigator !== 'undefined') {
+        // Fallback for older browsers
+        const legacyGetUserMedia = 
+          (navigator as any).getUserMedia ||
+          (navigator as any).webkitGetUserMedia ||
+          (navigator as any).mozGetUserMedia ||
+          (navigator as any).msGetUserMedia;
+
+        if (legacyGetUserMedia) {
+          stream = await new Promise<MediaStream>((resolve, reject) => {
+            legacyGetUserMedia.call(navigator, { audio: true }, resolve, reject);
+          });
+        }
+      }
+
+      if (!stream) {
+        const isNotSecure = typeof window !== 'undefined' && window.isSecureContext === false;
+        console.warn("Microphone not available. Secure context (HTTPS):", !isNotSecure);
+        if (isNotSecure) {
+          toast.error("Microphone requires HTTPS. Please access this website using https://", { id: 'mic-https-warn' });
+        } else {
+          toast.error("Microphone access is not supported or was blocked by the browser.", { id: 'mic-unsupported-warn' });
+        }
+        return null;
+      }
+
+      mediaStreamRef.current = stream;
+
+      if (typeof MediaRecorder === 'undefined') {
+        console.warn("MediaRecorder is not supported in this browser.");
+        toast.error("Audio recording is not supported in this browser.");
+        return null;
+      }
+
+      const options = MediaRecorder.isTypeSupported('audio/webm') 
+        ? { mimeType: 'audio/webm' } 
+        : MediaRecorder.isTypeSupported('audio/mp4') 
+          ? { mimeType: 'audio/mp4' } 
+          : undefined;
+
+      const mediaRecorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
       
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
         if (audioChunksRef.current.length > 0) {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
+          const type = mediaRecorder.mimeType || 'audio/webm';
+          const audioBlob = new Blob(audioChunksRef.current, { type });
           const audioUrl = URL.createObjectURL(audioBlob);
           setRecordedAudioUrl(audioUrl);
           setRecordedAudioBlob(audioBlob);
@@ -644,10 +697,34 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       };
 
       mediaRecorderRef.current = mediaRecorder;
-    }).catch(err => {
-      console.error("Microphone access denied", err);
-      toast.error("Microphone access is required for audio recording.");
-    });
+      return mediaRecorder;
+    } catch (err: any) {
+      console.error("Microphone access denied or error:", err);
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        toast.error("Microphone permission was denied. Please allow microphone in browser settings.", { id: 'mic-denied' });
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        toast.error("No microphone detected on your device.", { id: 'mic-not-found' });
+      } else {
+        toast.error("Microphone access is required for audio recording.", { id: 'mic-err' });
+      }
+      return null;
+    }
+  };
+
+  // Initialize Speech Recognition & Media Recorder safely
+  useEffect(() => {
+    // Only attempt to pre-request microphone if navigator.mediaDevices.getUserMedia exists
+    if (typeof navigator !== 'undefined' && typeof navigator?.mediaDevices?.getUserMedia === 'function') {
+      initAudioRecorder().catch((err) => {
+        console.warn("Could not pre-initialize microphone on mount:", err);
+      });
+    } else {
+      const isNotSecure = typeof window !== 'undefined' && window.isSecureContext === false;
+      if (isNotSecure) {
+        console.warn("navigator.mediaDevices is undefined because the site is not running in a secure context (HTTPS).");
+      }
+    }
+
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
@@ -706,8 +783,19 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       stopAllSpeech();
       if (recognitionRef.current) {
         try {
-            recognitionRef.current.stop();
+          recognitionRef.current.stop();
         } catch(e) {}
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch(e) {}
+      }
+      if (mediaStreamRef.current) {
+        try {
+          mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        } catch(e) {}
+        mediaStreamRef.current = null;
       }
     };
   }, []);
@@ -983,7 +1071,7 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
     });
   };
 
-  const startListening = (duration: number = 3000) => {
+  const startListening = async (duration: number = 3000) => {
     stopAllSpeech();
     setIsListening(true);
     if (recognitionRef.current) {
@@ -995,12 +1083,22 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
       }
     }
     
-    if (mediaRecorderRef.current) {
-      if (mediaRecorderRef.current.state === 'inactive') {
-        audioChunksRef.current = [];
-        mediaRecorderRef.current.start(200); 
-      } else if (mediaRecorderRef.current.state === 'paused') {
-        mediaRecorderRef.current.resume();
+    // Ensure mediaRecorder is initialized
+    let recorder = mediaRecorderRef.current;
+    if (!recorder) {
+      recorder = await initAudioRecorder();
+    }
+
+    if (recorder) {
+      try {
+        if (recorder.state === 'inactive') {
+          audioChunksRef.current = [];
+          recorder.start(200); 
+        } else if (recorder.state === 'paused') {
+          recorder.resume();
+        }
+      } catch (err) {
+        console.warn("Could not start media recorder:", err);
       }
     }
 
@@ -1238,6 +1336,16 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
 
       {/* Main Content Area */}
       <main className={`flex-1 ${showNotesPanel ? 'max-w-full' : 'max-w-5xl'} w-full mx-auto p-3 md:p-8 flex flex-col pb-24 lg:pb-8 transition-all duration-300`}>
+        {/* Insecure Context Warning */}
+        {typeof window !== 'undefined' && window.isSecureContext === false && (
+          <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200/80 text-amber-800 rounded-2xl flex items-center gap-3 text-xs font-semibold shadow-xs">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <div className="flex-1">
+              <span className="font-bold">Insecure Connection (HTTP): </span>
+              <span>Microphone and recording features are disabled by your browser because this site is not using HTTPS. Please access the site via <code className="bg-amber-100/80 px-1 py-0.5 rounded text-[11px] font-mono">https://</code>.</span>
+            </div>
+          </div>
+        )}
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-8 items-start">
             
@@ -1580,21 +1688,36 @@ export default function SpeakAlongSession({ courseId, subjectId, chapterIds, cha
                                     Click the button below to start recording your answer.
                                  </p>
                                  <button
-                                    onClick={(e) => {
+                                    onClick={async (e) => {
                                        e.stopPropagation();
                                        stopAllSpeech();
                                        setUserTranscript('');
                                        setRecordedText('');
                                        audioChunksRef.current = [];
-                                       setRecordingAnswerState('recording');
-                                       if (mediaRecorderRef.current) {
-                                          try {
-                                             if (mediaRecorderRef.current.state === 'inactive') {
-                                                mediaRecorderRef.current.start(200);
-                                             }
-                                          } catch(err) {
-                                             console.error("Failed to start media recorder", err);
+                                       let recorder = mediaRecorderRef.current;
+                                       if (!recorder) {
+                                          recorder = await initAudioRecorder();
+                                       }
+
+                                       if (!recorder) {
+                                          const isNotSecure = typeof window !== 'undefined' && window.isSecureContext === false;
+                                          if (isNotSecure) {
+                                             toast.error("Audio recording requires HTTPS. Please access this website using https://");
+                                          } else {
+                                             toast.error("Microphone is not available or permission was denied.");
                                           }
+                                          return;
+                                       }
+
+                                       setRecordingAnswerState('recording');
+                                       try {
+                                          if (recorder.state === 'inactive') {
+                                             recorder.start(200);
+                                          }
+                                       } catch (err) {
+                                          console.error("Failed to start media recorder", err);
+                                          toast.error("Failed to start recording audio.");
+                                          setRecordingAnswerState('idle');
                                        }
                                     }}
                                     className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-2xl flex items-center gap-2.5 shadow-lg shadow-indigo-600/25 transition-all hover:scale-105 active:scale-95 cursor-pointer"

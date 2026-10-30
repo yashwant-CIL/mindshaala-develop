@@ -134,6 +134,12 @@ export default function GKProfile() {
     if (exists) {
       setSelectedCategories(prev => prev.filter(c => String(c.id) !== String(catId)));
     } else {
+      const targetCat = categories.find(c => String(c.category_id || c.id) === String(catId));
+      const count = Number(targetCat?.available_questions ?? 0) || 0;
+      if (count <= 0) {
+        toast.error("This category is deactivated because it has 0 available questions.");
+        return;
+      }
       if (selectedCategories.length >= 3) {
         toast.error("You can select a maximum of 3 focus areas.");
         return;
@@ -208,6 +214,15 @@ export default function GKProfile() {
   const handleSave = () => {
     if (selectedCategories.length === 0) {
       toast.error("Please select at least one focus area.");
+      return;
+    }
+    const zeroQCat = selectedCategories.find(item => {
+      const cat = categories.find(c => String(c.category_id || c.id) === String(item.id));
+      return cat && (Number(cat.available_questions ?? 0) || 0) <= 0;
+    });
+    if (zeroQCat) {
+      const catObj = categories.find(c => String(c.category_id || c.id) === String(zeroQCat.id));
+      toast.error(`"${catObj?.category_name || catObj?.name || 'Selected category'}" has no questions available. Please choose active categories.`);
       return;
     }
     if (totalWeight !== 100) {
@@ -506,30 +521,50 @@ export default function GKProfile() {
                       }).map(cat => {
                         const catId = cat.category_id || cat.id;
                         const catName = cat.category_name || cat.name || '';
+                        const questionCount = Number(cat.available_questions ?? 0) || 0;
+                        const hasQuestions = questionCount > 0;
                         const isSelected = selectedCategories.some(c => String(c.id) === String(catId));
                         const isLimitReached = selectedCategories.length >= 3 && !isSelected;
+                        const isDisabled = (!hasQuestions && !isSelected) || isLimitReached;
                         
                         return (
                           <button
                             key={catId}
                             type="button"
-                            disabled={isLimitReached}
+                            disabled={isDisabled}
                             onClick={() => handleToggleCategory(catId)}
+                            title={!hasQuestions ? "Deactivated: No questions available" : isLimitReached ? "Maximum 3 categories selected" : undefined}
                             className={`w-full px-3 py-2.5 rounded-xl text-left text-xs font-bold flex items-center justify-between transition-all ${
-                              isSelected 
-                                ? 'bg-indigo-50/50 text-indigo-600' 
-                                : (isLimitReached 
+                              !hasQuestions
+                                ? 'opacity-40 bg-slate-50/70 text-slate-400 cursor-not-allowed'
+                                : isSelected 
+                                  ? 'bg-indigo-50/50 text-indigo-600 cursor-pointer' 
+                                  : isLimitReached 
                                     ? 'opacity-40 cursor-not-allowed text-slate-400' 
-                                    : 'hover:bg-slate-50 text-slate-700'
-                                  )
+                                    : 'hover:bg-slate-50 text-slate-700 cursor-pointer'
                             }`}
                           >
-                            <span className="flex items-center gap-2">
+                            <span className="flex items-center gap-2 min-w-0 flex-1 pr-2">
                               {/* Small color dot/badge */}
-                              <span className={`w-2.5 h-2.5 rounded-full bg-gradient-to-r ${cat.gradient || 'from-indigo-500 to-blue-500'}`}></span>
-                              <span>{catName}</span>
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                !hasQuestions 
+                                  ? 'bg-slate-300' 
+                                  : `bg-gradient-to-r ${cat.gradient || 'from-indigo-500 to-blue-500'}`
+                              }`}></span>
+                              <span className="truncate">{catName}</span>
                             </span>
-                            {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                !hasQuestions
+                                  ? 'bg-slate-100 text-slate-400'
+                                  : isSelected
+                                    ? 'bg-indigo-100 text-indigo-700'
+                                    : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {questionCount} {questionCount === 1 ? 'question' : 'questions'}
+                              </span>
+                              {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
+                            </div>
                           </button>
                         );
                       })}
@@ -545,6 +580,7 @@ export default function GKProfile() {
                       if (!cat) return null;
                       const catName = cat.category_name || cat.name || '';
                       const isFetched = initialSelectedCategories.some(initial => String(initial.id) === String(item.id));
+                      const questionCount = Number(cat.available_questions ?? 0) || 0;
                       return (
                         <span 
                           key={item.id}
@@ -552,6 +588,7 @@ export default function GKProfile() {
                         >
                           <span className={`w-2.5 h-2.5 rounded-full bg-gradient-to-r ${cat.gradient || 'from-indigo-500 to-blue-500'}`}></span>
                           <span>{catName}</span>
+                          <span className="text-[10px] font-semibold text-slate-400">({questionCount} Qs)</span>
                           <button 
                             type="button" 
                             onClick={() => handleRemoveCategory(item.id)}
@@ -646,10 +683,13 @@ export default function GKProfile() {
                           <div className="absolute left-0 top-0 bottom-0 w-2 rounded-l-[2rem]" style={{ backgroundColor: themeColor }}></div>
                           
                           <div className="flex justify-between items-center pl-3">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: themeColor }}></span>
                               <span className="text-sm font-black text-slate-800 tracking-tight">
                                 {catName}
+                              </span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                                {Number(cat.available_questions ?? 0) || 0} questions
                               </span>
                             </div>
                             <button

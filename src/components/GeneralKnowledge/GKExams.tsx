@@ -200,6 +200,12 @@ export default function GKExams({ onStartExam }: GKExamsProps) {
   }, []);
 
   const handleToggleCategory = (catId: string | number) => {
+    const targetCat = categories.find(c => String(c.id || c.category_id) === String(catId));
+    const count = Number(targetCat?.available_questions ?? 0) || 0;
+    if (count <= 0) {
+      toast.error("This category is deactivated because it has 0 available questions.");
+      return;
+    }
     setSelectedCategoryIds(prev => 
       prev.includes(catId) 
         ? prev.filter(id => id !== catId) 
@@ -227,11 +233,15 @@ export default function GKExams({ onStartExam }: GKExamsProps) {
       }
       finalCategoryIds = normalCategoryIds;
     } else {
-      if (selectedCategoryIds.length === 0) {
-        toast.error("Please select at least one category for the custom assessment.");
+      const activeSelected = selectedCategoryIds.filter(id => {
+        const cat = categories.find(c => String(c.id || c.category_id) === String(id));
+        return (Number(cat?.available_questions ?? 0) || 0) > 0;
+      });
+      if (activeSelected.length === 0) {
+        toast.error("Please select at least one active category with available questions.");
         return;
       }
-      finalCategoryIds = selectedCategoryIds;
+      finalCategoryIds = activeSelected;
     }
 
     try {
@@ -284,9 +294,14 @@ export default function GKExams({ onStartExam }: GKExamsProps) {
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  const validSelectedCategoryIds = selectedCategoryIds.filter(id => {
+    const cat = categories.find(c => String(c.id || c.category_id) === String(id));
+    return (Number(cat?.available_questions ?? 0) || 0) > 0;
+  });
+
   const isStartDisabled = submitting || 
     (creationMode === 'Normal' && (profileLoading || normalCategoryIds.length === 0)) ||
-    (creationMode === 'Custom' && selectedCategoryIds.length === 0);
+    (creationMode === 'Custom' && validSelectedCategoryIds.length === 0);
 
   return (
     <div className="flex-1 bg-slate-50/60 min-h-screen pb-20" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -473,13 +488,17 @@ export default function GKExams({ onStartExam }: GKExamsProps) {
                       {normalCategoryIds.map(id => {
                         const matchedCat = categories.find(c => String(c.id || c.category_id) === String(id));
                         if (!matchedCat) return null;
+                        const qCount = Number(matchedCat.available_questions ?? 0) || 0;
                         return (
                           <span 
                             key={id}
-                            className="inline-flex items-center px-3 py-1 bg-white border border-slate-200 rounded-full text-[10px] font-black text-slate-600 gap-1.5"
+                            className={`inline-flex items-center px-3 py-1 bg-white border rounded-full text-[10px] font-black gap-1.5 ${
+                              qCount > 0 ? 'border-slate-200 text-slate-600' : 'border-amber-200 text-amber-700 bg-amber-50/40'
+                            }`}
                           >
-                            <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${matchedCat.gradient || 'from-indigo-500 to-blue-500'}`}></span>
+                            <span className={`w-2 h-2 rounded-full ${qCount > 0 ? `bg-gradient-to-r ${matchedCat.gradient || 'from-indigo-500 to-blue-500'}` : 'bg-amber-400'}`}></span>
                             {matchedCat.name || matchedCat.category_name}
+                            <span className="text-[9px] font-semibold text-slate-400">({qCount} Qs)</span>
                           </span>
                         );
                       })}
@@ -534,27 +553,63 @@ export default function GKExams({ onStartExam }: GKExamsProps) {
                   {filteredCategories.map(cat => {
                     const catId = cat.id || cat.category_id;
                     const catName = cat.name || cat.category_name || '';
+                    const questionCount = Number(cat.available_questions ?? 0) || 0;
+                    const hasQuestions = questionCount > 0;
                     const isSelected = selectedCategoryIds.includes(catId);
                     
                     return (
                       <button
                         key={catId}
                         type="button"
+                        disabled={!hasQuestions}
                         onClick={() => handleToggleCategory(catId)}
-                        className={`p-4 rounded-2xl border text-left transition-all duration-300 flex items-center justify-between group cursor-pointer ${
-                          isSelected
-                            ? 'border-indigo-500 bg-indigo-50/10 shadow-sm shadow-indigo-500/5 ring-1 ring-indigo-500'
-                            : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50 bg-white'
+                        title={!hasQuestions ? "Deactivated: No questions available in this category" : undefined}
+                        className={`p-4 rounded-2xl border text-left transition-all duration-300 flex items-center justify-between group ${
+                          !hasQuestions
+                            ? 'border-slate-200/60 bg-slate-50/60 opacity-50 cursor-not-allowed'
+                            : isSelected
+                              ? 'border-indigo-500 bg-indigo-50/10 shadow-sm shadow-indigo-500/5 ring-1 ring-indigo-500 cursor-pointer'
+                              : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50 bg-white cursor-pointer'
                         }`}
                       >
-                        <span className="flex items-center gap-3 min-w-0">
-                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 bg-gradient-to-r ${cat.gradient || 'from-indigo-500 to-blue-500'}`} />
-                          <span className="text-xs font-black text-slate-700 truncate leading-none">{catName}</span>
-                        </span>
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                            !hasQuestions 
+                              ? 'bg-slate-300' 
+                              : `bg-gradient-to-r ${cat.gradient || 'from-indigo-500 to-blue-500'}`
+                          }`} />
+                          <div className="min-w-0 flex-1">
+                            <span className={`text-xs font-black truncate block leading-tight ${
+                              !hasQuestions ? 'text-slate-400' : 'text-slate-700'
+                            }`}>
+                              {catName}
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className={`text-[10px] font-bold ${
+                                !hasQuestions
+                                  ? 'text-slate-400'
+                                  : isSelected
+                                    ? 'text-indigo-600'
+                                    : 'text-slate-500'
+                              }`}>
+                                {questionCount} {questionCount === 1 ? 'question' : 'questions'}
+                              </span>
+                              {!hasQuestions && (
+                                <span className="text-[9px] font-bold text-slate-400 bg-slate-200/60 px-1.5 py-0.5 rounded-md">
+                                  Deactivated
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                         <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-all ${
-                          isSelected ? 'bg-indigo-500 border-indigo-500 text-white' : 'border-slate-200 group-hover:border-slate-300'
+                          !hasQuestions
+                            ? 'border-slate-200 bg-slate-100/70 text-slate-300'
+                            : isSelected 
+                              ? 'bg-indigo-500 border-indigo-500 text-white' 
+                              : 'border-slate-200 group-hover:border-slate-300'
                         }`}>
-                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                          {isSelected && hasQuestions && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
                         </div>
                       </button>
                     );

@@ -29,10 +29,12 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
     const [chapterList, setChapterList] = useState<any[]>([]);
      const userId = localStorage.getItem('user_id') || Cookies.get("user_id"); 
 
-    // Initial load for Mock mode
+    // Initial load for Mock and PYQ modes
     useEffect(() => {
         if (filterMode === "mock") {
             fetchMockTests();
+        } else if (filterMode === "pyq") {
+            fetchPyqTests();
         } else {
             // Reset for other modes until selection
             setTests([]);
@@ -123,10 +125,49 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
         }
     };
 
+    const fetchPyqTests = async () => {
+        setIsLoading(true);
+        try {
+            const currentSubId = subscriptionId || localStorage.getItem('subscription_id');
+            if (!currentSubId) {
+                console.log("No subscription selected in AvailableTestsList for PYQ");
+                setTests([]);
+                setIsLocked(true);
+                setIsLoading(false);
+                return;
+            }
+            setIsLocked(false);
+
+            const rawTests = await TestService.getPyqTests(Number(currentSubId));
+            console.log("Fetched PYQ tests:", rawTests);
+            let testsList: any[] = [];
+            if (Array.isArray(rawTests)) {
+                testsList = rawTests;
+            } else if (rawTests && Array.isArray((rawTests as any).data)) {
+                testsList = (rawTests as any).data;
+            } else if (rawTests && Array.isArray((rawTests as any).assessments)) {
+                testsList = (rawTests as any).assessments;
+            } else if (rawTests && Array.isArray((rawTests as any).result)) {
+                testsList = (rawTests as any).result;
+            }
+            setTests(testsList);
+        } catch (error) {
+            console.error("Failed to fetch PYQ tests", error);
+            setTests([]);
+            toast({
+                title: "Error fetching tests",
+                description: "Could not load PYQ tests.",
+                variant: "destructive"
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
 
     // Effect to trigger fetches based on selection
     useEffect(() => {
-        if ((filterMode === 'subject' || filterMode === 'pyq') && selectedSubject) {
+        if (filterMode === 'subject' && selectedSubject) {
              fetchSubjectTests(selectedSubject);
         } else if (filterMode === 'chapter' && selectedSubject && selectedTopic) {
              fetchChapterTests(selectedTopic);
@@ -193,9 +234,6 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
         const name = (test.assessment_name || test.title || "").toUpperCase();
         if (filterMode === 'subject') {
             return !name.startsWith("PYQ");
-        }
-        if (filterMode === 'pyq') {
-            return name.startsWith("PYQ");
         }
         return true;
     });
@@ -285,7 +323,7 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
             </div>
 
             {/* ... EXISTING DYNAMIC INPUT AREA ... */}
-            {(filterMode === 'subject' || filterMode === 'chapter' || filterMode === 'pyq') && (
+            {(filterMode === 'subject' || filterMode === 'chapter') && (
                 <div className="bg-slate-50/80 p-6 rounded-2xl border border-dashed border-slate-200 flex flex-row md:flex-row gap-6 items-end animate-in fade-in slide-in-from-top-4 duration-500 shadow-inner">
                     <div className="w-full md:w-72 ">
                         <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 ml-1">Select Subject</label>
@@ -328,9 +366,9 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
                         <p className="text-lg font-medium text-slate-600">Finding best tests for you...</p>
                      </div>
                 ) : displayTests.length > 0 ? (
-                    displayTests.map((test) => (
+                    displayTests.map((test, index) => (
                         <div 
-                            key={test.assessment_id} 
+                            key={test.assessment_id || test.id || index} 
                             className="group flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden relative"
                         >
                             {/* Card Top Accent */}
@@ -339,8 +377,7 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
                             <div className="p-5 flex-1 flex flex-col gap-4">
                                  <div className="flex justify-between items-start gap-2">
                                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
-                                        {/* {subjects.find(s => s.id === test.subject)?.name || test.subject} */}
-                                        {test.assessment_method}
+                                        {test.assessment_method || test.subject || "PYQ"}
                                     </span>
                                     {test.completion_status === "SUBMITTED" && (
                                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 border border-emerald-200 animate-in fade-in zoom-in duration-300">
@@ -365,15 +402,15 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
                                 <div className="grid grid-cols-3 gap-2 text-xs text-slate-500 font-medium">
                                     <div className="flex flex-col items-center p-2 bg-slate-50 rounded-lg group-hover:bg-slate-100 transition-colors">
                                         <FileText className="h-4 w-4 mb-1 text-slate-400 group-hover:text-primary transition-colors" />
-                                        <span>{test.total_question} Qs</span>
+                                        <span>{test.total_question ?? test.questionsCount ?? 0} Qs</span>
                                     </div>
                                     <div className="flex flex-col items-center p-2 bg-slate-50 rounded-lg group-hover:bg-slate-100 transition-colors">
                                         <Clock className="h-4 w-4 mb-1 text-slate-400 group-hover:text-primary transition-colors" />
-                                        <span>{test.total_time} mins</span>
+                                        <span>{test.total_time ?? test.duration ?? 0} mins</span>
                                     </div>
                                     <div className="flex flex-col items-center p-2 bg-slate-50 rounded-lg group-hover:bg-slate-100 transition-colors">
                                         <BarChart className="h-4 w-4 mb-1 text-slate-400 group-hover:text-primary transition-colors" />
-                                        <span>{test.total_marks} Marks</span>
+                                        <span>{test.total_marks ?? test.marks ?? 0} Marks</span>
                                     </div>
                                 </div>
                             </div>
@@ -441,7 +478,13 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
 
                         <h3 className="text-xl font-bold text-slate-900 mb-2">
                             {(() => {
-                                if (!selectedSubject && filterMode !== 'mock') {
+                                if (filterMode === 'mock') {
+                                    return "No Mock Exams Found";
+                                }
+                                if (filterMode === 'pyq') {
+                                    return "No PYQ Assessments Found";
+                                }
+                                if (!selectedSubject) {
                                     return filterMode === 'chapter' ? "Selection Required" : "Subject Required";
                                 }
                                 if (filterMode === 'chapter' && selectedSubject && !selectedTopic) {
@@ -454,10 +497,11 @@ export const AvailableTestsList = forwardRef<HTMLDivElement, AvailableTestsListP
                              {(() => {
                                  if (filterMode === 'mock') return "It looks like there are no active tests in this category yet. Try exploring other subjects or check back later!";
                                  
+                                 if (filterMode === 'pyq') return "There are no previous year question papers available for this subscription yet.";
+                                 
                                  if (!selectedSubject) {
                                      if (filterMode === 'subject') return "please select the subject first";
                                      if (filterMode === 'chapter') return "first select the subject then select the chapter";
-                                     if (filterMode === 'pyq') return "select the subject first";
                                  }
                                  
                                  if (filterMode === 'chapter' && !selectedTopic) return "please select the chapter";

@@ -158,6 +158,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
     const hiddenContainerRef = useRef<HTMLDivElement>(null);
     const [userAnswers, setUserAnswers] = useState<Record<string, any>>({});
     const [mcqAnswers, setMcqAnswers] = useState<Record<string, number>>({});
+    const [tfAnswers, setTfAnswers] = useState<Record<string, string>>({});
     const [textAnswers, setTextAnswers] = useState<Record<string, string>>({});
     const [savedMcq, setSavedMcq] = useState<Record<string, boolean>>({});
     const [uploadingQid, setUploadingQid] = useState<string | null>(null);
@@ -242,6 +243,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
 
                 const newAnswers: Record<string, any> = {};
                 const newMcq: Record<string, number> = {};
+                const newTf: Record<string, string> = {};
                 const newText: Record<string, string> = {};
                 const newSaved: Record<string, boolean> = {};
                 const newShuffles: Record<string, string[]> = {};
@@ -318,6 +320,10 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                                 if (latest.user_answer) {
                                     newText[q.question_id] = latest.user_answer;
                                 }
+                            } else if (qType === "true/false" || qType === "true / false" || qType === "true or false" || qType === "tf") {
+                                if (latest.user_answer) {
+                                    newTf[q.question_id] = latest.user_answer.toUpperCase().trim();
+                                }
                             }
                         }
 
@@ -361,6 +367,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                 setUserAnswers(newAnswers);
                 setMcqAnswers(newMcq);
                 setTextAnswers(newText);
+                setTfAnswers(newTf);
                 setSavedMcq(newSaved);
                 setMatchShuffles(newShuffles);
                 setMatchMappings(newMatchMappings);
@@ -405,8 +412,13 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
     }, [loading, questionPaperData, expandedSections]);
 
     const handleMcqChange = (qid: string, value: number) => {
-        if (savedMcq[qid]) return;
+        if (savedMcq[qid] || uploadingQid) return;
         setMcqAnswers(prev => ({ ...prev, [qid]: value }));
+    };
+
+    const handleTfChange = (qid: string, value: string) => {
+        if (savedMcq[qid] || uploadingQid) return;
+        setTfAnswers(prev => ({ ...prev, [qid]: value }));
     };
 
     const handleSaveMCQ = async (qid: string, uaid: string) => {
@@ -414,8 +426,12 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
             toast({ title: "Error", description: "Answer tracking ID missing.", variant: "destructive" });
             return;
         }
+        if (uploadingQid) return;
         const selectedIdx = mcqAnswers[qid];
-        if (selectedIdx === undefined) return;
+        if (selectedIdx === undefined) {
+            toast({ title: "Selection Required", description: "Please select an option before saving.", variant: "destructive" });
+            return;
+        }
         setUploadingQid(qid);
         try {
             const payload = {
@@ -442,13 +458,54 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
         }
     };
 
+    const handleSaveTF = async (qid: string, uaid: string) => {
+        if (!uaid) {
+            toast({ title: "Error", description: "Answer tracking ID missing.", variant: "destructive" });
+            return;
+        }
+        if (uploadingQid) return;
+        const selectedValue = tfAnswers[qid];
+        if (!selectedValue) {
+            toast({ title: "Selection Required", description: "Please select True or False before saving.", variant: "destructive" });
+            return;
+        }
+        setUploadingQid(qid);
+        try {
+            const payload = {
+                userAnswerId: uaid,
+                userAnswerImages: null,
+                userAnswerText: selectedValue.toUpperCase(),
+                answerUploadType: "ANSWER_TEXT",
+                status: "ACTIVE",
+                attemptStatus: "ANSWERED",
+                answerSubmissionTime: getLocalDateTimeString()
+            };
+
+            console.log("Submitting TF Payload:", payload);
+            const response = await TestService.submitUserAnswer(payload);
+            if (response) {
+                toast({ title: "Saved", description: "True/False answer recorded." });
+                setSavedMcq(prev => ({ ...prev, [qid]: true }));
+                setUserAnswers(prev => ({ ...prev, [qid]: { ...prev[qid], user_answer: selectedValue.toUpperCase() } }));
+            }
+        } catch (error) {
+            toast({ title: "Error", description: "Failed to save answer.", variant: "destructive" });
+        } finally {
+            setUploadingQid(null);
+        }
+    };
+
     const handleSaveText = async (qid: string, uaid: string) => {
         if (!uaid) {
             toast({ title: "Error", description: "Answer tracking ID missing.", variant: "destructive" });
             return;
         }
+        if (uploadingQid) return;
         const text = textAnswers[qid];
-        if (!text || !text.trim()) return;
+        if (!text || !text.trim()) {
+            toast({ title: "Empty Answer", description: "Please enter your answer before saving.", variant: "destructive" });
+            return;
+        }
         setUploadingQid(qid);
         try {
             const payload = {
@@ -476,6 +533,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
     };
 
     const handleBulkSaveMatch = async (questions: any[], groupId: string) => {
+        if (bulkSavingGroupId || uploadingQid) return;
         setBulkSavingGroupId(groupId);
         const shuffled = matchShuffles[groupId];
         if (!shuffled) {
@@ -532,6 +590,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
             toast({ title: "Error", description: "Answer tracking ID missing.", variant: "destructive" });
             return;
         }
+        if (uploadingQid) return;
         const letter = matchMappings[qid];
         if (!letter || !letter.trim()) return;
         const shuffled = matchShuffles[groupId];
@@ -600,6 +659,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
             toast({ title: "Error", description: "Answer tracking ID missing.", variant: "destructive" });
             return;
         }
+        if (uploadingQid) return;
         const files = pendingImages[qid];
         if (!files || files.length === 0) return;
 
@@ -670,6 +730,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
         const qType = question.question_type_name?.toLowerCase().trim() || "";
         const isMcq = qType === "theory mcq 1 marks" || qType === "assertion&reasoning";
         const isText = qType === "name the following" || qType === "fill in the blanks";
+        const isTF = qType === "true/false" || qType === "true / false" || qType === "true or false" || qType === "tf";
 
         if (isMcq) {
             const options = [
@@ -689,13 +750,13 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                             return (
                                 <button
                                     key={`opt-${i}`}
-                                    onClick={() => !isSaved && handleMcqChange(question.question_id, i)}
-                                    disabled={isSaved}
+                                    onClick={() => !isSaved && !uploadingQid && handleMcqChange(question.question_id, i)}
+                                    disabled={isSaved || !!uploadingQid}
                                     className={`w-full flex items-center gap-4 p-5 rounded-2xl border-2 transition-all duration-300 text-left group ${
                                         isSelected 
                                             ? "bg-indigo-50 border-indigo-600 shadow-md ring-2 ring-indigo-600/10" 
                                             : "bg-white border-slate-100 hover:border-slate-300 hover:bg-slate-50"
-                                    } ${isSaved ? "opacity-90 cursor-default" : "cursor-pointer"}`}
+                                    } ${isSaved || uploadingQid ? "opacity-90 cursor-default" : "cursor-pointer"}`}
                                 >
                                     <div className={`w-6 h-6 rounded flex items-center justify-center font-bold text-xs ${
                                         isSelected ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
@@ -710,9 +771,79 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                     {!savedMcq[question.question_id] ? (
                         <Button 
                             onClick={() => handleSaveMCQ(question.question_id, question.user_answer_id)}
+                            disabled={!!uploadingQid}
                             className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all"
                         >
-                            Save Selection
+                            {uploadingQid === question.question_id ? (
+                                <div className="flex items-center justify-center gap-2">
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span>Saving Selection...</span>
+                                </div>
+                            ) : (
+                                "Save Selection"
+                            )}
+                        </Button>
+                    ) : (
+                        <div className="flex items-center justify-center gap-2 py-4 px-6 bg-green-50 border border-green-100 rounded-2xl text-green-700 font-bold text-sm">
+                            <CheckCircle2 className="w-5 h-5" />
+                            Answer Submitted
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        if (isTF) {
+            const tfOptions = [
+                { label: "True", value: "TRUE" },
+                { label: "False", value: "FALSE" }
+            ];
+            const isSaved = savedMcq[question.question_id];
+            const currentSelected = tfAnswers[question.question_id]?.toUpperCase();
+
+            return (
+                <div className="mt-6 space-y-4 max-w-2xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {tfOptions.map((opt) => {
+                            const isSelected = currentSelected === opt.value;
+                            return (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => !isSaved && !uploadingQid && handleTfChange(question.question_id, opt.value)}
+                                    disabled={isSaved || !!uploadingQid}
+                                    className={`w-full flex items-center gap-4 p-5 rounded-2xl border-2 transition-all duration-300 text-left group ${
+                                        isSelected 
+                                            ? "bg-indigo-50 border-indigo-600 shadow-md ring-2 ring-indigo-600/10" 
+                                            : "bg-white border-slate-100 hover:border-slate-300 hover:bg-slate-50"
+                                    } ${isSaved || uploadingQid ? "opacity-90 cursor-default" : "cursor-pointer"}`}
+                                >
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                                        isSelected 
+                                            ? "border-indigo-600 bg-indigo-600" 
+                                            : "border-slate-300 bg-white group-hover:border-slate-400"
+                                    }`}>
+                                        {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+                                    </div>
+                                    <span className="text-base font-bold text-slate-800">{opt.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {!isSaved ? (
+                        <Button 
+                            onClick={() => handleSaveTF(question.question_id, question.user_answer_id)}
+                            disabled={!!uploadingQid}
+                            className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all"
+                        >
+                            {uploadingQid === question.question_id ? (
+                                <div className="flex items-center justify-center gap-2">
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <span>Saving Selection...</span>
+                                </div>
+                            ) : (
+                                "Save Selection"
+                            )}
                         </Button>
                     ) : (
                         <div className="flex items-center justify-center gap-2 py-4 px-6 bg-green-50 border border-green-100 rounded-2xl text-green-700 font-bold text-sm">
@@ -729,18 +860,26 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                 <div className="mt-6 space-y-4 max-w-2xl">
                     <textarea
                         value={textAnswers[question.question_id] || ""}
-                        onChange={(e) => !savedMcq[question.question_id] && setTextAnswers(prev => ({ ...prev, [question.question_id]: e.target.value }))}
-                        readOnly={savedMcq[question.question_id]}
+                        onChange={(e) => !savedMcq[question.question_id] && !uploadingQid && setTextAnswers(prev => ({ ...prev, [question.question_id]: e.target.value }))}
+                        readOnly={savedMcq[question.question_id] || !!uploadingQid}
                         placeholder="Type your answer here..."
-                        className={`w-full h-40 p-6 bg-white border-2 border-slate-100 rounded-2xl focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all resize-none text-slate-700 text-lg leading-relaxed placeholder:text-slate-300 ${savedMcq[question.question_id] ? "bg-slate-50 text-slate-500" : ""}`}
+                        className={`w-full h-40 p-6 bg-white border-2 border-slate-100 rounded-2xl focus:border-indigo-600 focus:ring-4 focus:ring-indigo-600/5 transition-all resize-none text-slate-700 text-lg leading-relaxed placeholder:text-slate-300 ${savedMcq[question.question_id] || uploadingQid ? "bg-slate-50 text-slate-500" : ""}`}
                     />
                     <div className="mt-8 flex justify-start">
                         {!savedMcq[question.question_id] ? (
                             <Button 
                                 onClick={() => handleSaveText(question.question_id, question.user_answer_id)}
+                                disabled={!!uploadingQid}
                                 className="bg-indigo-600 text-white h-12 px-8 rounded-2xl font-bold shadow-md hover:bg-indigo-700 transition-all"
                             >
-                                Save Text Answer
+                                {uploadingQid === question.question_id ? (
+                                    <div className="flex items-center gap-2">
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <span>Saving Answer...</span>
+                                    </div>
+                                ) : (
+                                    "Save Text Answer"
+                                )}
                             </Button>
                         ) : (
                             <div className="flex items-center gap-2 py-3 px-6 bg-green-50 border border-green-100 rounded-2xl text-green-700 font-bold text-sm">
@@ -813,11 +952,14 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                         {pending.length > 0 && (
                             <Button 
                                 onClick={() => uploadAllImages(qai, question.user_answer_id)} 
-                                disabled={uploadingQid === qai}
+                                disabled={!!uploadingQid}
                                 className="bg-indigo-600 text-white rounded-2xl px-8 h-12 shadow-xl shadow-indigo-600/30 font-bold"
                             >
                                 {uploadingQid === qai ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <div className="flex items-center gap-2">
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <span>Uploading...</span>
+                                    </div>
                                 ) : (
                                     <><Send className="w-4 h-4 mr-2" /> Submit {pending.length} Pages</>
                                 )}
@@ -853,7 +995,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                     </div>
                     <Button 
                         onClick={() => handleBulkSaveMatch(questions, groupId)}
-                        disabled={bulkSavingGroupId === groupId || questions.every(q => savedMcq[q.question_id])}
+                        disabled={bulkSavingGroupId === groupId || !!uploadingQid || questions.every(q => savedMcq[q.question_id])}
                         className={`rounded-2xl px-10 h-14 font-bold shadow-xl transition-all ${
                             questions.every(q => savedMcq[q.question_id])
                                 ? "bg-green-50 text-green-700 border border-green-200 shadow-none cursor-default"
@@ -906,11 +1048,20 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                                         }`}
                                         value={matchMappings[q.question_id] || ""}
                                         onChange={(e) => setMatchMappings(prev => ({ ...prev, [q.question_id]: e.target.value.toUpperCase() }))}
-                                        disabled={savedMcq[q.question_id]}
+                                        disabled={savedMcq[q.question_id] || !!uploadingQid || !!bulkSavingGroupId}
                                     />
                                     {!savedMcq[q.question_id] && matchMappings[q.question_id] && (
-                                        <Button size="icon" className="w-10 h-10 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-600/20" onClick={() => handleSaveMatch(q.question_id, q.user_answer_id, groupId)}>
-                                            <Check className="w-5 h-5 text-white" />
+                                        <Button 
+                                            size="icon" 
+                                            className="w-10 h-10 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-600/20" 
+                                            onClick={() => handleSaveMatch(q.question_id, q.user_answer_id, groupId)}
+                                            disabled={!!uploadingQid || !!bulkSavingGroupId}
+                                        >
+                                            {uploadingQid === q.question_id ? (
+                                                <Loader2 className="w-4 h-4 text-white animate-spin" />
+                                            ) : (
+                                                <Check className="w-5 h-5 text-white" />
+                                            )}
                                         </Button>
                                     )}
                                     {savedMcq[q.question_id] && (
@@ -960,7 +1111,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
-                            <Button className="bg-indigo-600 rounded-2xl px-12 h-12 text-white font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-600/20 hover:scale-105 transition-all hover:bg-indigo-700" onClick={handleFinalSubmit} disabled={submitting}>
+                            <Button className="bg-indigo-600 rounded-2xl px-12 h-12 text-white font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-600/20 hover:scale-105 transition-all hover:bg-indigo-700" onClick={handleFinalSubmit} disabled={submitting || !!uploadingQid}>
                                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Final Submit"}
                             </Button>
                         </div>
@@ -1148,7 +1299,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                     <div className="flex justify-center mt-12 pb-8">
                         <Button 
                             onClick={handleFinalSubmit} 
-                            disabled={submitting}
+                            disabled={submitting || !!uploadingQid}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl px-16 h-16 font-black uppercase tracking-widest text-lg shadow-xl shadow-indigo-600/30 transition-all hover:-translate-y-1"
                         >
                             {submitting ? <Loader2 className="w-6 h-6 animate-spin mr-3" /> : <CheckCircle2 className="w-6 h-6 mr-3" />}
@@ -1192,6 +1343,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                                         const files = Array.from(e.target.files || []);
                                         if (files.length > 0) {
                                             setCroppingImage(files[0]);
+                                            setUploadModalOpen(false);
                                         }
                                         e.target.value = "";
                                     }}
@@ -1206,6 +1358,7 @@ export function TheorySubmissionPage({ onComplete, onExit }: TheorySubmissionPag
                                         const files = Array.from(e.target.files || []);
                                         if (files.length > 0) {
                                             setCroppingImage(files[0]);
+                                            setUploadModalOpen(false);
                                         }
                                         e.target.value = "";
                                     }}

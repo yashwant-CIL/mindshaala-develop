@@ -53,7 +53,8 @@ export const API_ENDPOINT = {
         MOCK_TESTS: (user_id: number | string | undefined ,package_id: number | string, subscription_id: number | string) => `/api/v1/cil/assessments/get/all/by?package_id=${package_id}&content_type_id=100003&content_category_id=100018&user_id=${user_id}&entity_id=${subscription_id}`,
         SUBJECT_TESTS: (user_id: number | string | undefined ,package_id: number | string, subject_id: number | string) => `/api/v1/cil/assessments/get/all/by?package_id=${package_id}&content_type_id=100003&content_category_id=100019&user_id=${user_id}&entity_id=${subject_id}`,
         CHAPTER_TESTS: (user_id: number | string | undefined ,package_id: number | string, chapter_id: number | string) => `/api/v1/cil/assessments/get/all/by?package_id=${package_id}&content_type_id=100003&content_category_id=100020&user_id=${user_id}&entity_id=${chapter_id}`,
-        PYQ_TESTS: (user_id: number | string | undefined ,package_id: number | string, subject_id: number | string) => `/api/v1/cil/assessments/get/all/by?package_id=${package_id}&content_type_id=100003&content_category_id=100021&user_id=${user_id}&entity_id=${subject_id}`,
+        // PYQ_TESTS: (user_id: number | string | undefined ,package_id: number | string, subject_id: number | string) => `/api/v1/cil/assessments/get/all/by?package_id=${package_id}&content_type_id=100003&content_category_id=100021&user_id=${user_id}&entity_id=${subject_id}`,
+        PYQ_TESTS:(subscription_id: number) => `/api/v3/mindshaala/fetch-assessments?susbcription_id=${subscription_id}&attribute9=1`,
         GET_INSTRUCTIONS: ( instructionId?: number | string) => `/api/v1/cil/instructions/get/all/by/instruction_set_id?instruction_set_id=${instructionId}`,
         GET_EXAMDETAILS: (assessmentId: number | string, user_id: number | string | undefined) => `/api/v1/cil/assessment/generate?assessmentId=${assessmentId}&userId=${user_id}`,
         SECTION_DETAILS: (user_ass_id: number | string) => `/api/v1/cil/user_ass_div/get/sections_details?user_ass_id=${user_ass_id}`,
@@ -71,7 +72,8 @@ export const API_ENDPOINT = {
         NEGATIVE_MARKS_UPDATE:(user_ass_id: number | string) => `/check-competitive-paper`,
         RESULT_DETAILS:(user_ass_id: number | string) => `/api/v1/cil/user_assessments/get?user_ass_id=${user_ass_id}`,
         COMPLEXITY_DETAILS:(user_ass_id: number | string) => `/api/v1/cil/exam_module/dashboard/time_vs_accuracy?user_ass_id=${user_ass_id}`,
-        THEORY_RESULT_DETAILS: `/generate-evaluation`,
+        // THEORY_RESULT_DETAILS: `/generate-evaluation`,
+        THEORY_RESULT_DETAILS: `/api/v3/mindshaala/theory-evaluation/generate-evaluation`,
     },
 
     SOLUTIONS: {
@@ -274,7 +276,10 @@ export const API_ENDPOINT = {
     MAP_PRACTICE: {
         GET_MASTER_TOOL: `/api/v3/mindshaala/map/tools/master`,
         GET_MAP_IMAGE_URL : (imageurl: string) => `/api/v3/mindshaala/map${imageurl}`,
-        GET_ALL_ASSESSMENTS: `/api/v3/mindshaala/map/assessments/published`,
+        GET_ALL_ASSESSMENTS: (subscription_id?: string | number) => 
+            subscription_id 
+                ? `/api/v3/mindshaala/map/assessments/published?subscription_id=${subscription_id}`
+                : `/api/v3/mindshaala/map/assessments/published`,
         START_MAP_ASSESSMENT: `/api/v3/mindshaala/map/map-assessment/start`,
         SUBMIT_USER_ANSWER:  `/api/v3/mindshaala/map/map-assessment/submit-answer`,
         END_MAP_ASSESSMENT:  `/api/v3/mindshaala/map/map-assessment/end`,
