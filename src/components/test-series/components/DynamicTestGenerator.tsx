@@ -50,6 +50,8 @@ import { CommonApiServices } from "../../../services/CommonApiServices";
 import { useCourse } from "../../../context/CourseContext";
 import { SectionDetailsPage } from "./SectionDetailsPage";
 import { MCQExamScreen } from "./ExamScreens/MCQExamScreen";
+import { ResultCountdown } from "./ResultCountdown";
+import { DynamicAssessmentSolutions } from "./DynamicAssessmentSolutions";
 import Cookies from "js-cookie";
 
 export interface PatternSubject {
@@ -378,6 +380,11 @@ export function DynamicTestGenerator({ onStartTest, onNavigate }: DynamicTestGen
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "READY" | "SUBMITTED">("ALL");
   const [selectedSectionAssessment, setSelectedSectionAssessment] = useState<GeneratedAssessment | null>(null);
+  const [countdownAssId, setCountdownAssId] = useState<number | string | null>(null);
+  const [solutionState, setSolutionState] = useState<{
+    assessmentId: number | string;
+    assessmentData?: any;
+  } | null>(null);
   const [activeMCQExam, setActiveMCQExam] = useState<{
     userAssessmentId?: number | string;
     user_ass_id?: number | string;
@@ -1093,7 +1100,7 @@ export function DynamicTestGenerator({ onStartTest, onNavigate }: DynamicTestGen
 
       toast({
         title: "Assessment Generated Successfully!",
-        description: `Assessment "${selectedPattern.pattern_name}" has been generated. You can now see it in your dynamic assessments list below.`,
+        description: `Assessment has been generated. You can now see it in your dynamic assessments list below.`,
       });
     } catch (err) {
       console.warn("Backend dynamic assessment generation warning:", err);
@@ -1131,8 +1138,28 @@ export function DynamicTestGenerator({ onStartTest, onNavigate }: DynamicTestGen
             if (hasNext && selectedSectionAssessment) {
               setActiveMCQExam(null);
             } else {
+              const completedAssId = activeMCQExam?.user_ass_id || activeMCQExam?.userAssessmentId;
               setActiveMCQExam(null);
               setSelectedSectionAssessment(null);
+              if (completedAssId) {
+                setCountdownAssId(completedAssId);
+              } else {
+                sessionStorage.setItem("test_result_active_tab", "custom");
+                localStorage.setItem("test_result_active_tab", "custom");
+                fetchGeneratedAssessments();
+                if (onNavigate) {
+                  onNavigate("test-history", { tab: "custom" });
+                }
+              }
+            }
+          }}
+          onCompleteExam={(completedId) => {
+            const finalAssId = completedId || activeMCQExam?.user_ass_id || activeMCQExam?.userAssessmentId;
+            setActiveMCQExam(null);
+            setSelectedSectionAssessment(null);
+            if (finalAssId) {
+              setCountdownAssId(finalAssId);
+            } else {
               sessionStorage.setItem("test_result_active_tab", "custom");
               localStorage.setItem("test_result_active_tab", "custom");
               fetchGeneratedAssessments();
@@ -1141,12 +1168,70 @@ export function DynamicTestGenerator({ onStartTest, onNavigate }: DynamicTestGen
               }
             }
           }}
-          onCompleteExam={() => {
-            setActiveMCQExam(null);
-            setSelectedSectionAssessment(null);
+        />
+      </div>
+    );
+  }
+
+  if (countdownAssId) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-white overflow-hidden w-screen h-screen">
+        <ResultCountdown
+          userAssId={countdownAssId}
+          isDynamic={true}
+          userId={activeUserId ?? undefined}
+          subscriptionId={activeSubscriptionId ?? undefined}
+          onResultFetched={(resultData: any) => {
+            const currentId = countdownAssId;
+            setCountdownAssId(null);
+            setSolutionState({
+              assessmentId: currentId,
+              assessmentData: resultData,
+            });
+          }}
+          onCancel={() => {
+            setCountdownAssId(null);
             sessionStorage.setItem("test_result_active_tab", "custom");
             localStorage.setItem("test_result_active_tab", "custom");
             fetchGeneratedAssessments();
+            window.dispatchEvent(
+              new CustomEvent("app:navigate", {
+                detail: { page: "test-history", params: { tab: "custom" } },
+              })
+            );
+            window.dispatchEvent(
+              new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+            );
+            if (onNavigate) {
+              onNavigate("test-history", { tab: "custom" });
+            }
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (solutionState) {
+    return (
+      <div className="fixed inset-0 z-[9999] bg-white overflow-y-auto w-screen h-screen">
+        <DynamicAssessmentSolutions
+          assessmentId={solutionState.assessmentId}
+          assessment={solutionState.assessmentData}
+          userId={activeUserId ?? undefined}
+          subscriptionId={activeSubscriptionId ?? undefined}
+          onBack={() => {
+            setSolutionState(null);
+            sessionStorage.setItem("test_result_active_tab", "custom");
+            localStorage.setItem("test_result_active_tab", "custom");
+            fetchGeneratedAssessments();
+            window.dispatchEvent(
+              new CustomEvent("app:navigate", {
+                detail: { page: "test-history", params: { tab: "custom" } },
+              })
+            );
+            window.dispatchEvent(
+              new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+            );
             if (onNavigate) {
               onNavigate("test-history", { tab: "custom" });
             }

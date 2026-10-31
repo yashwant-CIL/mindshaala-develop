@@ -27,6 +27,18 @@ export function TestResultListPage({ onViewResult, onStartTest, initialTab }: Te
             sessionStorage.removeItem("test_result_active_tab");
             localStorage.removeItem("test_result_active_tab");
         }
+
+        const handleTabChange = (e: any) => {
+            const tab = e?.detail?.tab || e?.detail;
+            if (tab === "custom" || tab === "available") {
+                setActiveTab(tab);
+            }
+        };
+
+        window.addEventListener("test_result_tab_change", handleTabChange as EventListener);
+        return () => {
+            window.removeEventListener("test_result_tab_change", handleTabChange as EventListener);
+        };
     }, [initialTab]);
 
     return (

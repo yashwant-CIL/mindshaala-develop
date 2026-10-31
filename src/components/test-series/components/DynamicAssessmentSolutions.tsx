@@ -34,8 +34,8 @@ import Cookies from "js-cookie";
 export interface DynamicAssessmentSolutionsProps {
   assessment?: any;
   assessmentId?: number | string;
-  userId?: number | string;
-  subscriptionId?: number | string;
+  userId?: number | string | null;
+  subscriptionId?: number | string | null;
   onBack?: () => void;
 }
 
@@ -137,6 +137,22 @@ export function DynamicAssessmentSolutions({
 
   // Fetch assessment results on mount
   const fetchSolutionData = useCallback(async () => {
+    // If assessment prop already contains full question/section result data, use it directly
+    const candidateData = assessment?.data || assessment?.result || assessment;
+    if (
+      candidateData &&
+      (candidateData.sub_division_data ||
+        candidateData.sub_division_details ||
+        candidateData.sections ||
+        candidateData.questions ||
+        candidateData.question_data ||
+        candidateData.question_bank_response_list)
+    ) {
+      setRawData(candidateData);
+      setLoading(false);
+      return;
+    }
+
     if (!effectiveAssessmentId) {
       setError("No assessment ID provided.");
       setLoading(false);
@@ -463,6 +479,16 @@ export function DynamicAssessmentSolutions({
 
   // Handle navigation back
   const handleBack = () => {
+    sessionStorage.setItem("test_result_active_tab", "custom");
+    localStorage.setItem("test_result_active_tab", "custom");
+    window.dispatchEvent(
+      new CustomEvent("app:navigate", {
+        detail: { page: "test-history", params: { tab: "custom" } },
+      })
+    );
+    window.dispatchEvent(
+      new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+    );
     if (onBack) {
       onBack();
     } else {

@@ -26,6 +26,7 @@ import { SectionDetailsPage } from "./test-series/components/SectionDetailsPage"
 import { MCQExamScreen } from "./test-series/components/ExamScreens/MCQExamScreen";
 import { AvailableTest } from "../services/TestServices";
 import { ResultCountdown } from "./test-series/components/ResultCountdown";
+import { DynamicAssessmentSolutions } from "./test-series/components/DynamicAssessmentSolutions";
 import { Result } from "./Result";
 import { TheoryExamScreen } from "./test-series/components/ExamScreens/TheoryExamScreen.tsx";
 import { TheorySubmissionPage } from "./test-series/components/ExamScreens/TheorySubmissionPage";
@@ -43,10 +44,11 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
     }
   };
 
-  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "section_details" | "section_exam" | "loading_exam" | "result-countdown" | "final-result" | "theory_exam" | "theory_submission" | "theory_result">(() => loadLocalState("takeTest_testMode", "setup"));
+  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "section_details" | "section_exam" | "loading_exam" | "result-countdown" | "final-result" | "theory_exam" | "theory_submission" | "theory_result" | "dynamic_solutions">(() => loadLocalState("takeTest_testMode", "setup"));
   const [activeTestConfig, setActiveTestConfig] = useState<TestConfig | null>(() => loadLocalState("takeTest_activeTestConfig", null));
   const [selectedTestForInstructions, setSelectedTestForInstructions] = useState<AvailableTest | null>(() => loadLocalState("takeTest_selectedTestForInstructions", null));
   const [activeTab, setActiveTab] = useState<"available" | "custom">(() => loadLocalState("takeTest_activeTab", "available"));
+  const [dynamicResultData, setDynamicResultData] = useState<any>(null);
 
   // Persist states
   useEffect(() => {
@@ -392,27 +394,14 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
                          // Return to section details to pick another section
                          setTestMode("section_details");
                      } else if (activeTestConfig?.isDynamic || activeTab === "custom" || activeTestConfig?.source === "dynamic") {
-                         // Dynamic assessment completed - navigate to test-history with custom tab active
-                         setTestMode("setup");
-                         setActiveTestConfig(null);
-                         sessionStorage.setItem("test_result_active_tab", "custom");
-                         localStorage.setItem("test_result_active_tab", "custom");
-                         if (onNavigate) {
-                             onNavigate("test-history", { tab: "custom" });
-                         }
+                         setTestMode("result-countdown");
                      } else {
                          handleCompleteExamMode();
                      }
                 }}
                 onCompleteExam={() => {
                      if (activeTestConfig?.isDynamic || activeTab === "custom" || activeTestConfig?.source === "dynamic") {
-                         setTestMode("setup");
-                         setActiveTestConfig(null);
-                         sessionStorage.setItem("test_result_active_tab", "custom");
-                         localStorage.setItem("test_result_active_tab", "custom");
-                         if (onNavigate) {
-                             onNavigate("test-history", { tab: "custom" });
-                         }
+                         setTestMode("result-countdown");
                      } else {
                          handleCompleteExamMode();
                      }
@@ -424,24 +413,81 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
 
   // New Flows for Exam Results
   if (testMode === "result-countdown") {
+      const isDynamicTest = Boolean(
+          activeTestConfig?.isDynamic || 
+          activeTab === "custom" || 
+          activeTestConfig?.source === "dynamic"
+      );
       return (
           <ResultCountdown 
             userAssId={activeTestConfig?.userAssessmentId || 0} 
+            isDynamic={isDynamicTest}
+            userId={activeTestConfig?.fullExamDetails?.user_id}
+            subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id}
             onResultFetched={(data: any) => {
               // Pass the fetched data to next state
-              // If assessment method is TH, we go to theory_result
-              if (activeTestConfig?.assessmentMethod?.toUpperCase() === "TH") {
+              if (isDynamicTest) {
+                  setDynamicResultData(data);
+                  setTestMode("dynamic_solutions");
+              } else if (activeTestConfig?.assessmentMethod?.toUpperCase() === "TH") {
                   setTestMode("theory_result");
               } else {
                   setTestMode("final-result");
               }
             }} 
             onCancel={() => {
-              setTestMode("setup");
-              setActiveTestConfig(null);
+              if (isDynamicTest) {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+                  sessionStorage.setItem("test_result_active_tab", "custom");
+                  localStorage.setItem("test_result_active_tab", "custom");
+                  window.dispatchEvent(
+                    new CustomEvent("app:navigate", {
+                      detail: { page: "test-history", params: { tab: "custom" } }
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+                  );
+                  if (onNavigate) {
+                    onNavigate("test-history", { tab: "custom" });
+                  }
+              } else {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+              }
             }}
           />
       )
+  }
+
+  if (testMode === "dynamic_solutions") {
+      return (
+          <DynamicAssessmentSolutions
+              assessmentId={activeTestConfig?.userAssessmentId}
+              assessment={dynamicResultData}
+              userId={activeTestConfig?.fullExamDetails?.user_id}
+              subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id}
+              onBack={() => {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+                  setDynamicResultData(null);
+                  sessionStorage.setItem("test_result_active_tab", "custom");
+                  localStorage.setItem("test_result_active_tab", "custom");
+                  window.dispatchEvent(
+                    new CustomEvent("app:navigate", {
+                      detail: { page: "test-history", params: { tab: "custom" } }
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+                  );
+                  if (onNavigate) {
+                    onNavigate("test-history", { tab: "custom" });
+                  }
+              }}
+          />
+      );
   }
 
   if (testMode === "final-result" || testMode === "theory_result") {

@@ -3,15 +3,27 @@ import { Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { TestService } from "../../../services/TestServices";
 import { TestresultService } from "../../../services/TestresultService";
+import { DynamicAssessmentService } from "../../../services/DynamicAssessmentService";
 import { Button } from "../../../components/ui/button";
+import Cookies from "js-cookie";
 
 interface ResultCountdownProps {
     userAssId: number | string;
     onResultFetched: (data: any) => void;
     onCancel?: () => void;
+    isDynamic?: boolean;
+    userId?: number | string | null;
+    subscriptionId?: number | string | null;
 }
 
-export function ResultCountdown({ userAssId, onResultFetched, onCancel }: ResultCountdownProps) {
+export function ResultCountdown({ 
+    userAssId, 
+    onResultFetched, 
+    onCancel,
+    isDynamic,
+    userId,
+    subscriptionId,
+}: ResultCountdownProps) {
     const [timeLeft, setTimeLeft] = useState(60);
     const [isChecking, setIsChecking] = useState(false);
     const [statusMessage, setStatusMessage] = useState("Generating your report...");
@@ -19,18 +31,75 @@ export function ResultCountdown({ userAssId, onResultFetched, onCancel }: Result
     const checkResult = async () => {
         setIsChecking(true);
         try {
-            // First update the competitive paper result
-            await TestresultService.checkCompetitivePaper(userAssId);
-            
-            // Then get the exam result status
-            const response = await TestService.getExamResult(userAssId);
-            
-            // Success condition based on user's manual requirement
-            if (response && response.attribute2 === "Result generated successfully") {
-                setStatusMessage("Result ready!");
-                setTimeout(() => {
-                    onResultFetched(response.data || response);
-                }, 1000);
+            const isDynamicAssessment = Boolean(
+                isDynamic ||
+                (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+            );
+
+            if (isDynamicAssessment) {
+                const effectiveUserId = userId || (typeof window !== "undefined"
+                    ? localStorage.getItem("user_id") || localStorage.getItem("userId") || Cookies.get("user_id") || Cookies.get("userId")
+                    : null);
+                const effectiveSubId = subscriptionId || (typeof window !== "undefined"
+                    ? localStorage.getItem("subscription_id") || localStorage.getItem("subscriptionId") || Cookies.get("subscription_id") || Cookies.get("subscriptionId")
+                    : null) || 100018;
+
+                console.log("Checking dynamic assessment result in ResultCountdown:", {
+                    userId: effectiveUserId,
+                    subscriptionId: effectiveSubId,
+                    assessmentId: userAssId
+                });
+
+                const response = await DynamicAssessmentService.GET_ATTEMPTED_ASSESSMENT_RESULT(
+                    Number(effectiveUserId),
+                    Number(effectiveSubId),
+                    Number(userAssId)
+                );
+
+                console.log("Dynamic result check response in ResultCountdown:", response);
+
+                const resultData = response?.data || response?.result || response;
+                const isSuccess = Boolean(
+                    resultData && (
+                        resultData.assessment_id ||
+                        resultData.user_ass_id ||
+                        resultData.id ||
+                        resultData.score !== undefined ||
+                        resultData.obtained_marks !== undefined ||
+                        resultData.questions ||
+                        resultData.question_data ||
+                        resultData.sections ||
+                        resultData.sub_division_data ||
+                        resultData.status === "COMPLETED" ||
+                        resultData.assessment_status === "COMPLETED" ||
+                        resultData.status === "SUBMITTED" ||
+                        resultData.completion_status === "COMPLETED" ||
+                        resultData.completion_status === "SUBMITTED" ||
+                        response?.status === 200 ||
+                        response?.status === "SUCCESS"
+                    )
+                );
+
+                if (isSuccess) {
+                    setStatusMessage("Result ready!");
+                    setTimeout(() => {
+                        onResultFetched(resultData);
+                    }, 1000);
+                }
+            } else {
+                // First update the competitive paper result
+                await TestresultService.checkCompetitivePaper(userAssId);
+                
+                // Then get the exam result status
+                const response = await TestService.getExamResult(userAssId);
+                
+                // Success condition based on user's manual requirement
+                if (response && response.attribute2 === "Result generated successfully") {
+                    setStatusMessage("Result ready!");
+                    setTimeout(() => {
+                        onResultFetched(response.data || response);
+                    }, 1000);
+                }
             }
         } catch (error) {
             console.error("Failed to check result status:", error);

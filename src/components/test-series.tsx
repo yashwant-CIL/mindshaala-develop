@@ -27,12 +27,15 @@ import { AvailableTestsList } from "../components/test-series/components/Availab
 import { TestInstructionPage } from "../components/test-series/components/TestInstructionPage";
 import { SectionDetailsPage } from "./test-series/components/SectionDetailsPage";
 import { MCQExamScreen } from "./test-series/components/ExamScreens/MCQExamScreen";
+import { ResultCountdown } from "./test-series/components/ResultCountdown";
+import { DynamicAssessmentSolutions } from "./test-series/components/DynamicAssessmentSolutions";
 import { AvailableTest } from "../services/TestServices";
 
 export default function TestSeries({ onNavigate, initialTest }: { onNavigate?: (page: string, params?: any) => void, initialTest?: AvailableTest | null }) {
   const { toast } = useToast();
-  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "SECTION_WISE" | "section_exam">("setup");
+  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "SECTION_WISE" | "section_exam" | "result-countdown" | "dynamic_solutions">("setup");
   const [activeTestConfig, setActiveTestConfig] = useState<TestConfig | null>(null);
+  const [dynamicResultData, setDynamicResultData] = useState<any>(null);
   const [selectedTestForInstructions, setSelectedTestForInstructions] = useState<AvailableTest | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
   const [activeSectionName, setActiveSectionName] = useState<string>("");
@@ -379,29 +382,89 @@ export default function TestSeries({ onNavigate, initialTest }: { onNavigate?: (
                          setTestMode("SECTION_WISE");
                          return;
                      }
-                     setTestMode("setup");
-                     setActiveTestConfig(null);
                      if (activeTestConfig?.isDynamic) {
-                         sessionStorage.setItem("test_result_active_tab", "custom");
-                         localStorage.setItem("test_result_active_tab", "custom");
-                         if (onNavigate) {
-                             onNavigate("test-history", { tab: "custom" });
-                         }
+                         setTestMode("result-countdown");
+                     } else {
+                         setTestMode("setup");
+                         setActiveTestConfig(null);
                      }
                 }}
                 onCompleteExam={() => {
-                     setTestMode("setup");
-                     setActiveTestConfig(null);
                      if (activeTestConfig?.isDynamic) {
-                         sessionStorage.setItem("test_result_active_tab", "custom");
-                         localStorage.setItem("test_result_active_tab", "custom");
-                         if (onNavigate) {
-                             onNavigate("test-history", { tab: "custom" });
-                         }
+                         setTestMode("result-countdown");
+                     } else {
+                         setTestMode("setup");
+                         setActiveTestConfig(null);
                      }
                 }}
             />
           </div>
+      );
+  }
+
+  if (testMode === "result-countdown") {
+      return (
+          <ResultCountdown 
+            userAssId={activeTestConfig?.userAssessmentId || 0} 
+            isDynamic={Boolean(activeTestConfig?.isDynamic)}
+            userId={activeTestConfig?.fullExamDetails?.user_id}
+            subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id}
+            onResultFetched={(data: any) => {
+              if (activeTestConfig?.isDynamic) {
+                  setDynamicResultData(data);
+                  setTestMode("dynamic_solutions");
+              } else {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+              }
+            }} 
+            onCancel={() => {
+              setTestMode("setup");
+              setActiveTestConfig(null);
+              if (activeTestConfig?.isDynamic) {
+                  sessionStorage.setItem("test_result_active_tab", "custom");
+                  localStorage.setItem("test_result_active_tab", "custom");
+                  window.dispatchEvent(
+                    new CustomEvent("app:navigate", {
+                      detail: { page: "test-history", params: { tab: "custom" } }
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+                  );
+                  if (onNavigate) onNavigate("test-history", { tab: "custom" });
+              }
+            }}
+          />
+      );
+  }
+
+  if (testMode === "dynamic_solutions") {
+      return (
+          <DynamicAssessmentSolutions
+              assessmentId={activeTestConfig?.userAssessmentId}
+              assessment={dynamicResultData}
+              userId={activeTestConfig?.fullExamDetails?.user_id}
+              subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id}
+              onBack={() => {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+                  setDynamicResultData(null);
+                  sessionStorage.setItem("test_result_active_tab", "custom");
+                  localStorage.setItem("test_result_active_tab", "custom");
+                  window.dispatchEvent(
+                    new CustomEvent("app:navigate", {
+                      detail: { page: "test-history", params: { tab: "custom" } }
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+                  );
+                  if (onNavigate) {
+                    onNavigate("test-history", { tab: "custom" });
+                  }
+              }}
+          />
       );
   }
 

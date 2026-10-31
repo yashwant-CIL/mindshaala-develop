@@ -676,23 +676,14 @@ export function MCQExamScreen({
                         localStorage.removeItem("takeTest_activeTestConfig");
                         localStorage.removeItem("takeTest_selectedTestForInstructions");
 
-                        // Dispatch global event for App.tsx navigation to scorecard / test-history
-                        window.dispatchEvent(
-                            new CustomEvent("app:navigate", {
-                                detail: { page: "test-history", params: { tab: "custom" } }
-                            })
-                        );
-
-                        // Navigate directly to result list page if onNavigate is provided
-                        if (onNavigate) {
-                            onNavigate("test-history", { tab: "custom" });
-                        }
-
-                        // Complete exam callback to close modal in parents
-                        if (onCompleteExam && formattedPayload.user_ass_id) {
-                            onCompleteExam(formattedPayload.user_ass_id);
-                        } else {
+                        // Complete exam callback to close modal in parents and show ResultCountdown
+                        const userAssId = formattedPayload.user_ass_id || effectiveUserAssId;
+                        if (onCompleteExam && userAssId) {
+                            onCompleteExam(userAssId);
+                        } else if (onSectionSubmit) {
                             onSectionSubmit(false);
+                        } else if (onNavigate) {
+                            onNavigate("test-history", { tab: "custom" });
                         }
                         return true;
                     }
@@ -711,20 +702,14 @@ export function MCQExamScreen({
                     localStorage.removeItem("takeTest_activeTestConfig");
                     localStorage.removeItem("takeTest_selectedTestForInstructions");
 
-                    window.dispatchEvent(
-                        new CustomEvent("app:navigate", {
-                            detail: { page: "test-history", params: { tab: "custom" } }
-                        })
-                    );
-
-                    if (onNavigate) {
-                        onNavigate("test-history", { tab: "custom" });
-                    }
-
-                    if (onCompleteExam && formattedPayload.user_ass_id) {
-                        onCompleteExam(formattedPayload.user_ass_id);
-                    } else {
+                    // Complete exam callback to close modal in parents and show ResultCountdown
+                    const userAssId = formattedPayload.user_ass_id || effectiveUserAssId;
+                    if (onCompleteExam && userAssId) {
+                        onCompleteExam(userAssId);
+                    } else if (onSectionSubmit) {
                         onSectionSubmit(false);
+                    } else if (onNavigate) {
+                        onNavigate("test-history", { tab: "custom" });
                     }
                     return true;
                 }
