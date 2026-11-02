@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { TestService } from "../../../services/TestServices";
 import { TestresultService } from "../../../services/TestresultService";
+import { DynamicAssessmentService } from "../../../services/DynamicAssessmentService";
 import { Button } from "../../../components/ui/button";
+import Cookies from "js-cookie";
 
 interface ResultCountdownProps {
     userAssId: number | string;
@@ -11,6 +13,10 @@ interface ResultCountdownProps {
     assessmentMethod?: string;
     onResultFetched: (data: any) => void;
     onCancel?: () => void;
+    isDynamic?: boolean;
+    source?: string;
+    userId?: number | string | null;
+    subscriptionId?: number | string | null;
 }
 
 export function ResultCountdown({ 
@@ -18,11 +24,45 @@ export function ResultCountdown({
     assessmentType,
     assessmentMethod,
     onResultFetched, 
-    onCancel 
+    onCancel,
+    isDynamic,
+    source,
+    userId,
+    subscriptionId,
 }: ResultCountdownProps) {
     const [timeLeft, setTimeLeft] = useState(60);
     const [isChecking, setIsChecking] = useState(false);
     const [statusMessage, setStatusMessage] = useState("Generating your report...");
+
+    const timeLeftRef = useRef(60);
+    const isCheckingRef = useRef(false);
+    const isResultReadyRef = useRef(false);
+    const isMountedRef = useRef(true);
+
+    // Synchronize timeLeft in ref so interval and async callbacks never suffer from stale closures
+    useEffect(() => {
+        timeLeftRef.current = timeLeft;
+    }, [timeLeft]);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    const isDynamicAssessment = Boolean(
+        isDynamic ||
+        source === "dynamic" ||
+        (assessmentType && (assessmentType.toUpperCase() === "DYNAMIC" || assessmentType.toUpperCase() === "CUSTOM")) ||
+        (typeof window !== "undefined" && (
+            localStorage.getItem("is_dynamic_assessment") === "true" ||
+            sessionStorage.getItem("is_dynamic_assessment") === "true" ||
+            localStorage.getItem("test_result_active_tab") === "custom" ||
+            sessionStorage.getItem("test_result_active_tab") === "custom" ||
+            localStorage.getItem("takeTest_activeTab") === '"custom"'
+        ))
+    );
 
     const isTheoryAssessment = () => {
         const method = (assessmentMethod || assessmentType || "").toUpperCase();
@@ -57,59 +97,154 @@ export function ResultCountdown({
     };
 
     const checkResult = async () => {
-        setIsChecking(true);
-        try {
-            // First update the competitive paper result
-            // await TestresultService.checkCompetitivePaper(userAssId);
-            
-            // If the assessment type = TH then call this api first
-            if (isTheoryAssessment()) {
-                console.log("Checking result for Theory Assessment", isTheoryAssessment());
-                await TestService.getTheoryResult(userAssId);
-            }
+        // If countdown reached 0 or result is already ready or already in-flight, DO NOT call methods in background!
+        if (timeLeftRef.current <= 0 || isResultReadyRef.current || isCheckingRef.current || !isMountedRef.current) {
+            console.log("[ResultCountdown] Countdown reached 0 or result already ready; skipping API check.");
+            return;
+        }
 
-            // Then get the exam result status
-            const response = await TestService.getExamResult(userAssId);
-            
-            // Success condition based on user's manual requirement
-            if (response && response.attribute2 === "Result generated successfully" || response.result_status === "COMPLETED" ) {
-                setStatusMessage("Result ready!");
-                setTimeout(() => {
-                    onResultFetched(response.data || response);
-                }, 1000);
+        isCheckingRef.current = true;
+        setIsChecking(true);
+
+        try {
+            if (isDynamicAssessment) {
+                const effectiveUserId = userId || (typeof window !== "undefined"
+                    ? localStorage.getItem("user_id") || localStorage.getItem("userId") || Cookies.get("user_id") || Cookies.get("userId")
+                    : null);
+                const effectiveSubId = subscriptionId || (typeof window !== "undefined"
+                    ? localStorage.getItem("subscription_id") || localStorage.getItem("subscriptionId") || Cookies.get("subscription_id") || Cookies.get("subscriptionId")
+                    : null) || 100018;
+
+                console.log("[ResultCountdown] Checking dynamic assessment result:", {
+                    userId: effectiveUserId,
+                    subscriptionId: effectiveSubId,
+                    assessmentId: userAssId
+                });
+
+                const response = await DynamicAssessmentService.GET_ATTEMPTED_ASSESSMENT_RESULT(
+                    Number(effectiveUserId),
+                    Number(effectiveSubId),
+                    Number(userAssId)
+                );
+
+                console.log("[ResultCountdown] Dynamic result check response:", response);
+
+                // If countdown expired while waiting for response, abort immediately
+                if (timeLeftRef.current <= 0 || !isMountedRef.current) {
+                    console.log("[ResultCountdown] Countdown hit 0; dropping dynamic result response.");
+                    return;
+                }
+
+                const resultData = response?.data || response?.result || response;
+                const isSuccess = Boolean(
+                    resultData && (
+                        resultData.assessment_id ||
+                        resultData.user_ass_id ||
+                        resultData.id ||
+                        resultData.score !== undefined ||
+                        resultData.obtained_marks !== undefined ||
+                        resultData.questions ||
+                        resultData.question_data ||
+                        resultData.sections ||
+                        resultData.sub_division_data ||
+                        resultData.status === "COMPLETED" ||
+                        resultData.assessment_status === "COMPLETED" ||
+                        resultData.status === "SUBMITTED" ||
+                        resultData.completion_status === "COMPLETED" ||
+                        resultData.completion_status === "SUBMITTED" ||
+                        response?.status === 200 ||
+                        response?.status === "SUCCESS"
+                    )
+                );
+
+                if (isSuccess) {
+                    isResultReadyRef.current = true;
+                    setStatusMessage("Result ready!");
+                    setTimeout(() => {
+                        if (isMountedRef.current) {
+                            onResultFetched(resultData);
+                        }
+                    }, 1000);
+                }
+            } else {
+                console.log("[ResultCountdown] Checking available assessment result for userAssId:", userAssId);
+
+                // First update the competitive paper result
+                // await TestresultService.checkCompetitivePaper(userAssId);
+
+                if (timeLeftRef.current <= 0 || !isMountedRef.current) {
+                    return;
+                }
+
+                // Then get the exam result status
+                const response = await TestService.getExamResult(userAssId);
+
+                if (timeLeftRef.current <= 0 || !isMountedRef.current) {
+                    return;
+                }
+
+                // Success condition based on user's manual requirement
+                if (response && response.attribute2 === "Result generated successfully") {
+                    isResultReadyRef.current = true;
+                    setStatusMessage("Result ready!");
+                    setTimeout(() => {
+                        if (isMountedRef.current) {
+                            onResultFetched(response.data || response);
+                        }
+                    }, 1000);
+                }
             }
         } catch (error) {
             console.error("Failed to check result status:", error);
         } finally {
-            setIsChecking(false);
+            isCheckingRef.current = false;
+            if (isMountedRef.current) {
+                setIsChecking(false);
+            }
         }
     };
 
+    // Countdown timer: decrements every second, stops strictly at 0
     useEffect(() => {
-        if (timeLeft <= 0) return;
+        if (timeLeft <= 0) {
+            setStatusMessage("Evaluation is taking longer than usual...");
+            return;
+        }
+
         const timer = setInterval(() => {
-            setTimeLeft((prev) => prev - 1);
+            setTimeLeft((prev) => {
+                const next = prev - 1;
+                timeLeftRef.current = next;
+                if (next <= 0) {
+                    return 0;
+                }
+                return next;
+            });
         }, 1000);
+
         return () => clearInterval(timer);
     }, [timeLeft]);
 
+    // Polling effect: only polls while countdown is active (timeLeft > 0). If count reaches 0, stops completely!
     useEffect(() => {
         // Initial check on mount
         checkResult();
 
         const interval = setInterval(() => {
-            if (!isChecking && timeLeft > 0) {
+            // When countdown reaches 0 or result is ready, CLEAR interval and NEVER call methods in background
+            if (timeLeftRef.current <= 0 || isResultReadyRef.current) {
+                console.log("[ResultCountdown] Countdown reached 0 or result ready; stopping background poll interval.");
+                clearInterval(interval);
+                return;
+            }
+
+            if (!isCheckingRef.current) {
                 checkResult();
             }
-        }, 20000); // Poll every 20 seconds
+        }, 15000); // Poll every 15 seconds
+
         return () => clearInterval(interval);
     }, []); 
-
-    useEffect(() => {
-        if (timeLeft === 0) {
-            setStatusMessage("Evaluation is taking longer than usual...");
-        }
-    }, [timeLeft]);
 
     const progress = ((60 - timeLeft) / 60) * 100;
 
@@ -167,8 +302,22 @@ export function ResultCountdown({
                 {timeLeft === 0 && (
                     <div className="flex flex-col gap-4 animate-in fade-in duration-700">
                         <Button 
-                            onClick={() => onResultFetched(null)} // Trigger navigation to result page 
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-6 px-8 rounded-2xl shadow-lg transition-all"
+                            onClick={() => {
+                                sessionStorage.setItem("test_result_active_tab", isDynamicAssessment ? "custom" : "available");
+                                localStorage.setItem("test_result_active_tab", isDynamicAssessment ? "custom" : "available");
+                                if (isDynamicAssessment) {
+                                    window.dispatchEvent(
+                                        new CustomEvent("app:navigate", {
+                                            detail: { page: "test-history", params: { tab: "custom" } }
+                                        })
+                                    );
+                                    window.dispatchEvent(
+                                        new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+                                    );
+                                }
+                                onResultFetched(null);
+                            }} 
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-6 px-8 rounded-2xl shadow-lg transition-all cursor-pointer"
                         >
                             Go to Test Result Page
                         </Button>

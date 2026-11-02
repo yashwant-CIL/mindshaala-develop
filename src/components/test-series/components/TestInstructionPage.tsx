@@ -5,7 +5,7 @@ import { Checkbox } from "../../../components/ui/checkbox";
 import { Badge } from "../../../components/ui/badge";
 import { Skeleton } from "../../../components/ui/skeleton";
 import { TestService, AvailableTest } from "../../../services/TestServices";
-import { TestConfig } from "./CustomTestGenerator";
+import { TestConfig } from "./DynamicTestGenerator";
 import { ScrollArea } from "../../../components/ui/scroll-area";
 import { 
     Camera, 
@@ -264,8 +264,14 @@ export function TestInstructionPage({ test, onStartTest, onBack }: TestInstructi
             assessmentType: examDetails?.assessment_type,
             assessmentMethod: examDetails?.assessment_method,
             userImage: capturedImage,
-            fullExamDetails: examDetails
+            fullExamDetails: examDetails,
+            isDynamic: false,
+            source: "available"
         };
+
+        if (typeof window !== "undefined") {
+            localStorage.setItem("is_dynamic_assessment", "false");
+        }
 
         stopCamera(); // Clean up this page's camera instance
         onStartTest(config);

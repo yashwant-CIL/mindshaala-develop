@@ -18,7 +18,7 @@ import { useToast } from "../hooks/use-toast";
 
 // Imported Data & Components
 import { subjects, mcqQuestions, theoryQuestions } from "./test-series/data";
-import { CustomTestGenerator, TestConfig } from "./test-series/components/CustomTestGenerator";
+import { DynamicTestGenerator, TestConfig } from "./test-series/components/DynamicTestGenerator";
 import { AvailableTestsList } from "./test-series/components/AvailableTestsList";
 import { TestInstructionPage } from "./test-series/components/TestInstructionPage";
 import { AssessmentDashboard } from "./AssessmentDashboard";
@@ -26,11 +26,12 @@ import { SectionDetailsPage } from "./test-series/components/SectionDetailsPage"
 import { MCQExamScreen } from "./test-series/components/ExamScreens/MCQExamScreen";
 import { AvailableTest } from "../services/TestServices";
 import { ResultCountdown } from "./test-series/components/ResultCountdown";
+import { DynamicAssessmentSolutions } from "./test-series/components/DynamicAssessmentSolutions";
 import { Result } from "./Result";
 import { TheoryExamScreen } from "./test-series/components/ExamScreens/TheoryExamScreen.tsx";
 import { TheorySubmissionPage } from "./test-series/components/ExamScreens/TheorySubmissionPage";
 
-export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigate?: (page: string) => void }) {
+export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigate?: (page: string, params?: any) => void }) {
   const { toast } = useToast();
 
   // Helper to load state
@@ -43,10 +44,11 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
     }
   };
 
-  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "section_details" | "section_exam" | "loading_exam" | "result-countdown" | "final-result" | "theory_exam" | "theory_submission" | "theory_result">(() => loadLocalState("takeTest_testMode", "setup"));
+  const [testMode, setTestMode] = useState<"setup" | "instructions" | "mcq" | "theory" | "result" | "section_details" | "section_exam" | "loading_exam" | "result-countdown" | "final-result" | "theory_exam" | "theory_submission" | "theory_result" | "dynamic_solutions">(() => loadLocalState("takeTest_testMode", "setup"));
   const [activeTestConfig, setActiveTestConfig] = useState<TestConfig | null>(() => loadLocalState("takeTest_activeTestConfig", null));
   const [selectedTestForInstructions, setSelectedTestForInstructions] = useState<AvailableTest | null>(() => loadLocalState("takeTest_selectedTestForInstructions", null));
   const [activeTab, setActiveTab] = useState<"available" | "custom">(() => loadLocalState("takeTest_activeTab", "available"));
+  const [dynamicResultData, setDynamicResultData] = useState<any>(null);
 
   // Persist states
   useEffect(() => {
@@ -80,6 +82,9 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
   const [questionDurations, setQuestionDurations] = useState<Record<number, number>>({});
 
   const handleTestSelect = (test: AvailableTest) => {
+      if (typeof window !== "undefined") {
+          localStorage.setItem("is_dynamic_assessment", "false");
+      }
       setSelectedTestForInstructions(test);
       setTestMode("instructions");
   };
@@ -132,28 +137,42 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
       const method = config.assessmentMethod?.toUpperCase();
       const type = config.assessmentType?.toUpperCase();
 
-      if (method === "MCQ") {
-          if (type === "SECTION_WISE") {
-              // Instructions -> Section Details
-              setTestMode("section_details");
+      // Check if we already have pre-fetched question details (e.g. from SectionDetailsPage)
+      const hasPreFetchedQuestions = Boolean(
+          config.fullExamDetails && (
+              config.fullExamDetails.sub_division_data || 
+              config.fullExamDetails.question_bank_response_list || 
+              config.fullExamDetails.question_data ||
+              config.fullExamDetails.questions
+          )
+      );
+
+      if (hasPreFetchedQuestions) {
+          console.log("Routing directly to MCQExamScreen with pre-fetched questions:", config.fullExamDetails);
+          const firstSection = config.fullExamDetails?.sub_division_data?.[0];
+          setActiveSectionId(Number(firstSection?.sub_div_id || config.fullExamDetails?.user_ass_div_id || config.fullExamDetails?.sub_div_id || 0));
+          setActiveSectionName(firstSection?.sub_div_name || config.fullExamDetails?.sub_div_name || config.fullExamDetails?.assessment_name || "MCQ Assessment");
+          setActiveSectionData(config.fullExamDetails);
+          setTestMode("section_exam");
+      } else if (type === "SECTION_WISE" || config.testType === "SECTION_WISE" || (method === "MCQ" && type === "SECTION_WISE")) {
+          // Instructions / Dynamic -> Section Details
+          setTestMode("section_details");
+      } else if (method === "MCQ") {
+          // Instructions -> MCQ Exam Screen (Direct) for STANDARD or other MCQ tests
+          if (config.fullExamDetails) {
+              console.log("Routing to MCQExamScreen with Details:", config.fullExamDetails);
+              
+              const firstSection = config.fullExamDetails?.sub_division_data?.[0];
+              setActiveSectionId(Number(firstSection?.sub_div_id || config.fullExamDetails?.user_ass_div_id || 0));
+              setActiveSectionName(firstSection?.sub_div_name || config.fullExamDetails?.assessment_name || "MCQ Assessment");
+              setActiveSectionData(config.fullExamDetails);
+              setTestMode("section_exam");
           } else {
-              // Instructions -> MCQ Exam Screen (Direct) for STANDARD or other MCQ tests
-              // If we have full exam details from the API, we use the premium MCQExamScreen
-              if (config.fullExamDetails) {
-                  console.log("Routing to MCQExamScreen with Details:", config.fullExamDetails);
-                  
-                  const firstSection = config.fullExamDetails?.sub_division_data?.[0];
-                  setActiveSectionId(Number(firstSection?.sub_div_id || config.fullExamDetails?.user_ass_div_id || 0));
-                  setActiveSectionName(firstSection?.sub_div_name || config.fullExamDetails?.assessment_name || "MCQ Assessment");
-                  setActiveSectionData(config.fullExamDetails);
-                  setTestMode("section_exam");
-              } else {
-                  // Fallback to internal/mock MCQ mode for custom-generated tests
-                  console.log("Falling back to internal MCQ mode (no fullExamDetails)");
-                  setTestMode("mcq");
-                  setTimeLeft(config.duration * 60);
-                  setIsTestActive(true);
-              }
+              // Fallback to internal/mock MCQ mode for custom-generated tests
+              console.log("Falling back to internal MCQ mode (no fullExamDetails)");
+              setTestMode("mcq");
+              setTimeLeft(config.duration * 60);
+              setIsTestActive(true);
           }
       } else if (method === "TH" || config.testType === "theory") {
           // Instructions -> Theory Exam Screen
@@ -298,17 +317,33 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
   }
 
   if (testMode === "section_details") {
+      const isDynamic = Boolean(
+          activeTestConfig?.isDynamic || 
+          activeTab === "custom" || 
+          (typeof window !== "undefined" && localStorage.getItem("is_dynamic_assessment") === "true")
+      );
       return (
           <SectionDetailsPage 
               userAssessmentId={activeTestConfig?.userAssessmentId}
-              assessmentName={selectedTestForInstructions?.assessment_name || "Section Assessment"}
+              assessmentName={activeTestConfig?.patternName || activeTestConfig?.selectedSubject || selectedTestForInstructions?.assessment_name || "Section Assessment"}
+              isDynamic={isDynamic}
+              source={isDynamic ? "dynamic" : "available"}
+              subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id || activeTestConfig?.subscription_id || activeTestConfig?.fullExamDetails?.subscriptionId}
+              userId={activeTestConfig?.fullExamDetails?.user_id || activeTestConfig?.user_id || activeTestConfig?.fullExamDetails?.userId}
               onStartSection={(sectionId, sectionName, sections) => {
                   setActiveSectionId(sectionId);
                   setActiveSectionName(sectionName);
                   setActiveSectionData(sections);
                   setTestMode("section_exam");
               }}
-              onBack={() => setTestMode("instructions")}
+              onBack={() => {
+                  if (activeTab === "custom" || isDynamic) {
+                      setTestMode("setup");
+                      setActiveTestConfig(null);
+                  } else {
+                      setTestMode("instructions");
+                  }
+              }}
           />
       );
   }
@@ -343,19 +378,34 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
           <div className="fixed inset-0 z-[9999] bg-white overflow-hidden w-screen h-screen">
             <MCQExamScreen 
                 sectionId={activeSectionId}
+                user_ass_div_id={activeSectionId}
                 sectionName={activeSectionName}
                 allSections={activeSectionData}
                 userAssessmentId={activeTestConfig?.userAssessmentId}
+                user_ass_id={activeTestConfig?.userAssessmentId}
+                user_id={activeTestConfig?.fullExamDetails?.user_id}
+                subscription_id={activeTestConfig?.fullExamDetails?.subscription_id}
+                isDynamic={activeTestConfig?.isDynamic}
+                source={activeTestConfig?.source}
+                onNavigate={onNavigate}
                 onSectionSubmit={(hasNext) => {
-                     // If assessment type is STANDARD or MCQ (single section as requested), move to result countdown directly 
-                     if (hasNext && activeTestConfig?.assessmentType?.toUpperCase() !== "STANDARD" && activeTestConfig?.assessmentType?.toUpperCase() !== "MCQ") {
+                     // If hasNext is true for dynamic or section-wise assessment, return to section details
+                     if (hasNext && (activeTestConfig?.isDynamic || (activeTestConfig?.assessmentType?.toUpperCase() !== "STANDARD" && activeTestConfig?.assessmentType?.toUpperCase() !== "MCQ"))) {
                          // Return to section details to pick another section
                          setTestMode("section_details");
+                     } else if (activeTestConfig?.isDynamic || activeTab === "custom" || activeTestConfig?.source === "dynamic") {
+                         setTestMode("result-countdown");
                      } else {
                          handleCompleteExamMode();
                      }
                 }}
-                onCompleteExam={() => handleCompleteExamMode()}
+                onCompleteExam={() => {
+                     if (activeTestConfig?.isDynamic || activeTab === "custom" || activeTestConfig?.source === "dynamic") {
+                         setTestMode("result-countdown");
+                     } else {
+                         handleCompleteExamMode();
+                     }
+                }}
             />
           </div>
       );
@@ -363,26 +413,90 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
 
   // New Flows for Exam Results
   if (testMode === "result-countdown") {
+      const isDynamicTest = Boolean(
+          activeTestConfig?.isDynamic || 
+          activeTab === "custom" || 
+          activeTestConfig?.source === "dynamic" ||
+          (typeof window !== "undefined" && (
+              localStorage.getItem("is_dynamic_assessment") === "true" ||
+              sessionStorage.getItem("is_dynamic_assessment") === "true" ||
+              localStorage.getItem("test_result_active_tab") === "custom" ||
+              sessionStorage.getItem("test_result_active_tab") === "custom"
+          ))
+      );
       return (
           <ResultCountdown 
             userAssId={activeTestConfig?.userAssessmentId || 0} 
+            isDynamic={isDynamicTest}
+            source={isDynamicTest ? "dynamic" : "available"}
+            userId={activeTestConfig?.fullExamDetails?.user_id}
+            subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id}
             assessmentMethod={activeTestConfig?.assessmentMethod}
             assessmentType={activeTestConfig?.assessmentType}
             onResultFetched={(data: any) => {
               // Pass the fetched data to next state
-              // If assessment method is TH, we go to theory_result
-              if (activeTestConfig?.assessmentMethod?.toUpperCase() === "TH") {
+              if (isDynamicTest) {
+                  setDynamicResultData(data);
+                  setTestMode("dynamic_solutions");
+              } else if (activeTestConfig?.assessmentMethod?.toUpperCase() === "TH") {
                   setTestMode("theory_result");
               } else {
                   setTestMode("final-result");
               }
             }} 
             onCancel={() => {
-              setTestMode("setup");
-              setActiveTestConfig(null);
+              if (isDynamicTest) {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+                  sessionStorage.setItem("test_result_active_tab", "custom");
+                  localStorage.setItem("test_result_active_tab", "custom");
+                  window.dispatchEvent(
+                    new CustomEvent("app:navigate", {
+                      detail: { page: "test-history", params: { tab: "custom" } }
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+                  );
+                  if (onNavigate) {
+                    onNavigate("test-history", { tab: "custom" });
+                  }
+              } else {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+              }
             }}
           />
       )
+  }
+
+  if (testMode === "dynamic_solutions") {
+      return (
+          <DynamicAssessmentSolutions
+              assessmentId={activeTestConfig?.userAssessmentId}
+              assessment={dynamicResultData}
+              userId={activeTestConfig?.fullExamDetails?.user_id}
+              subscriptionId={activeTestConfig?.fullExamDetails?.subscription_id}
+              onBack={() => {
+                  setTestMode("setup");
+                  setActiveTestConfig(null);
+                  setDynamicResultData(null);
+                  sessionStorage.setItem("test_result_active_tab", "custom");
+                  localStorage.setItem("test_result_active_tab", "custom");
+                  window.dispatchEvent(
+                    new CustomEvent("app:navigate", {
+                      detail: { page: "test-history", params: { tab: "custom" } }
+                    })
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("test_result_tab_change", { detail: { tab: "custom" } })
+                  );
+                  if (onNavigate) {
+                    onNavigate("test-history", { tab: "custom" });
+                  }
+              }}
+          />
+      );
   }
 
   if (testMode === "final-result" || testMode === "theory_result") {
@@ -768,7 +882,7 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
                 }`}
             >
                 <div className={`w-2 h-2 rounded-full ${activeTab === "custom" ? "bg-blue-400" : "bg-slate-300"}`} />
-                Custom Generator
+                Dynamic Generator
             </button>
         </div>
 
@@ -785,7 +899,7 @@ export function TakeTest({ onBack, onNavigate }: { onBack: () => void, onNavigat
 
             {activeTab === "custom" && (
                 <div className="outline-none h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <CustomTestGenerator onStartTest={handleConfigSubmit} />
+                    <DynamicTestGenerator onStartTest={handleConfigSubmit} onNavigate={onNavigate} />
                 </div>
             )}
         </div>

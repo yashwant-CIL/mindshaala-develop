@@ -104,8 +104,11 @@ import { MathJaxContext } from "better-react-mathjax";
 import { QuestionMathJaxConfig } from "./shared/mathjaxconfig/QuestionMathJax";
 import MCQsolutionScreen from "./components/test-series/components/MCQsolutionScreen";
 import TheorySolutionScreen from "./components/test-series/components/TheorySolutionScreen";
+import { DynamicAssessmentSolutions } from "./components/test-series/components/DynamicAssessmentSolutions";
 import { Toaster, toast } from "react-hot-toast";
 import { Toaster as ShadcnToaster } from "./components/ui/toaster";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import Cookies from "js-cookie";
 import LandingPage from "./components/LandingPage/LandingPage";
@@ -464,6 +467,17 @@ export default function App() {
     navigate("/"); // Reset URL when navigating via sidebar/state
   };
 
+  // Global navigation listener for decoupled child components (e.g. MCQExamScreen)
+  useEffect(() => {
+    const handleGlobalNavigate = (e: any) => {
+      if (e?.detail?.page) {
+        handleNavigate(e.detail.page, e.detail.params);
+      }
+    };
+    window.addEventListener("app:navigate", handleGlobalNavigate as EventListener);
+    return () => window.removeEventListener("app:navigate", handleGlobalNavigate as EventListener);
+  }, []);
+
   const handleStartCourse = () => {
     setActivePage("learning");
   };
@@ -526,6 +540,18 @@ export default function App() {
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
           <Toaster position="top-right" />
           <ShadcnToaster />
+          <ToastContainer
+            position="top-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            newestOnTop
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="light"
+          />
           
           <Routes>
             <Route path="/privacypolicy" element={
@@ -561,6 +587,8 @@ export default function App() {
             
             <Route path="/test-series/solutions/:userAssId" element={<MCQsolutionScreen />} />
             <Route path="/test-series/theory-solutions/:userAssId" element={<TheorySolutionScreen />} />
+            <Route path="/test-series/dynamic-solutions/:assessmentId" element={<DynamicAssessmentSolutions />} />
+            <Route path="/dynamic-assessment/solutions/:assessmentId" element={<DynamicAssessmentSolutions />} />
             <Route path="/theory-mobile-upload" element={<TheoryMobileUploadPage />} />
 
             <Route path="/" element={
