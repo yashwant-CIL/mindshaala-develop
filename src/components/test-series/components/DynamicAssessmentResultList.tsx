@@ -105,7 +105,12 @@ export function DynamicAssessmentResultList({
         let submitted = 0;
         let inProgress = 0;
         results.forEach((r) => {
-            const s = (r.assessment_status || r.status || "").toUpperCase();
+            const summary = Array.isArray(r.attempt_summary)
+                ? r.attempt_summary[0]
+                : Array.isArray(r.attempted_summary)
+                ? r.attempted_summary[0]
+                : r.attempt_summary || r.attempted_summary || {};
+            const s = (summary.status || r.assessment_status || r.status || "").toUpperCase();
             if (s === "SUBMITTED" || s === "COMPLETED") {
                 submitted++;
             } else if (s === "IN_PROGRESS" || s === "INITIALIZED") {
@@ -126,7 +131,13 @@ export function DynamicAssessmentResultList({
         const category = (res.category || res.subject_name || res.pattern_type || "").toLowerCase();
         const matchesSearch = name.includes(searchQuery.toLowerCase()) || category.includes(searchQuery.toLowerCase());
 
-        const status = (res.assessment_status || res.status || "SUBMITTED").toUpperCase();
+        const summary = Array.isArray(res.attempt_summary)
+            ? res.attempt_summary[0]
+            : Array.isArray(res.attempted_summary)
+            ? res.attempted_summary[0]
+            : res.attempt_summary || res.attempted_summary || {};
+
+        const status = (summary.status || res.assessment_status || res.status || "SUBMITTED").toUpperCase();
         const matchesStatus = 
             statusFilter === "ALL" || 
             (statusFilter === "SUBMITTED" && (status === "SUBMITTED" || status === "COMPLETED")) ||
@@ -135,10 +146,10 @@ export function DynamicAssessmentResultList({
         return matchesSearch && matchesStatus;
     });
 
-    const formatDate = (dateString: string) => {
-        if (!dateString) return "N/A";
+    const formatDate = (dateString?: string | null) => {
+        if (!dateString) return "—";
         const date = new Date(dateString);
-        if (isNaN(date.getTime())) return dateString;
+        if (isNaN(date.getTime())) return String(dateString);
         
         const datePart = date.toLocaleDateString('en-GB', {
             day: '2-digit',
@@ -195,7 +206,7 @@ export function DynamicAssessmentResultList({
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                     {/* Status Filter Chips */}
-                    <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-600 self-start sm:self-auto">
+                    <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-600 self-start sm:self-auto overflow-x-auto max-w-full">
                         <button
                             onClick={() => setStatusFilter("ALL")}
                             className={`px-3 py-1.5 rounded-lg transition-all ${
@@ -257,27 +268,35 @@ export function DynamicAssessmentResultList({
             <div className="hidden md:grid grid-cols-12 gap-4 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pb-2">
                 <div className="col-span-1">No.</div>
                 <div className="col-span-3">Assessment Name</div>
-                <div className="col-span-2 text-center">Type / Level</div>
-                <div className="col-span-2 text-center">Date & Time</div>
+                <div className="col-span-2 text-center">Assessment Type</div>
                 <div className="col-span-1 text-center">Score</div>
-                <div className="col-span-2 text-center">Status</div>
-                <div className="col-span-1 text-right">Action</div>
+                <div className="col-span-2 text-center">Start Time</div>
+                <div className="col-span-1 text-center">Status</div>
+                <div className="col-span-2 text-right">Action</div>
             </div>
 
             {/* Results List */}
             <div className="space-y-3">
                 {filteredResults.length > 0 ? (
                     filteredResults.map((result, index) => {
-                        const totalM = result.total_marks || 100;
-                        const obtainedM = result.obtained_marks ?? result.score ?? result.marks_obtained ?? 0;
+                        const summary = Array.isArray(result.attempt_summary)
+                            ? result.attempt_summary[0]
+                            : Array.isArray(result.attempted_summary)
+                            ? result.attempted_summary[0]
+                            : result.attempt_summary || result.attempted_summary || {};
+
+                        const totalM = Number(summary.total_marks ?? result.total_marks ?? 100);
+                        const obtainedM = Number(summary.score ?? summary.score_obtained ?? result.obtained_marks ?? result.score ?? result.marks_obtained ?? 0);
                         const scoreRatio = totalM > 0 ? obtainedM / totalM : 0;
-                        const status = (result.assessment_status || result.status || "SUBMITTED").toUpperCase();
+
+                        const status = (summary.status || result.assessment_status || result.status || "SUBMITTED").toUpperCase();
                         const isSubmitted = status === "SUBMITTED" || status === "COMPLETED";
                         const isInProgress = status === "INITIALIZED" || status === "IN_PROGRESS";
-                        const dateStr = result.ass_start_time || result.created_at || result.submitted_at || result.start_time;
+                        
+                        const startTimeStr = summary.start_time || result.start_time || result.ass_start_time || result.created_at;
 
                         const name = result.assessment_name || result.name || result.title || `Custom Test #${index + 1}`;
-                        const levelType = result.assessment_type || result.exam_level || result.pattern_type || result.pattern_name || "Custom Pattern";
+                        const levelType = result.assessment_type || result.exam_level || result.pattern_type || result.pattern_name || result.category || result.subject_name || "Dynamic MCQ";
 
                         return (
                             <motion.div 
@@ -290,99 +309,152 @@ export function DynamicAssessmentResultList({
                                         handleViewResult(result);
                                     }
                                 }}
-                                className={`bg-white border border-slate-100 p-4 md:px-6 md:py-5 rounded-2xl shadow-xs transition-all ${
+                                className={`bg-white border border-slate-100 p-4 md:px-6 md:py-4 rounded-2xl shadow-xs transition-all ${
                                     isSubmitted 
                                         ? "hover:shadow-md hover:border-indigo-100 cursor-pointer group" 
                                         : "opacity-80 cursor-default"
                                 }`}
                             >
-                                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                                    {/* Index */}
-                                    <div className="hidden md:block col-span-1 text-sm font-bold text-slate-400">
-                                        {(index + 1).toString().padStart(2, '0')}
-                                    </div>
-
-                                    {/* Name & Subtitle */}
-                                    <div className="col-span-3 flex flex-col">
-                                        <div className="flex items-center gap-1.5">
-                                            <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                                            <span className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
-                                                {name}
+                                {/* Mobile View (< md) */}
+                                <div className="flex flex-col gap-3 md:hidden">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-start gap-2 min-w-0">
+                                            <span className="text-xs font-bold text-slate-400 mt-0.5 shrink-0">
+                                                {(index + 1).toString().padStart(2, '0')}.
                                             </span>
+                                            <div className="min-w-0">
+                                                <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2">
+                                                    {name}
+                                                </h4>
+                                                <div className="mt-1">
+                                                    <Badge variant="outline" className="px-2 py-0.5 bg-indigo-50/50 text-indigo-700 border-indigo-100 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                                                        {levelType}
+                                                    </Badge>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                                                {result.subject_name || result.category || "Dynamic MCQ"}
-                                            </span>
-                                            {result.total_questions && (
-                                                <span className="text-[10px] text-slate-400 font-medium">
-                                                    • {result.total_questions} Qs
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Level / Pattern */}
-                                    <div className="md:col-span-2 flex items-center md:justify-center">
-                                        <Badge variant="outline" className="px-3 py-1 bg-indigo-50/50 text-indigo-700 border-indigo-100 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                                            {levelType}
-                                        </Badge>
-                                    </div>
-
-                                    {/* Date */}
-                                    <div className="md:col-span-2 flex items-center md:justify-center gap-2">
-                                        <Calendar className="w-3.5 h-3.5 text-slate-400 md:hidden" />
-                                        <span className="text-sm font-medium text-slate-600">
-                                            {formatDate(dateStr)}
-                                        </span>
-                                    </div>
-
-                                    {/* Score */}
-                                    <div className="md:col-span-1 flex items-center md:justify-center">
-                                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${
-                                            scoreRatio >= 0.4 
-                                            ? 'bg-emerald-50 text-emerald-700' 
-                                            : 'bg-rose-50 text-rose-700'
-                                        }`}>
-                                            <Trophy className={`w-3.5 h-3.5 ${
-                                                scoreRatio >= 0.4 ? 'text-emerald-600' : 'text-rose-600'
-                                            }`} />
-                                            <span className="text-sm font-black">
-                                                {obtainedM}/{totalM}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Status */}
-                                    <div className="md:col-span-2 flex items-center md:justify-center">
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border shrink-0 ${
                                             isSubmitted 
                                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
                                             : isInProgress
                                             ? 'bg-blue-50 text-blue-700 border-blue-100'
                                             : 'bg-amber-50 text-amber-700 border-amber-100'
                                         }`}>
-                                            {status}
+                                            {summary.status || status}
                                         </span>
                                     </div>
 
-                                    {/* Action Button */}
-                                    <div className="md:col-span-1 flex justify-end">
+                                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+                                        <div className="flex items-center gap-1.5">
+                                            <Trophy className={`w-3.5 h-3.5 shrink-0 ${scoreRatio >= 0.4 ? 'text-amber-500' : 'text-slate-400'}`} />
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Score</span>
+                                                <span className="font-black text-slate-900 text-xs">
+                                                    {isSubmitted ? `${obtainedM}/${totalM}` : "—"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                            <div className="min-w-0">
+                                                <span className="text-[10px] text-slate-400 block font-bold uppercase tracking-wider">Start Time</span>
+                                                <span className="font-semibold text-slate-700 text-[11px] truncate block">
+                                                    {startTimeStr ? formatDate(startTimeStr) : "—"}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {isSubmitted && (
+                                        <Button 
+                                            variant="default"
+                                            size="sm"
+                                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold h-9 transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer mt-0.5"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleViewResult(result);
+                                            }}
+                                        >
+                                            <Eye className="w-3.5 h-3.5" />
+                                            View Solution
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* Desktop View (>= md) */}
+                                <div className="hidden md:grid md:grid-cols-12 gap-4 items-center">
+                                    {/* 1. Index */}
+                                    <div className="col-span-1 text-sm font-bold text-slate-400">
+                                        {(index + 1).toString().padStart(2, '0')}
+                                    </div>
+
+                                    {/* 2. Assessment Name */}
+                                    <div className="col-span-3 flex items-center gap-2 min-w-0">
+                                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                        <span className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate" title={name}>
+                                            {name}
+                                        </span>
+                                    </div>
+
+                                    {/* 3. Assessment Type */}
+                                    <div className="col-span-2 flex justify-center min-w-0">
+                                        <Badge variant="outline" className="px-2.5 py-0.5 bg-indigo-50/50 text-indigo-700 border-indigo-100 rounded-md text-[10px] font-bold uppercase tracking-wider truncate max-w-full" title={levelType}>
+                                            {levelType}
+                                        </Badge>
+                                    </div>
+
+                                    {/* 4. Score */}
+                                    <div className="col-span-1 flex items-center justify-center gap-1">
+                                        {isSubmitted ? (
+                                            <>
+                                                <Trophy className={`w-3.5 h-3.5 shrink-0 ${scoreRatio >= 0.4 ? 'text-amber-500' : 'text-slate-400'}`} />
+                                                <span className="text-sm font-black text-slate-900 whitespace-nowrap">
+                                                    {obtainedM}<span className="text-xs text-slate-400 font-semibold">/{totalM}</span>
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="text-xs text-slate-400 font-medium">—</span>
+                                        )}
+                                    </div>
+
+                                    {/* 5. Start Time */}
+                                    <div className="col-span-2 flex items-center justify-center gap-1.5 text-slate-600 text-xs font-semibold">
+                                        <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                        <span className="whitespace-nowrap text-[11px] font-medium text-slate-700">
+                                            {startTimeStr ? formatDate(startTimeStr) : "—"}
+                                        </span>
+                                    </div>
+
+                                    {/* 6. Status */}
+                                    <div className="col-span-1 flex justify-center">
+                                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border whitespace-nowrap ${
+                                            isSubmitted 
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                                            : isInProgress
+                                            ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                                        }`}>
+                                            {summary.status || status}
+                                        </span>
+                                    </div>
+
+                                    {/* 7. Action Button */}
+                                    <div className="col-span-2 flex justify-end">
                                         {isSubmitted ? (
                                             <Button 
                                                 variant="default"
                                                 size="sm"
-                                                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold h-8 px-3.5 transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold h-8 px-3.5 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleViewResult(result);
                                                 }}
                                             >
                                                 <Eye className="w-3.5 h-3.5" />
-                                                Result
+                                                View Solution
                                             </Button>
                                         ) : (
-                                            <span className="text-[11px] font-bold text-slate-400 italic">
+                                            <span className="text-xs font-bold text-slate-400 italic">
                                                 In Progress
                                             </span>
                                         )}

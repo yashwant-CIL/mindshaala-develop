@@ -21,7 +21,8 @@ import {
   Check,
   X,
   FileText,
-  Filter
+  Filter,
+  Bookmark
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DynamicAssessmentService } from "../../../services/DynamicAssessmentService";
@@ -63,6 +64,7 @@ interface NormalizedQuestion {
   explanationDiagrams: string[];
   difficulty?: string;
   subjectName?: string;
+  book_mark_status: boolean;
 }
 
 interface NormalizedSection {
@@ -132,7 +134,7 @@ export function DynamicAssessmentSolutions({
 
   // Active section & filter state
   const [activeSectionIdx, setActiveSectionIdx] = useState<number>(0);
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "CORRECT" | "INCORRECT" | "SKIPPED">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "CORRECT" | "INCORRECT" | "SKIPPED" | "REVIEW">("ALL");
   const [expandedSolutions, setExpandedSolutions] = useState<Record<string | number, boolean>>({});
 
   // Fetch assessment results on mount
@@ -325,6 +327,21 @@ export function DynamicAssessmentSolutions({
       q.solution_text ||
       "";
 
+    const isBookMarked = Boolean(
+      q.book_mark_status === true ||
+      q.book_mark_status === 1 ||
+      q.book_mark_status === "true" ||
+      q.book_mark_status === "TRUE" ||
+      q.bookmark_status === true ||
+      q.bookmark_status === 1 ||
+      q.bookmark_status === "true" ||
+      q.bookMarkStatus === true ||
+      q.is_bookmarked === true ||
+      q.bookmarked === true ||
+      q.review_status === true ||
+      q.is_reviewed === true
+    );
+
     return {
       id: q.question_id || q.id || idx + 1,
       index: idx + 1,
@@ -341,6 +358,7 @@ export function DynamicAssessmentSolutions({
       explanationDiagrams,
       difficulty: q.difficulty_level || q.difficulty,
       subjectName: q.subject_name || q.subject,
+      book_mark_status: isBookMarked,
     };
   };
 
@@ -444,6 +462,9 @@ export function DynamicAssessmentSolutions({
   const filteredQuestions = useMemo(() => {
     if (!currentSection) return [];
     if (statusFilter === "ALL") return currentSection.questions;
+    if (statusFilter === "REVIEW") {
+      return currentSection.questions.filter((q) => Boolean(q.book_mark_status));
+    }
     return currentSection.questions.filter((q) => q.status === statusFilter);
   }, [currentSection, statusFilter]);
 
@@ -768,6 +789,18 @@ export function DynamicAssessmentSolutions({
             >
               Skipped ({currentSection?.questions.filter((q) => q.status === "SKIPPED").length || 0})
             </button>
+
+            <button
+              onClick={() => setStatusFilter("REVIEW")}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                statusFilter === "REVIEW"
+                  ? "bg-purple-600 text-white shadow-xs font-black"
+                  : "bg-purple-50 text-purple-700 hover:bg-purple-100"
+              }`}
+            >
+              <Bookmark className="w-3 h-3" />
+              Review ({currentSection?.questions.filter((q) => Boolean(q.book_mark_status)).length || 0})
+            </button>
           </div>
 
           <div className="text-xs font-semibold text-slate-500 text-right">
@@ -835,6 +868,13 @@ export function DynamicAssessmentSolutions({
                         {q.status === "SKIPPED" && <Clock className="w-4 h-4 text-slate-500" />}
                         {q.status}
                       </span>
+
+                      {q.book_mark_status && (
+                        <span className="px-2.5 py-1 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 bg-purple-50 text-purple-700 border border-purple-200">
+                          <Bookmark className="w-3 h-3 text-purple-600 fill-purple-100" />
+                          Review
+                        </span>
+                      )}
 
                       <div className="text-[11px] font-bold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
                         +{q.marks} Marks {q.negativeMarks > 0 ? `| -${q.negativeMarks}` : ""}
