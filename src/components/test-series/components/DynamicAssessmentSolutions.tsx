@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -83,6 +83,16 @@ export function DynamicAssessmentSolutions({
   const routerParams = useParams<{ assessmentId?: string; userAssId?: string }>();
   const navigate = useNavigate();
   const { subscriptionId: contextSubscriptionId } = useCourse();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Prevent background scrolling while solutions page is open
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   // 1. Resolve Assessment ID
   const effectiveAssessmentId = useMemo(() => {
@@ -543,7 +553,7 @@ export function DynamicAssessmentSolutions({
   // Loading View
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 space-y-4">
+      <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col items-center justify-center p-6 space-y-4">
         <div className="p-4 bg-white rounded-3xl shadow-xl shadow-indigo-100 border border-slate-100">
           <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
         </div>
@@ -558,7 +568,7 @@ export function DynamicAssessmentSolutions({
   // Error View
   if (error || !rawData) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+      <div className="fixed inset-0 z-[100] bg-slate-50 flex flex-col items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 shadow-xl text-center space-y-6">
           <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-100">
             <AlertCircle className="w-8 h-8" />
@@ -583,10 +593,13 @@ export function DynamicAssessmentSolutions({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24 font-sans animate-in fade-in duration-300">
+    <div 
+      ref={containerRef}
+      className="fixed inset-0 z-[100] bg-slate-50 text-slate-900 pb-24 font-sans animate-in fade-in duration-300 overflow-y-auto w-full h-full"
+    >
       {/* Top Floating App Bar */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-8 py-3.5 transition-all shadow-xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-8 lg:px-12 py-3.5 transition-all shadow-xs w-full">
+        <div className="w-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={handleBack}
@@ -627,7 +640,7 @@ export function DynamicAssessmentSolutions({
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 space-y-6">
+      <main className="w-full px-4 sm:px-8 lg:px-12 pt-6 space-y-6">
         {/* Performance Overview Banner */}
         <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
           {/* Subtle decorative background aura */}
@@ -1063,6 +1076,7 @@ export function DynamicAssessmentSolutions({
 
           <Button
             onClick={() => {
+              containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             className="w-full sm:w-auto px-8 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md shadow-indigo-200 cursor-pointer"

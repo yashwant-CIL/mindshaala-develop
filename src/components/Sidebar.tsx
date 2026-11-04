@@ -977,7 +977,10 @@ export function Sidebar({ activePage, onNavigate, onLogout, isOnboardingComplete
             </div>
           </div>
           <button 
-            onClick={onLogout}
+            onClick={(e) => {
+              e.stopPropagation();
+              onLogout?.();
+            }}
             className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all group border border-transparent hover:border-rose-100"
           >
             <LogOut className="w-4 h-4 group-hover:text-rose-600 transition-colors" />

@@ -25,6 +25,12 @@ export const API_ENDPOINT = {
         INQUIRY_COURSES: "/api/v1/cil/courses/get/all",
         REVIEWS: "/api/v1/cil/userReviews/get/all/custom "
     },
+      USER_PROFILE: {
+        GET_PROFILE: (user_id: number | string) => `/api/v1/cil/users/get/custom/details?user_id=${user_id}`,
+        UPDATE_PROFILE: (user_id: number | string) => `/api/v1/cil/users/update?userId=${user_id}&roleId=100001`,
+        ADD_ACADEMIC_DETAILS: `/api/v1/cil/user-academic-details/add`,
+        UPDATE_ACADEMIC_DETAILS: (academic_id: number | string) => `/api/v1/cil/user-academic-details/update?academic_id=${academic_id}`,
+    },
  
     COURSE: {
         ALL_COURSES:(userId: number | string) => `/api/v1/cil/subscription/get/all/by/status?user_id=${userId}`,
